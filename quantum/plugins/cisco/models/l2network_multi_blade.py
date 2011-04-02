@@ -61,7 +61,8 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
         """Get the name of the calling function"""
         return inspect.stack()[1 + offset][3]
 
-    def _invoke_plugin_per_device(self, plugin_key, function_name, args):
+    def _invoke_plugin_per_device(self, plugin_key, function_name, args,
+                                  kwargs=None):
         """Invoke only device plugin for all the devices in the system"""
         if not plugin_key in self._plugins.keys():
             LOG.info("No %s Plugin loaded" % plugin_key)
@@ -74,7 +75,7 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
         if not device_ips:
             # Return in a list
             return [self._invoke_plugin(plugin_key, function_name, args,
-                                device_params)]
+                                device_params, kwargs)]
         else:
             # Return a list of return values from each device
             output = []
@@ -82,7 +83,7 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
                 new_device_params = deepcopy(device_params)
                 new_device_params[const.DEVICE_IP] = device_ip
                 output.append(self._invoke_plugin(plugin_key, function_name,
-                                args, new_device_params))
+                                args, new_device_params, kwargs))
             return output
 
     def _invoke_inventory(self, plugin_key, function_name, args):
@@ -95,15 +96,13 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
         else:
             return getattr(self._inventory[plugin_key], function_name)(args)
 
-    def _invoke_plugin(self, plugin_key, function_name, args, kwargs):
+    def _invoke_plugin(self, plugin_key, function_name, args, device_params,
+                       kwargs=None):
         """Invoke only the device plugin"""
-        # If there are more args than needed, add them to kwargs
+        if kwargs:
+            device_params.update(kwargs)
         func = getattr(self._plugins[plugin_key], function_name)
-
-        if args.__len__() + 1 > inspect.getargspec(func).args.__len__():
-            kwargs.update(args.pop())
-
-        return func(*args, **kwargs)
+        return func(*args, **device_params)
 
     def get_all_networks(self, args):
         """Not implemented for this model"""
@@ -135,13 +134,13 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
         """Not implemented for this model"""
         pass
 
-    def update_network(self, args):
+    def update_network(self, args, **kwargs):
         """Support for the Quantum core API call"""
         output = []
         ucs_output = self._invoke_plugin_per_device(const.UCS_PLUGIN,
-                                       self._func_name(), args)
+                                       self._func_name(), args, kwargs)
         nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
-                                       self._func_name(), args)
+                                       self._func_name(), args, kwargs)
         output.extend(ucs_output or [])
         output.extend(nexus_output or [])
         return output
@@ -160,7 +159,7 @@ class L2NetworkMultiBlade(L2NetworkModelBase):
         return self._invoke_plugin_per_device(const.UCS_PLUGIN,
                                         self._func_name(), args)
 
-    def update_port(self, args):
+    def update_port(self, args, **kwargs):
         """Not implemented for this model"""
         pass
 

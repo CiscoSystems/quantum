@@ -147,8 +147,8 @@ class L2Network(QuantumPluginBase):
         """
         LOG.debug("update_network() called\n")
         network = db.network_update(net_id, tenant_id, **kwargs)
-        self._invoke_device_plugins(self._func_name(), [tenant_id, net_id,
-                                                     kwargs])
+        self._invoke_device_plugins(self._func_name(), [tenant_id, net_id],
+                                       **kwargs)
         net_dict = cutil.make_net_dict(network[const.UUID],
                                        network[const.NETWORKNAME],
                                        [])
@@ -219,7 +219,7 @@ class L2Network(QuantumPluginBase):
         LOG.debug("update_port() called\n")
         network = db.network_get(net_id)
         self._invoke_device_plugins(self._func_name(), [tenant_id, net_id,
-                                        port_id, kwargs])
+                                        port_id], **kwargs)
         self._validate_port_state(kwargs["state"])
         db.port_update(port_id, net_id, **kwargs)
 
@@ -528,10 +528,12 @@ class L2Network(QuantumPluginBase):
     """
     Private functions
     """
-    def _invoke_device_plugins(self, function_name, args):
+    def _invoke_device_plugins(self, function_name, args, **kwargs):
         """
         All device-specific calls are delegated to the model
         """
+        if kwargs:
+            return getattr(self._model, function_name)(args, **kwargs)
         return getattr(self._model, function_name)(args)
 
     def _get_vlan_for_tenant(self, tenant_id, net_name):

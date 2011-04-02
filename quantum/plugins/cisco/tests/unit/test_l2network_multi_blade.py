@@ -184,8 +184,8 @@ class TestMultiBlade(unittest.TestCase):
 
         db.network_update(self.net_id, tenant_id, name=new_net_name)
         networks = self._l2network_multiblade.update_network([tenant_id,
-                                                   self.net_id,
-                                                   {'name': new_net_name}])
+                                                   self.net_id],
+                                                   name=new_net_name)
 
         self.assertEqual(networks.__len__(), self.ucs_count)
         for network in networks:
@@ -198,7 +198,7 @@ class TestMultiBlade(unittest.TestCase):
         LOG.debug("test_update_networkDNE - START")
         self.assertRaises(exc.NetworkNotFound,
                           self._l2network_multiblade.update_network,
-                          [tenant_id, net_id, {'name': new_net_name}])
+                          [tenant_id, net_id], name=new_net_name)
         LOG.debug("test_update_networkDNE - END")
 
     def test_get_all_networks(self):

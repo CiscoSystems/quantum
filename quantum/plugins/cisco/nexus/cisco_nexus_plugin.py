@@ -120,7 +120,7 @@ class NexusPlugin(L2DevicePluginBase):
         """
         LOG.debug("NexusPlugin:update_network() called\n")
         network = self._get_network(tenant_id, net_id)
-        network[const.NET_NAME] = kwargs["name"]
+        network[const.NET_NAME] = kwargs.pop("name")
         return network
 
     def get_all_ports(self, tenant_id, net_id, **kwargs):
