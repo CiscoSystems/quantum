@@ -48,7 +48,7 @@ def _requirements(*parents):
     return req
 
 
-class APIRouter(wsgi.Router):
+class APIRouterV2(wsgi.Router):
 
     @classmethod
     def factory(cls, global_config, **local_config):
@@ -59,45 +59,34 @@ class APIRouter(wsgi.Router):
         plugin = manager.QuantumManager.get_plugin(conf)
 
         kwargs = dict(plugin=plugin, conf=conf)
-        ips_resource = ips.create_resource(**kwargs)
-        floatingips_resource = floatingips.create_resource(**kwargs)
-        networks_resource = networks.create_resource(**kwargs)
-        ports_resource = ports.create_resource(**kwargs)
-        routes_resource = routes.create_resource(**kwargs)
-        subnets_resource = subnets.create_resource(**kwargs)
 
         col_kwargs = dict(collection_actions=COLLECTION_ACTIONS,
                           member_actions=MEMBER_ACTIONS)
 
-        with mapper.collection('networks', 'network',
-                               controller=networks_resource,
-                               requirements=REQUIREMENTS,
-                               **col_kwargs) as net_m:
+        reqs = _requirements()
 
-            with net_m.collection('subnets', 'subnet',
-                                  controller=subnets_resource,
-                                  path_prefix=_parent_path(net_m,
-                                                           'subnets'),
-                                  requirements=_requirements(net_m),
-                                  **col_kwargs) as subnet_m:
+        def _map_resource(resources, resource, req=None, parent=None):
+            controller = getattr(quantum.api, resources).create_resource(**kwargs)
+            mapper_kwargs = dict(collection_name=resources,
+                                resouce_name=resource,
+                                controller=controller,
+                                requiements=req or reqs,
+                                **col_kwargs)
+            if parent:
+                args['path_prefix'] = parent
+            return mapper.collection(**mapper_kwargs)
 
-                subnet_m.collection('routes', 'route',
-                                    controller=routes_resource,
-                                    path_prefix=_parent_path(subnet_m,
-                                                             'routes'),
-                                    requirements=_requirements(net_m,
-                                                               subnet_m),
-                                    **col_kwargs)
+        net_m = _map_resource('networks', 'network', REQUIREMENTS)
+        subnet_m = _map_resource('subnets', 'subnet',
+                                 _requirements(net_mapper),
+                                 _parent_path(net_mapper, 'subnets'))
+        _map_resource('routes', 'route',
+                      _requirements(net_mapper, subnet_mapper),
+                      _parent_path(subnet_mapper, 'routes'))
 
-        mapper.collection('ports', 'port', controller=ports_resource,
-                          requirements=_requirements(),
-                          **col_kwargs)
-        mapper.collection('ips', 'ip', controller=ips_resource,
-                          requirements=_requirements(),
-                          **col_kwargs)
-        mapper.collection('floatingips', 'floatingip',
-                          controller=floatingips_resource,
-                          requirements=_requirements(),
-                          **col_kwargs)
+        _map_resource('ports', 'port')
+        _map_resource('ips', 'ip')
+        _map_resource('floatingips', 'floatingip')
+
 
         super(APIRouter, self).__init__(mapper)
