@@ -34,7 +34,18 @@ UUID_PATTERN = '-'.join([HEX_ELEM + '{8}', HEX_ELEM + '{4}',
                          HEX_ELEM + '{12}'])
 COLLECTION_ACTIONS = ['index', 'create']
 MEMBER_ACTIONS = ['show', 'update', 'delete']
-UUID_REQUIREMENT = {'id': UUID_PATTERN}
+REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
+
+
+def _parent_path(parent, collection):
+    return '/{%s_id}/%s' % (parent.resource_name, collection)
+
+
+def _requirements(*parents):
+    req = dict(**REQUIREMENTS)
+    for parent in parents:
+        req['%s_id' % parent.resource_name] = UUID_PATTERN
+    return req
 
 
 class APIRouter(wsgi.Router):
@@ -56,24 +67,37 @@ class APIRouter(wsgi.Router):
         subnets_resource = subnets.create_resource(**kwargs)
 
         col_kwargs = dict(collection_actions=COLLECTION_ACTIONS,
-                          member_actions=MEMBER_ACTIONS,
-                          requirements=UUID_REQUIREMENT)
+                          member_actions=MEMBER_ACTIONS)
 
         with mapper.collection('networks', 'network',
                                controller=networks_resource,
+                               requirements=REQUIREMENTS,
                                **col_kwargs) as net_m:
+
             with net_m.collection('subnets', 'subnet',
                                   controller=subnets_resource,
+                                  path_prefix=_parent_path(net_m,
+                                                           'subnets'),
+                                  requirements=_requirements(net_m),
                                   **col_kwargs) as subnet_m:
+
                 subnet_m.collection('routes', 'route',
                                     controller=routes_resource,
+                                    path_prefix=_parent_path(subnet_m,
+                                                             'routes'),
+                                    requirements=_requirements(net_m,
+                                                               subnet_m),
                                     **col_kwargs)
+
         mapper.collection('ports', 'port', controller=ports_resource,
+                          requirements=_requirements(),
                           **col_kwargs)
         mapper.collection('ips', 'ip', controller=ips_resource,
+                          requirements=_requirements(),
                           **col_kwargs)
         mapper.collection('floatingips', 'floatingip',
                           controller=floatingips_resource,
+                          requirements=_requirements(),
                           **col_kwargs)
 
         super(APIRouter, self).__init__(mapper)
