@@ -19,12 +19,8 @@ import routes as routes_mapper
 
 from quantum import manager
 from quantum import wsgi
-from quantum.api import ips
-from quantum.api import floatingips
-from quantum.api import networks
-from quantum.api import ports
-from quantum.api import routes
-from quantum.api import subnets
+
+from quantum.api import v2 as api
 
 
 LOG = logging.getLogger(__name__)
@@ -66,20 +62,21 @@ class APIRouterV2(wsgi.Router):
         reqs = _requirements()
 
         def _map_resource(resources, resource, req=None, parent=None):
-            controller = getattr(quantum.api, resources).create_resource(**kwargs)
+            module = getattr(api, resources)
+            controller = module.create_resource(**kwargs)
             mapper_kwargs = dict(collection_name=resources,
                                 resouce_name=resource,
                                 controller=controller,
                                 requiements=req or reqs,
                                 **col_kwargs)
             if parent:
-                args['path_prefix'] = parent
+                kwargs['path_prefix'] = parent
             return mapper.collection(**mapper_kwargs)
 
-        net_m = _map_resource('networks', 'network', REQUIREMENTS)
-        subnet_m = _map_resource('subnets', 'subnet',
-                                 _requirements(net_mapper),
-                                 _parent_path(net_mapper, 'subnets'))
+        net_mapper = _map_resource('networks', 'network', REQUIREMENTS)
+        subnet_mapper = _map_resource('subnets', 'subnet',
+                                      _requirements(net_mapper),
+                                      _parent_path(net_mapper, 'subnets'))
         _map_resource('routes', 'route',
                       _requirements(net_mapper, subnet_mapper),
                       _parent_path(subnet_mapper, 'routes'))
@@ -88,5 +85,4 @@ class APIRouterV2(wsgi.Router):
         _map_resource('ips', 'ip')
         _map_resource('floatingips', 'floatingip')
 
-
-        super(APIRouter, self).__init__(mapper)
+        super(APIRouterV2, self).__init__(mapper)
