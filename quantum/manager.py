@@ -72,12 +72,6 @@ class QuantumManager(object):
                             "plugin with: pip install <plugin-name>\n"
                             "Example: pip install quantum-sample-plugin")
 
-        if not issubclass(plugin_klass, QuantumPluginBase):
-            raise Exception("Configured Quantum plug-in "
-                            "didn't pass compatibility test")
-        else:
-            LOG.debug("Successfully imported Quantum plug-in."
-                      "All compatibility tests passed")
         self.plugin = plugin_klass()
 
     @classmethod

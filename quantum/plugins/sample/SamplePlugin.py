@@ -16,7 +16,9 @@
 # @author: Somik Behera, Nicira Networks, Inc.
 # @author: Salvatore Orlando, Citrix
 
+import ConfigParser
 import logging
+import os
 
 from quantum.api.api_common import OperationalStatus
 from quantum.common import exceptions as exc
@@ -24,7 +26,37 @@ from quantum.db import api as db
 
 
 LOG = logging.getLogger('quantum.plugins.sample.SamplePlugin')
+CONFIG_FILE = 'sample_plugin.ini'
+CONFIG_FILE_PATHS = []
+if os.environ.get('QUANTUM_HOME', None):
+    CONFIG_FILE_PATHS.append('%s/etc' % os.environ['QUANTUM_HOME'])
+CONFIG_FILE_PATHS.append("/etc/quantum/plugins/sample_plugin")
 
+def init_config(cfile=None):
+    config = ConfigParser.ConfigParser()
+    if cfile == None:
+        if os.path.exists(CONFIG_FILE):
+            cfile = CONFIG_FILE
+        else:
+            cfile = find_config(os.path.abspath(os.path.dirname(__file__)))
+
+    if cfile == None:
+        raise Exception("Configuration file \"%s\" doesn't exist" % (cfile))
+    LOG.info("Using configuration file: %s" % cfile)
+    config.read(cfile)
+    LOG.debug("Config: %s" % config)
+    return config
+
+def find_config(basepath):
+    LOG.info("Looking for %s in %s" % (CONFIG_FILE, basepath))
+    for root, dirs, files in os.walk(basepath, followlinks=True):
+        if CONFIG_FILE in files:
+            return os.path.join(root, CONFIG_FILE)
+    for alternate_path in CONFIG_FILE_PATHS:
+        p = os.path.join(alternate_path, CONFIG_FILE)
+        if os.path.exists(p):
+            return p
+    return None
 
 class QuantumEchoPlugin(object):
 
@@ -131,7 +163,11 @@ class FakePlugin(object):
     """
 
     def __init__(self):
-        db.configure_db({'sql_connection': 'sqlite:///quantum.sqlite'})
+        config = init_config()
+        sql_connection = 'sqlite:///:memory:'
+        if config.has_section('db'):
+            sql_connection = config.get('db', 'sql_connection')
+        db.configure_db({'sql_connection': sql_connection})
         FakePlugin._net_counter = 0
 
     def _get_network(self, tenant_id, network_id):

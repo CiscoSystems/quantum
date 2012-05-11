@@ -240,31 +240,3 @@ class QuantumPluginBase(object):
         :raises: exception.PortNotFound
         """
         pass
-
-    @classmethod
-    def __subclasshook__(cls, klass):
-        """
-        The __subclasshook__ method is a class method
-        that will be called everytime a class is tested
-        using issubclass(klass, Plugin).
-        In that case, it will check that every method
-        marked with the abstractmethod decorator is
-        provided by the plugin class.
-        """
-        if cls is QuantumPluginBase:
-            for method in cls.__abstractmethods__:
-                method_ok = False
-                for base in klass.__mro__:
-                    if method in base.__dict__:
-                        fn_obj = base.__dict__[method]
-                        if inspect.isfunction(fn_obj):
-                            abstract_fn_obj = cls.__dict__[method]
-                            arg_count = fn_obj.func_code.co_argcount
-                            expected_arg_count = (
-                                abstract_fn_obj.func_code.co_argcount)
-                            method_ok = arg_count == expected_arg_count
-                if method_ok:
-                    continue
-                return NotImplemented
-            return True
-        return NotImplemented
