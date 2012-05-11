@@ -15,11 +15,41 @@
 
 import logging
 
-from quantum import wsgi
 
 LOG = logging.getLogger(__name__)
 
 
-def create_resource(plugin, conf):
-    # TODO(jkoelker)
-    return wsgi.Resource()
+def tagger(data):
+    if 'tags' not in data:
+        return []
+    return data['tags']
+
+
+def port(port_data):
+    res = dict(tags=tagger(port_data))
+    return res
+
+
+def network(network_data):
+    res = dict(tags=tagger(network_data))
+    return res
+
+
+def subnet(subnet_data):
+    res = dict(tags=tagger(subnet_data))
+    return res
+
+
+def ip(ip_data):
+    res = dict(tags=tagger(ip_data))
+    return res
+
+
+def route(route_data):
+    res = dict(tags=tagger(route_data))
+    return res
+
+
+def floating_ip(floating_ip_data):
+    res = dict(tags=tagger(floating_ip_data))
+    return res

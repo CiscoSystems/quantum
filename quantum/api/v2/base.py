@@ -15,11 +15,10 @@
 
 import logging
 
-from quantum import wsgi
-
 LOG = logging.getLogger(__name__)
 
 
-def create_resource(plugin, conf):
-    # TODO(jkoelker)
-    return wsgi.Resource()
+class Controller(object):
+    def __init__(self, plugin):
+        super(Controller, self).__init__()
+        self._plugin = plugin
