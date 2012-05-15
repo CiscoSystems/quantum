@@ -25,7 +25,7 @@ def create_resource(plugin, conf):
     controller = Controller(plugin)
 
     # TODO(jkoelker)
-    return wsgi.Resource()
+    return wsgi.Resource(controller)
 
 
 class Controller(base.Controller):

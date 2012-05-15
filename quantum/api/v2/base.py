@@ -17,9 +17,67 @@ import logging
 
 from quantum.api import api_common
 from quantum.api.v2 import views
-
+from quantum.common import utils
 
 LOG = logging.getLogger(__name__)
+XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
+
+
+def show(request):
+    """
+    Extracts the list of fields to return
+    """
+    return [v for v in request.GET.getall('show') if v]
+
+
+def filters(request):
+    """
+    Extracts the filters from the request string
+
+    Returns a dict of lists for the filters:
+
+    check=a&check=b&name=Bob&verbose=True&verbose=other
+
+    becomes
+
+    {'check': [u'a', u'b'], 'name': [u'Bob']}
+    """
+    return dict([(k, request.GET.getall(k))
+                 for k in set(request.GET)
+                 if k not in ('verbose', 'show') and
+                    [v for v in request.GET.getall(k) if v]])
+
+
+def verbose(request):
+    """
+    Determines the verbose fields for a request
+
+    Returns a list of items that are requested to be verbose:
+
+    check=a&check=b&name=Bob&verbose=True&verbose=other
+
+    returns
+
+    [True]
+
+    and
+
+    check=a&check=b&name=Bob&verbose=other
+
+    returns
+
+    ['other']
+
+    """
+    verbose = [utils.boolize(v) for v in request.GET.getall('verbose') if v]
+
+    # NOTE(jkoelker) verbose=<bool> trumps all other verbose settings
+    if True in verbose:
+        return [True]
+    elif False in verbose:
+        return []
+
+    return verbose
 
 
 XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
