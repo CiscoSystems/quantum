@@ -13,11 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
 
 from quantum.api import faults
 from quantum import api_common
 from quantum import wsgi
+from quantum.api.v2 import views
 
 LOG = logging.getLogger(__name__)
 
@@ -35,21 +37,19 @@ def create_resource(plugin, conf):
 
     # TODO(cerberus) There has to be a way to abstract this BS
     xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
-    json_serializer = wsgi.JSONDictSerializer()
     xml_deserializer = wsgi.XMLDeserializer(metadata)
-    json_deserializer = wsgi.JSONDeserializer()
+
 
     body_serializers = {
         'application/xml': xml_serializer,
-        'application/json': json_serializer,
+        'application/json': lambda x: json.dumps(x)
     }
 
     body_deserializers = {
         'application/xml': xml_deserializer,
-        'application/json': json_deserializer,
+        'application/json': lambda x: json.loads(x)
     }
 
-    # TODO(cerberus) fix the header serializer crap
     serializer = wsgi.ResponseSerializer(body_serializers,
                                          api_common.HeaderSerializer11())
     deserializer = wsgi.RequestDeserializer(body_deserializers)
@@ -60,6 +60,41 @@ def create_resource(plugin, conf):
                          deserializer,
                          serializer)
 
-class ControllerV20(common.QuantumController):
-    def __init__(self, plugin):
-        super(Controller, self).__init__(plugin)
+
+class ControllerV20(quantum.api.ports.Controller):
+    _serialization_metadata = {
+        "attributes": {
+            "port": ["id", "network_id", "mac", "device_id", "tenant_id"]
+        },
+        "plurals": {
+            "ports": "port",
+        },
+    }
+
+    def _items(self, request):
+        filter_opts = {}
+        filter_opts.update(request.GET)
+        port_list = self._plugin.get_all_ports(filter_opts=filter_opts)
+        return dict(ports=[views.port(port) for port in port_list])
+
+    def _item(self, request, id):
+        port = self._plugin.get_port_details(id)
+        return views.port(port)
+
+    def index(self, req):
+        context = req.environ['quantum.context']
+        self._plugin.get_port_details(tenant_id=context.tenant_id,
+                                      network_id=network_id,
+
+    def show(self, request, id):
+        context = req.environ['quantum.context']
+        return self._item(request, id)
+
+    def create(self, request, body):
+        port_data = api_common._req
+
+    def update(self, request, id, body):
+        pass
+
+    def delete(self, request, id):
+        pass
