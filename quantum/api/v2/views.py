@@ -18,6 +18,8 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
+# NOTE(cerberus): see http://pyvideo.org/video/880/stop-writing-classes for
+# justification of everything below
 
 def tagger(data):
     if 'tags' not in data:
@@ -26,8 +28,12 @@ def tagger(data):
 
 
 def port(port_data):
-    res = dict(tags=tagger(port_data))
-    return res
+    res = dict(tags=tagger(port_data),
+               network_id=port_data['network_id'],
+               mac=port_data['mac'],
+               device_id=port_data['device_id'],
+               tenant_id=port_data['tenant_id'])
+    return dict(port=res)
 
 
 def network(network_data):

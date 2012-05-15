@@ -13,11 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
 
 from quantum.api import faults
+from quantum.api import ports
 from quantum import api_common
 from quantum import wsgi
+from quantum.api.v2 import base
+from quantum.api.v2 import views
 
 LOG = logging.getLogger(__name__)
 
@@ -35,21 +39,19 @@ def create_resource(plugin, conf):
 
     # TODO(cerberus) There has to be a way to abstract this BS
     xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
-    json_serializer = wsgi.JSONDictSerializer()
     xml_deserializer = wsgi.XMLDeserializer(metadata)
-    json_deserializer = wsgi.JSONDeserializer()
+
 
     body_serializers = {
         'application/xml': xml_serializer,
-        'application/json': json_serializer,
+        'application/json': lambda x: json.dumps(x)
     }
 
     body_deserializers = {
         'application/xml': xml_deserializer,
-        'application/json': json_deserializer,
+        'application/json': lambda x: json.loads(x)
     }
 
-    # TODO(cerberus) fix the header serializer crap
     serializer = wsgi.ResponseSerializer(body_serializers,
                                          api_common.HeaderSerializer11())
     deserializer = wsgi.RequestDeserializer(body_deserializers)
@@ -60,6 +62,13 @@ def create_resource(plugin, conf):
                          deserializer,
                          serializer)
 
-class ControllerV20(common.QuantumController):
-    def __init__(self, plugin):
-        super(Controller, self).__init__(plugin)
+
+class ControllerV20(ports.Controller, base.Controller):
+    _serialization_metadata = {
+        "attributes": {
+            "port": ["id", "network_id", "mac", "device_id", "tenant_id"]
+        },
+        "plurals": {
+            "ports": "port",
+        },
+    }
