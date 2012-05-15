@@ -61,9 +61,10 @@ class APIRouterV2(wsgi.Router):
 
         reqs = _requirements()
 
-        def _map_resource(resources, resource, req=None, parent=None):
+        def _map_resource(collection, resource, req=None, parent=None):
             module = getattr(api, resources)
-            controller = module.create_resource(**kwargs)
+            controller = module.create_resource(collection, resource,
+                                                plugin, conf)
             mapper_kwargs = dict(collection_name=resources,
                                 resouce_name=resource,
                                 controller=controller,
