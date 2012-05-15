@@ -21,6 +21,13 @@ LOG = logging.getLogger(__name__)
 XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
 
 
+def show(request):
+    """
+    Extracts the list of fields to return
+    """
+    return [v for v in request.GET.getall('show') if v]
+
+
 def filters(request):
     """
     Extracts the filters from the request string
@@ -60,7 +67,7 @@ def verbose(request):
     ['other']
 
     """
-    verbose = [utils.boolize(v) for v in request.GET.getall("verbose")]
+    verbose = [utils.boolize(v) for v in request.GET.getall('verbose') if v]
 
     # NOTE(jkoelker) verbose=<bool> trumps all other verbose settings
     if True in verbose:
