@@ -18,27 +18,33 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
+
 # NOTE(cerberus): see http://pyvideo.org/video/880/stop-writing-classes for
 # justification of everything below
-
 def tagger(data):
     if 'tags' not in data:
         return []
     return data['tags']
 
 
+def filter(data, keys):
+    return dict([item for item in data.iteritems() if item[0] in keys])
+
+
+def resource(data, keys):
+    res = filter(data, keys)
+    res['tags'] = tagger(data)
+    return res
+
+
 def port(port_data):
-    res = dict(tags=tagger(port_data),
-               network_id=port_data['network_id'],
-               mac=port_data['mac'],
-               device_id=port_data['device_id'],
-               tenant_id=port_data['tenant_id'])
-    return dict(port=res)
+    keys = ('id', 'network_id', 'mac', 'device_id', 'tenant_id')
+    return dict(port=resource(port_data, keys))
 
 
 def network(network_data):
-    res = dict(tags=tagger(network_data))
-    return res
+    keys = ('id', 'label', 'subnets', 'mac_ranges')
+    return dict(network=resource(network_data, keys))
 
 
 def subnet(subnet_data):
