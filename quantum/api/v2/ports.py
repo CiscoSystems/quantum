@@ -33,7 +33,7 @@ def create_resource(plugin, conf):
     # NOTE(cerberus): total punt on using the 1.0 and 1.1 API common
     # stuff because I want a clean decoupling. If it makes sense later
     # in the patch, let's reintroduce them as a v2 construct
-    controller = ControllerV20(plugin),
+    controller = ControllerV20(plugin)
     metadata = ControllerV20._serialization_metadata
     xmlns = common.XML_NS_V20
 
