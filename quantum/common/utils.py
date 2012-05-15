@@ -21,23 +21,15 @@
 """Utilities and helper functions."""
 
 
-import base64
 import ConfigParser
 import datetime
-import functools
 import inspect
 import json
 import logging
 import os
 import random
-import re
-import socket
-import string
-import struct
 import subprocess
 import sys
-import time
-import types
 
 from quantum.common import exceptions as exception
 from quantum.common.exceptions import ProcessExecutionError
@@ -131,6 +123,21 @@ def bool_from_string(subject):
         if subject.strip().lower() in ('true', 'on', '1'):
             return True
     return False
+
+
+def boolize(subject):
+    """
+    Quak like a boolean
+    """
+    if isinstance(subject, bool):
+        return subject
+    elif hasattr(subject, 'startswith'):
+        sub = subject.strip().lower()
+        if sub in ('true', 'on', '1'):
+            return True
+        elif sub in ('false', 'off', '0'):
+            return False
+    return subject
 
 
 def fetchfile(url, target):
