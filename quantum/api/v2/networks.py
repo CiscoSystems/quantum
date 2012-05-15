@@ -15,11 +15,31 @@
 
 import logging
 
+from quantum.api.v2 import base
 from quantum import wsgi
 
 LOG = logging.getLogger(__name__)
 
 
 def create_resource(plugin, conf):
+    controller = Controller(plugin)
+
     # TODO(jkoelker)
     return wsgi.Resource()
+
+
+class Controller(base.Controller):
+    def index(self, request):
+        pass
+
+    def create(self, request):
+        pass
+
+    def show(self, request):
+        pass
+
+    def update(self, request):
+        pass
+
+    def delte(self, requst):
+        pass
