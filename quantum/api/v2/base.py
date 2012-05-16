@@ -14,10 +14,13 @@
 # limitations under the License.
 
 import logging
+import json
 
 from quantum.api import api_common
-from quantum.api.v2 import views
+from quantum.api import faults
 from quantum.common import utils
+from quantum.api.v2 import views
+from quantum import wsgi
 
 LOG = logging.getLogger(__name__)
 XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
@@ -80,21 +83,17 @@ def verbose(request):
     return verbose
 
 
-XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
-
-
 def create_resource(collection, resource, plugin, conf):
     # NOTE(cerberus): total punt on using the 1.0 and 1.1 API common
     # stuff because I want a clean decoupling. If it makes sense later
     # in the patch, let's reintroduce them as a v2 construct
     controller = Controller(plugin, collection, resource)
     metadata = Controller._serialization_metadata
-    xmlns = common.XML_NS_V20
+    xmlns = XML_NS_V20
 
     # TODO(cerberus) There has to be a way to abstract this BS
     xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
     xml_deserializer = wsgi.XMLDeserializer(metadata)
-
 
     body_serializers = {
         'application/xml': xml_serializer,
@@ -112,12 +111,13 @@ def create_resource(collection, resource, plugin, conf):
 
     # TODO(cerberus): fix the faults crap later
     return wsgi.Resource(controller,
-                         fault_body_function_v11,
+                         faults.fault_body_function_v11,
                          deserializer,
                          serializer)
 
+
 # TODO(anyone): super generic first cut
-class Controller(api_commom.QuantumController):
+class Controller(api_common.QuantumController):
     def __init__(self, plugin, collection, resource):
         super(Controller, self).__init__()
         self._plugin = plugin
@@ -148,7 +148,7 @@ class Controller(api_commom.QuantumController):
     def create(self, req, body):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin, "create_%s" % self._resource)
-        obj_creator(body)
+        obj = obj_creator(body)
         return {self._resource: self._view(obj)}
 
     def delete(self, req, id):
@@ -158,5 +158,5 @@ class Controller(api_commom.QuantumController):
     def update(self, req, id, body):
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin, "update_%s" % self._resource)
-        obj_updater(body)
+        obj = obj_updater(body)
         return {self._resource: self._view(obj)}
