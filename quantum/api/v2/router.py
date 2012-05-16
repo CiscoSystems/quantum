@@ -53,8 +53,6 @@ class APIRouter(wsgi.Router):
         mapper = routes_mapper.Mapper()
         plugin = manager.QuantumManager.get_plugin(conf)
 
-        kwargs = dict(plugin=plugin, conf=conf)
-
         col_kwargs = dict(collection_actions=COLLECTION_ACTIONS,
                           member_actions=MEMBER_ACTIONS)
 
@@ -63,14 +61,14 @@ class APIRouter(wsgi.Router):
         def _map_resource(collection, resource, req=None, parent=None):
             controller = base.create_resource(collection, resource,
                                               plugin, conf)
-            mapper_kwargs = dict(collection_name=collection,
-                                resouce_name=resource,
-                                controller=controller,
-                                requiements=req or reqs,
-                                **col_kwargs)
+            mapper_kwargs = dict(controller=controller,
+                                 requiements=req or reqs,
+                                 **col_kwargs)
             if parent:
-                kwargs['path_prefix'] = parent
-            return mapper.collection(**mapper_kwargs)
+                mapper_kwargs['path_prefix'] = parent
+            LOG.debug(mapper_kwargs)
+            return mapper.collection(collection, resource,
+                                     **mapper_kwargs)
 
         net_mapper = _map_resource('networks', 'network', REQUIREMENTS)
         subnet_mapper = _map_resource('subnets', 'subnet',
@@ -82,6 +80,5 @@ class APIRouter(wsgi.Router):
 
         _map_resource('ports', 'port')
         _map_resource('ips', 'ip')
-        _map_resource('floatingips', 'floatingip')
 
         super(APIRouter, self).__init__(mapper)
