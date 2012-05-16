@@ -143,7 +143,7 @@ class Controller(api_common.QuantumController):
         obj = obj_getter(id)
         return {self._resource: self._view(obj)}
 
-    def index(self, request, **kwargs):
+    def index(self, request):
         return self._items(request)
 
     def show(self, request, id):

@@ -62,7 +62,7 @@ class APIRouter(wsgi.Router):
             controller = base.create_resource(collection, resource,
                                               plugin, conf)
             mapper_kwargs = dict(controller=controller,
-                                 requiements=req or reqs,
+                                 requirements=req or reqs,
                                  **col_kwargs)
             if parent:
                 mapper_kwargs['path_prefix'] = parent
