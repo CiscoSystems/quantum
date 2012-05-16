@@ -143,23 +143,23 @@ class Controller(api_common.QuantumController):
         obj = obj_getter(id)
         return {self._resource: self._view(obj)}
 
-    def index(self, req):
-        return self._items(req)
+    def index(self, request, **kwargs):
+        return self._items(request)
 
-    def show(self, req, id):
-        return self._item(req, id)
+    def show(self, request, id):
+        return self._item(request, id)
 
-    def create(self, req, body):
+    def create(self, request, body):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin, "create_%s" % self._resource)
         obj = obj_creator(body)
         return {self._resource: self._view(obj)}
 
-    def delete(self, req, id):
+    def delete(self, request, id):
         obj_deleter = getattr(self._plugin, "delete_%s" % self._resource)
         obj_deleter(id)
 
-    def update(self, req, id, body):
+    def update(self, request, id, body):
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin, "update_%s" % self._resource)
         obj = obj_updater(body)
