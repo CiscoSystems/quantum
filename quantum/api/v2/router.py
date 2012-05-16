@@ -43,7 +43,7 @@ def _requirements(*parents):
     return req
 
 
-class APIRouterV2(wsgi.Router):
+class APIRouter(wsgi.Router):
 
     @classmethod
     def factory(cls, global_config, **local_config):
@@ -84,4 +84,4 @@ class APIRouterV2(wsgi.Router):
         _map_resource('ips', 'ip')
         _map_resource('floatingips', 'floatingip')
 
-        super(APIRouterV2, self).__init__(mapper)
+        super(APIRouter, self).__init__(mapper)
