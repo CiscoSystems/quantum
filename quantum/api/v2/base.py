@@ -88,20 +88,24 @@ def create_resource(collection, resource, plugin, conf):
     # stuff because I want a clean decoupling. If it makes sense later
     # in the patch, let's reintroduce them as a v2 construct
     controller = Controller(plugin, collection, resource)
-    metadata = Controller._serialization_metadata
-    xmlns = XML_NS_V20
+
+    # NOTE(jkoelker) punt on XML for now until we can genericizle it
+    # NOTE(jkoelker) genericizle is a word
+    # NOTE(jkoelker) just ask snoop dawg
+    #metadata = Controller._serialization_metadata
+    #xmlns = XML_NS_V20
 
     # TODO(cerberus) There has to be a way to abstract this BS
-    xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
-    xml_deserializer = wsgi.XMLDeserializer(metadata)
+    #xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
+    #xml_deserializer = wsgi.XMLDeserializer(metadata)
 
     body_serializers = {
-        'application/xml': xml_serializer,
+    #    'application/xml': xml_serializer,
         'application/json': lambda x: json.dumps(x)
     }
 
     body_deserializers = {
-        'application/xml': xml_deserializer,
+    #    'application/xml': xml_deserializer,
         'application/json': lambda x: json.loads(x)
     }
 
