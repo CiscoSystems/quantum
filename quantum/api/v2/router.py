@@ -19,8 +19,7 @@ import routes as routes_mapper
 
 from quantum import manager
 from quantum import wsgi
-
-from quantum.api import v2 as api
+from quantum.api.v2 import base
 
 
 LOG = logging.getLogger(__name__)
@@ -62,10 +61,9 @@ class APIRouterV2(wsgi.Router):
         reqs = _requirements()
 
         def _map_resource(collection, resource, req=None, parent=None):
-            module = getattr(api, resources)
-            controller = module.create_resource(collection, resource,
-                                                plugin, conf)
-            mapper_kwargs = dict(collection_name=resources,
+            controller = base.create_resource(collection, resource,
+                                              plugin, conf)
+            mapper_kwargs = dict(collection_name=collection,
                                 resouce_name=resource,
                                 controller=controller,
                                 requiements=req or reqs,
