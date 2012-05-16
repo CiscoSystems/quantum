@@ -87,8 +87,8 @@ def create_resource(collection, resource, plugin, conf):
     # NOTE(cerberus): total punt on using the 1.0 and 1.1 API common
     # stuff because I want a clean decoupling. If it makes sense later
     # in the patch, let's reintroduce them as a v2 construct
-    controller = ControllerV20(plugin, collection, resource)
-    metadata = ControllerV20._serialization_metadata
+    controller = Controller(plugin, collection, resource)
+    metadata = Controller._serialization_metadata
     xmlns = common.XML_NS_V20
 
     # TODO(cerberus) There has to be a way to abstract this BS
@@ -137,7 +137,7 @@ class Controller(api_commom.QuantumController):
     def _item(self, request, id):
         obj_getter = getattr(self._plugin, "get_%s_details" % self._resource)
         obj = obj_getter(id)
-        return self._view(obj)
+        return {self._resource: self._view(obj)}
 
     def index(self, req):
         return self._items(req)
@@ -149,7 +149,7 @@ class Controller(api_commom.QuantumController):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin, "create_%s" % self._resource)
         obj_creator(body)
-        return self._view(obj)
+        return {self._resource: self._view(obj)}
 
     def delete(self, req, id):
         obj_deleter = getattr(self._plugin, "delete_%s" % self._resource)
@@ -159,4 +159,4 @@ class Controller(api_commom.QuantumController):
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin, "update_%s" % self._resource)
         obj_updater(body)
-        return self._view(obj)
+        return {self._resource: self._view(obj)}

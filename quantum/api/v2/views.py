@@ -39,29 +39,26 @@ def resource(data, keys):
 
 def port(port_data):
     keys = ('id', 'network_id', 'mac', 'device_id', 'tenant_id')
-    return dict(port=resource(port_data, keys))
+    return resource(port_data, keys)
 
 
 def network(network_data):
     keys = ('id', 'label', 'subnets', 'mac_ranges')
-    return dict(network=resource(network_data, keys))
+    return resource(network_data, keys)
 
 
 def subnet(subnet_data):
-    res = dict(tags=tagger(subnet_data))
-    return res
+    keys = ('id', 'network', 'tenant_id', 'excluded_ranges', 'version',
+            'routes', 'enforce_unique', 'cidr')
+    return resource(subnet_data, keys)
 
 
 def ip(ip_data):
-    res = dict(tags=tagger(ip_data))
-    return res
+    keys = ('id', 'subnet', 'device_id', 'tenant_id', 'ports', 'version',
+            'address')
+    return resource(ip_data, keys)
 
 
 def route(route_data):
-    res = dict(tags=tagger(route_data))
-    return res
-
-
-def floating_ip(floating_ip_data):
-    res = dict(tags=tagger(floating_ip_data))
-    return res
+    keys = ('id', 'cidr', 'version', 'gateway', 'target')
+    return resource(route_data, keys)
