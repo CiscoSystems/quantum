@@ -119,7 +119,7 @@ def create_resource(collection, resource, plugin, conf):
 # TODO(anyone): super generic first cut
 class Controller(api_common.QuantumController):
     def __init__(self, plugin, collection, resource):
-        super(Controller, self).__init__()
+        super(Controller, self).__init__(plugin)
         self._plugin = plugin
         self._collection = collection
         self._resource = resource
