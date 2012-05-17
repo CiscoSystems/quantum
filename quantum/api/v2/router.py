@@ -14,8 +14,12 @@
 # limitations under the License.
 
 import logging
+import urlparse
 
 import routes as routes_mapper
+import webob
+import webob.dec
+import webob.exc
 
 from quantum import manager
 from quantum import wsgi
@@ -32,15 +36,33 @@ MEMBER_ACTIONS = ['show', 'update', 'delete']
 REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
-def _parent_path(parent, collection):
-    return '/{%s_id}/%s' % (parent.resource_name, collection)
+class Index(wsgi.Application):
+    def __init__(self, resources):
+        self.resources = resources
 
+    @webob.dec.wsgify(RequestClass=wsgi.Request)
+    def __call__(self, req):
+        metadata = {"application/xml": {
+                        "attributes": {
+                            "resource": ["name", "collection"],
+                            "link": ["href", "rel"],
+                           }
+                       }
+                   }
 
-def _requirements(*parents):
-    req = dict(**REQUIREMENTS)
-    for parent in parents:
-        req['%s_id' % parent.resource_name] = UUID_PATTERN
-    return req
+        layout = []
+        for name, collection in self.resources.iteritems():
+            href = urlparse.urljoin(req.path_url, collection)
+            resource = {"name": name,
+                        "collection": collection,
+                        "links": [{"rel": "self",
+                                   "href": href}]}
+            layout.append(resource)
+        response = dict(resources=layout)
+        content_type = req.best_match_content_type()
+        body = wsgi.Serializer(metadata=metadata).serialize(response,
+                                                            content_type)
+        return webob.Response(body=body, content_type=content_type)
 
 
 class APIRouter(wsgi.Router):
@@ -56,29 +78,24 @@ class APIRouter(wsgi.Router):
         col_kwargs = dict(collection_actions=COLLECTION_ACTIONS,
                           member_actions=MEMBER_ACTIONS)
 
-        reqs = _requirements()
+        resources = {'network': 'networks',
+                     'subnet': 'subnets',
+                     'route': 'routes',
+                     'port': 'ports',
+                     'ip': 'ips'}
 
-        def _map_resource(collection, resource, req=None, parent=None):
+        def _map_resource(collection, resource, req=None):
             controller = base.create_resource(collection, resource,
                                               plugin, conf)
             mapper_kwargs = dict(controller=controller,
-                                 requirements=req or reqs,
+                                 requirements=req or REQUIREMENTS,
                                  **col_kwargs)
-            if parent:
-                mapper_kwargs['path_prefix'] = parent
             LOG.debug(mapper_kwargs)
             return mapper.collection(collection, resource,
                                      **mapper_kwargs)
 
-        net_mapper = _map_resource('networks', 'network', REQUIREMENTS)
-        subnet_mapper = _map_resource('subnets', 'subnet',
-                                      _requirements(net_mapper),
-                                      _parent_path(net_mapper, 'subnets'))
-        _map_resource('routes', 'route',
-                      _requirements(net_mapper, subnet_mapper),
-                      _parent_path(subnet_mapper, 'routes'))
-
-        _map_resource('ports', 'port')
-        _map_resource('ips', 'ip')
+        mapper.connect('index', '/', controller=Index(resources))
+        for resource in resources:
+            _map_resource(resources[resource], resource)
 
         super(APIRouter, self).__init__(mapper)
