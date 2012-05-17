@@ -92,6 +92,7 @@ def create_resource(collection, resource, plugin, conf):
     # NOTE(jkoelker) punt on XML for now until we can genericizle it
     # NOTE(jkoelker) genericizle is a word
     # NOTE(jkoelker) just ask snoop dawg
+    # NOTE(cerberus) pretty sure it's genericizzle. Two Zs.
     #metadata = Controller._serialization_metadata
     #xmlns = XML_NS_V20
 
