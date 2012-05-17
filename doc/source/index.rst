@@ -23,4 +23,4 @@ Contents
 .. toctree::
    :maxdepth: 2
 
-   api_index
+   apidoc
