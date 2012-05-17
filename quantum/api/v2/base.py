@@ -138,7 +138,7 @@ class Controller(api_common.QuantumController):
                              "get_all_%s" % self._collection)
         obj_list = obj_getter(**kwargs)
 
-        return dict(ports=[self._view(obj) for obj in obj_list])
+        return {self._collection: [self._view(obj) for obj in obj_list]}
 
     def _item(self, request, id):
         kwargs = dict(verbose=verbose(request),
