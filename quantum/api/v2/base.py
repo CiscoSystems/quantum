@@ -130,17 +130,22 @@ class Controller(api_common.QuantumController):
         self._view = getattr(views, self._resource)
 
     def _items(self, request):
-        filter_opts = {}
-        filter_opts.update(request.GET)
+        kwargs = dict(filters=filters(request),
+                      verbose=verbose(request),
+                      show=show(request))
 
-        obj_getter = getattr(self._plugin, "get_all_%s" % self._collection)
-        obj_list = obj_getter(filter_opts=filter_opts)
+        obj_getter = getattr(self._plugin,
+                             "get_all_%s" % self._collection)
+        obj_list = obj_getter(**kwargs)
 
         return dict(ports=[self._view(obj) for obj in obj_list])
 
     def _item(self, request, id):
-        obj_getter = getattr(self._plugin, "get_%s_details" % self._resource)
-        obj = obj_getter(id)
+        kwargs = dict(verbose=verbose(request),
+                      show=show(request))
+        obj_getter = getattr(self._plugin,
+                             "get_%s_details" % self._resource)
+        obj = obj_getter(id, **kwargs)
         return {self._resource: self._view(obj)}
 
     def index(self, request):
@@ -151,16 +156,19 @@ class Controller(api_common.QuantumController):
 
     def create(self, request, body):
         body = self._prepare_request_body(body)
-        obj_creator = getattr(self._plugin, "create_%s" % self._resource)
+        obj_creator = getattr(self._plugin,
+                              "create_%s" % self._resource)
         obj = obj_creator(body)
         return {self._resource: self._view(obj)}
 
     def delete(self, request, id):
-        obj_deleter = getattr(self._plugin, "delete_%s" % self._resource)
+        obj_deleter = getattr(self._plugin,
+                              "delete_%s" % self._resource)
         obj_deleter(id)
 
     def update(self, request, id, body):
         body = self._prepare_request_body(body)
-        obj_updater = getattr(self._plugin, "update_%s" % self._resource)
+        obj_updater = getattr(self._plugin,
+                              "update_%s" % self._resource)
         obj = obj_updater(body)
         return {self._resource: self._view(obj)}
