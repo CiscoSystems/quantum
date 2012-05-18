@@ -162,8 +162,8 @@ class Controller(object):
     def __init__(self, plugin, collection, resource):
         self._plugin = FaultWrapper(plugin)
         self._collection = collection
-        self._resource = resource
-        self._view = getattr(views, self._resource)
+        self._resource_name = resource
+        self._view = getattr(views, self._resource_name)
 
     def _items(self, request):
         kwargs = dict(filters=filters(request),
@@ -171,8 +171,7 @@ class Controller(object):
                       show=show(request),
                       context=request.context)
 
-        obj_getter = getattr(self._plugin,
-                             "get_all_%s" % self._collection)
+        obj_getter = getattr(self._plugin, "get_all_%s" % self._collection)
         obj_list = obj_getter(**kwargs)
 
         return {self._collection: [self._view(obj) for obj in obj_list]}
@@ -193,7 +192,6 @@ class Controller(object):
         return self._item(request, id)
 
     def create(self, request, body):
-        body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin,
                               "create_%s" % self._resource)
         obj = obj_creator(body, context=request.context)

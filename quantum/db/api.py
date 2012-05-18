@@ -27,7 +27,7 @@ from sqlalchemy.orm import sessionmaker, exc
 
 from quantum.api.api_common import OperationalStatus
 from quantum.common import exceptions as q_exc
-from quantum.db import models
+from quantum.db import model_base, models
 
 
 LOG = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ LOG = logging.getLogger(__name__)
 
 _ENGINE = None
 _MAKER = None
-BASE = models.BASE
+BASE = model_base.BASE
 
 
 class MySQLPingListener(object):

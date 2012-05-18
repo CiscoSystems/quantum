@@ -31,18 +31,20 @@ def resource(data, keys):
 
 
 def port(port_data):
-    keys = ('id', 'network_id', 'mac', 'device_id', 'tenant_id')
+    keys = ('id', 'network_id', 'mac_address', 'fixed_ips',
+            'device_id', 'admin_state_up', 'tenant_id', 'op_status')
     return resource(port_data, keys)
 
 
 def network(network_data):
-    keys = ('id', 'label', 'subnets', 'mac_ranges')
+    keys = ('id', 'name', 'subnets', 'admin_state_up', 'op_status',
+            'tenant_id')
     return resource(network_data, keys)
 
 
 def subnet(subnet_data):
-    keys = ('id', 'network', 'tenant_id', 'excluded_ranges', 'version',
-            'routes', 'enforce_unique', 'cidr')
+    keys = ('id', 'network_id', 'tenant_id', 'gateway_ip', 'ip_version',
+            'prefix')
     return resource(subnet_data, keys)
 
 
@@ -53,5 +55,5 @@ def ip(ip_data):
 
 
 def route(route_data):
-    keys = ('id', 'cidr', 'version', 'gateway', 'target')
+    keys = ('id', 'cidr', 'version', 'gateway')
     return resource(route_data, keys)

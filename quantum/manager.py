@@ -66,12 +66,15 @@ class QuantumManager(object):
 
         # If the plugin can't be found let them know gracefully
         try:
+            LOG.error("plugin = '%s'" % options['plugin_provider'])
             plugin_klass = utils.import_class(options['plugin_provider'])
         except ClassNotFound:
+            LOG.exception("error loading plugin")
             raise Exception("Plugin not found.  You can install a "
                             "plugin with: pip install <plugin-name>\n"
                             "Example: pip install quantum-sample-plugin")
-
+        except:
+            LOG.exception("other error loading plugin")
         self.plugin = plugin_klass()
 
     @classmethod
