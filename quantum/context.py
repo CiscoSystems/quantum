@@ -35,7 +35,7 @@ class Context(object):
     """
 
     def __init__(self, user_id, tenant_id, is_admin=None, read_deleted="no",
-                 timestamp=None, **kwargs):
+                 roles=None, timestamp=None, **kwargs):
         """
         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
             indicates deleted records are visible, 'only' indicates that
@@ -47,7 +47,12 @@ class Context(object):
 
         self.user_id = user_id
         self.tenant_id = tenant_id
+        self.roles = roles or []
         self.is_admin = is_admin
+        if self.is_admin is None:
+            self.is_admin = 'admin' in [x.lower() for x in self.roles]
+        elif self.is_admin and 'admin' not in [x.lower() for x in self.roles]:
+            self.roles.append('admin')
         self.read_deleted = read_deleted
         if not timestamp:
             timestamp = datetime.utcnow()
@@ -80,6 +85,7 @@ class Context(object):
                 'tenant_id': self.tenant_id,
                 'is_admin': self.is_admin,
                 'read_deleted': self.read_deleted,
+                'roles': self.roles,
                 'timestamp': str(self.timestamp)}
 
     @classmethod
