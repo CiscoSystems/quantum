@@ -23,14 +23,6 @@ from quantum.api.v2 import views
 from quantum import wsgi
 
 LOG = logging.getLogger(__name__)
-XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
-
-
-def show(request):
-    """
-    Extracts the list of fields to return
-    """
-    return [v for v in request.GET.getall('show') if v]
 
 
 def filters(request):
@@ -45,11 +37,10 @@ def filters(request):
 
     {'check': [u'a', u'b'], 'name': [u'Bob']}
     """
-    return dict([(k, request.GET.getall(k))
+    return dict(((k, request.GET.getall(k))
                  for k in set(request.GET)
                  if k not in ('verbose', 'show') and
-                    [v for v in request.GET.getall(k) if v]])
-
+                    (v for v in request.GET.getall(k) if v)))
 
 def verbose(request):
     """
