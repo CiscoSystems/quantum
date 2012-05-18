@@ -19,6 +19,7 @@ import logging
 import webob.dec
 import webob.exc
 
+from quantum import context
 from quantum import wsgi
 
 
@@ -36,23 +37,16 @@ class QuantumKeystoneContext(wsgi.Middleware):
             LOG.debug("Neither X_USER_ID nor X_USER found in request")
             return webob.exc.HTTPUnauthorized()
 
-        # Suck out the roles
-        roles = [r.strip() for r in req.headers.get('X_ROLE', '').split(',')]
-
         # Determine the tenant
         tenant_id = req.headers.get('X_TENANT_ID', req.headers.get('X_TENANT'))
 
-        # Grab the auth token...
-        auth_token = req.headers.get('X_AUTH_TOKEN',
-                                     req.headers.get('X_STORAGE_TOKEN'))
+        # Suck out the roles
+        roles = [r.strip() for r in req.headers.get('X_ROLE', '').split(',')]
 
-        # Determine the remote address of the user
-        remote_address = req.remote_addr
-        # May want to consider adding an option akin to nova's
-        # use_forwarded_for later on...
+        # Create a context with the authentication data
+        ctx = context.Context(user_id, tenant_id, roles=roles)
 
-        ctx = None  # XXX No idea how to construct a context yet
-
-        # XXX No idea how to pass the context around
+        # Inject the context...
+        req.environ['quantum.context'] = ctx
 
         return self.application
