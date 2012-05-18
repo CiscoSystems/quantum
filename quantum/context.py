@@ -97,6 +97,9 @@ class Context(object):
         context = copy.copy(self)
         context.is_admin = True
 
+        if 'admin' not in [x.lower() for x in context.roles]:
+            context.roles.append('admin')
+
         if read_deleted is not None:
             context.read_deleted = read_deleted
 
