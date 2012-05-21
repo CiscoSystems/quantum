@@ -20,12 +20,10 @@ import json
 import webob.dec
 import webob.exc
 
-from quantum.api import api_common
 from quantum.common import exceptions
 from quantum.api import faults
 from quantum.common import utils
 from quantum.api.v2 import views
-from quantum import wsgi
 from quantum import wsgi2
 
 LOG = logging.getLogger(__name__)
@@ -112,23 +110,22 @@ def create_resource(collection, resource, plugin, conf):
     #xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
     #xml_deserializer = wsgi.XMLDeserializer(metadata)
 
-    body_serializers = {
+    serializers = {
     #    'application/xml': xml_serializer,
     }
 
-    body_deserializers = {
+    deserializers = {
     #    'application/xml': xml_deserializer,
     }
 
-    serializer = wsgi2.ResponseSerializer(body_serializers,
-                                         api_common.HeaderSerializer11())
-    deserializer = wsgi.RequestDeserializer(body_deserializers)
+    serializer = wsgi2.ResponseSerializer(serializers)
+    deserializer = wsgi2.RequestDeserializer(deserializers)
 
     # TODO(cerberus): fix the faults crap later
-    return Resource(controller,
-                         faults.fault_body_function_v11,
-                         deserializer,
-                         serializer)
+    return wsgi2.Resource(controller,
+                          faults.fault_body_function_v11,
+                          deserializer,
+                          serializer)
 
 
 def _fault_wrapper(func):

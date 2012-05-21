@@ -19,8 +19,27 @@
 Utility methods for working with WSGI servers redux
 """
 
+import webob
+
 from quantum import exceptions as exception
 from quantum import wsgi
+
+
+class Request(webob.Request):
+    """Add some Openstack API-specific logic to the base webob.Request."""
+
+    def best_match_content_type(self):
+        supported = ('application/json')
+        return self.accept.best_match(supported,
+                                      default_match='applicaton/json')
+
+
+def Resource(wsgi.Resource):
+    @webob.dec.wsgify(RequestClass=Request)
+    def resource(request):
+        pass
+
+    return resource
 
 
 class ResponseSerializer(object):
@@ -58,14 +77,16 @@ class RequestDeserializer(object):
         return self.deserialize(request)
 
     def deserialize(self, request):
-        action_args = self.get_action_args(request.environ)
-        action = action_args.pop('action', None)
+        args = environ['wsgiorg.routing_args'][1].copy()
+        for key in ['format', 'controller']:
+            args.pop(key, None)
+        action = args.pop('action', None)
 
         action_args.update(self.deserialize_body(request, action))
 
-        accept = self.get_expected_content_type(request)
+        accept = request.best_match_content_type()
 
-        return (action, action_args, accept)
+        return (action, args, accept)
 
     def deserialize_body(self, request, action):
         if len(request.body) == 0:
