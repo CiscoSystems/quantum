@@ -173,9 +173,20 @@ class Request(webob.Request):
 
 
 def Resource():
+    def _args(request):
+        route_args = request.environ.get('wsgiorg.routing_args')
+        if not route_args:
+            return {}
+
+        return route_args[1].copy()
+
     @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
-        pass
+        args = _args(request)
+
+        controller = args.pop('controller', None)
+        format = args.pop('format', None)
+        action = args.pop('action', None)
 
     return resource
 
