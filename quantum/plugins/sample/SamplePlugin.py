@@ -32,6 +32,7 @@ if os.environ.get('QUANTUM_HOME', None):
     CONFIG_FILE_PATHS.append('%s/etc' % os.environ['QUANTUM_HOME'])
 CONFIG_FILE_PATHS.append("/etc/quantum/plugins/sample_plugin")
 
+
 def init_config(cfile=None):
     config = ConfigParser.ConfigParser()
     if cfile == None:
@@ -47,6 +48,7 @@ def init_config(cfile=None):
     LOG.debug("Config: %s" % config)
     return config
 
+
 def find_config(basepath):
     LOG.info("Looking for %s in %s" % (CONFIG_FILE, basepath))
     for root, dirs, files in os.walk(basepath, followlinks=True):
@@ -58,6 +60,7 @@ def find_config(basepath):
             return p
     return None
 
+
 class QuantumEchoPlugin(object):
 
     """
@@ -68,13 +71,14 @@ class QuantumEchoPlugin(object):
     the name of the method that was called.
     """
 
-    def get_all_networks(self, tenant_id):
+    def get_all_networks(self, tenant_id=None, **kwargs):
         """
         Returns a dictionary containing all
         <network_uuid, network_name> for
         the specified tenant.
         """
         print("get_all_networks() called\n")
+        raise exc.NetworkNotFound(net_id="hozer")
 
     def create_network(self, tenant_id, net_name, **kwargs):
         """
@@ -340,7 +344,7 @@ class FakePlugin(object):
         is deleted.
         """
         LOG.debug("FakePlugin.delete_port() called")
-        net = self._get_network(tenant_id, net_id)
+        self._get_network(tenant_id, net_id)
         port = self._get_port(tenant_id, net_id, port_id)
         if port['interface_id']:
             raise exc.PortInUse(net_id=net_id, port_id=port_id,
