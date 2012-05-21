@@ -142,7 +142,7 @@ def _fault_wrapper(func):
         except exceptions.QuantumException as e:
             e_type = type(e)
             if e_type in FAULT_MAP:
-                fault = FAULT_MAP(e_type)
+                fault = FAULT_MAP[e_type]
                 fault_data = json.dumps({'QuantumError': {
                                             'type': e.__class__.__name__,
                                             'message': e.message,
