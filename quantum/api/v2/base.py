@@ -17,6 +17,7 @@ import functools
 import logging
 import json
 
+import webob.dec
 import webob.exc
 
 from quantum.api import api_common
@@ -125,7 +126,7 @@ def create_resource(collection, resource, plugin, conf):
     deserializer = wsgi.RequestDeserializer(body_deserializers)
 
     # TODO(cerberus): fix the faults crap later
-    return wsgi.Resource(controller,
+    return Resource(controller,
                          faults.fault_body_function_v11,
                          deserializer,
                          serializer)
@@ -163,6 +164,23 @@ class FaultWrapper(object):
     def __getattribute__(self, name):
         plugin = object.__getattribute__(self, '_plugin')
         return _fault_wrapper(object.__getattribute__(plugin, name))
+
+
+def Resource():
+    @webob.dev.wsgify(RequestClass=wsgi.Request)
+    def resource(request):
+        pass
+
+    return resource
+
+
+class Request(wsgi.Application):
+    def __init__(self):
+        pass
+
+    @webob.dec.wsgify(RequestClass=wsgi.Request)
+    def __call__(self, request):
+        pass
 
 
 # TODO(anyone): super generic first cut
