@@ -165,21 +165,19 @@ class FaultWrapper(object):
         return _fault_wrapper(object.__getattribute__(plugin, name))
 
 
+class Request(webob.Request):
+    def best_match_content_type(self):
+        supported = ('application/json')
+        return self.accept.best_match(supported,
+                                      default_match='applicaton/json')
+
+
 def Resource():
-    @webob.dev.wsgify(RequestClass=wsgi.Request)
+    @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
         pass
 
     return resource
-
-
-class Request(wsgi.Application):
-    def __init__(self):
-        pass
-
-    @webob.dec.wsgify(RequestClass=wsgi.Request)
-    def __call__(self, request):
-        pass
 
 
 # TODO(anyone): super generic first cut
