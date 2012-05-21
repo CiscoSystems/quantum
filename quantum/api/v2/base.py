@@ -162,7 +162,6 @@ class FaultWrapper(object):
         return _fault_wrapper(object.__getattribute__(plugin, name))
 
 
-# TODO(anyone): super generic first cut
 class Controller(object):
     def __init__(self, plugin, collection, resource):
         self._plugin = FaultWrapper(plugin)

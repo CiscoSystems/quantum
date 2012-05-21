@@ -49,7 +49,7 @@ def Resource():
         args = _args(request)
 
         controller = args.pop('controller', None)
-        format = args.pop('format', None)
+        fmt = args.pop('format', None)
         action = args.pop('action', None)
 
     return resource
