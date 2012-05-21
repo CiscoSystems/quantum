@@ -13,10 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import logging
 import json
 
+import webob.exc
+
 from quantum.api import api_common
+from quantum.common import exceptions
 from quantum.api import faults
 from quantum.common import utils
 from quantum.api.v2 import views
@@ -24,6 +28,12 @@ from quantum import wsgi
 
 LOG = logging.getLogger(__name__)
 XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
+
+FAULT_MAP = {exceptions.NetworkNotFound: webob.exc.HTTPNotFound,
+             exceptions.NetworkInUse: webob.exc.HTTPConflict,
+             exceptions.PortNotFound: webob.exc.HTTPNotFound,
+             exceptions.StateInvalid: webob.exc.HTTPBadRequest,
+             exceptions.PortInUse: webob.exc.HTTPConflict}
 
 
 def show(request):
@@ -120,11 +130,44 @@ def create_resource(collection, resource, plugin, conf):
                          serializer)
 
 
-# TODO(anyone): super generic first cut
-class Controller(api_common.QuantumController):
-    def __init__(self, plugin, collection, resource):
-        super(Controller, self).__init__(plugin)
+def _fault_wrapper(func):
+    """
+    Wraps calls to the plugin to translate Exceptions to webob Faults
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except exceptions.QuantumException as e:
+            e_type = type(e)
+            if e_type in FAULT_MAP:
+                fault = FAULT_MAP(e_type)
+                fault_data = json.dumps({'QuantumError': {
+                                            'type': e.__class__.__name__,
+                                            'message': e.message,
+                                            'detail': '${detail}',
+                                            }})
+                raise fault(body_template=fault_data)
+            raise e
+    return wrapper
+
+
+class FaultWrapper(object):
+    """
+    Wrapper class to wrap all plugin functions with the fault_wrapper
+    """
+    def __init__(self, plugin):
         self._plugin = plugin
+
+    def __getattribute__(self, name):
+        plugin = object.__getattribute__(self, '_plugin')
+        return _fault_wrapper(object.__getattribute__(plugin, name))
+
+
+# TODO(anyone): super generic first cut
+class Controller(object):
+    def __init__(self, plugin, collection, resource):
+        self._plugin = FaultWrapper(plugin)
         self._collection = collection
         self._resource = resource
         self._view = getattr(views, self._resource)
