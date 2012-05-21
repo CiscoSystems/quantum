@@ -55,10 +55,10 @@ def filters(request):
 
     {'check': [u'a', u'b'], 'name': [u'Bob']}
     """
-    return dict([(k, request.GET.getall(k))
+    return dict(((k, request.GET.getall(k))
                  for k in set(request.GET)
                  if k not in ('verbose', 'show') and
-                    [v for v in request.GET.getall(k) if v]])
+                    (v for v in request.GET.getall(k) if v)))
 
 
 def verbose(request):
@@ -102,6 +102,7 @@ def create_resource(collection, resource, plugin, conf):
     # NOTE(jkoelker) punt on XML for now until we can genericizle it
     # NOTE(jkoelker) genericizle is a word
     # NOTE(jkoelker) just ask snoop dawg
+    # NOTE(cerberus) pretty sure it's genericizzle. Two Zs.
     #metadata = Controller._serialization_metadata
     #xmlns = XML_NS_V20
 

@@ -13,26 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-
-
-LOG = logging.getLogger(__name__)
-
 
 # NOTE(cerberus): see http://pyvideo.org/video/880/stop-writing-classes for
 # justification of everything below
 def tagger(data):
-    if 'tags' not in data:
-        return []
-    return data['tags']
+    return data.get('tags', [])
 
 
-def filter(data, keys):
-    return dict([item for item in data.iteritems() if item[0] in keys])
+def filter_keys(data, keys):
+    return dict((item for item in data.iteritems() if item[0] in keys))
 
 
 def resource(data, keys):
-    res = filter(data, keys)
+    res = filter_keys(data, keys)
     res['tags'] = tagger(data)
     return res
 
