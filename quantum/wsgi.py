@@ -116,41 +116,25 @@ class Middleware(object):
 
 
 class Request(webob.Request):
+    """Add some Openstack API-specific logic to the base webob.Request."""
 
     def best_match_content_type(self):
-        """Determine the most acceptable content-type.
-
-        Based on:
-            1) URI extension (.json/.xml)
-            2) Content-type header
-            3) Accept* headers
-        """
-        # First lookup http request
-        parts = self.path.rsplit('.', 1)
-        if len(parts) > 1:
-            format = parts[1]
-            if format in ['json', 'xml']:
-                return 'application/{0}'.format(parts[1])
-
-        #Then look up content header
-        type_from_header = self.get_content_type()
-        if type_from_header:
-            return type_from_header
-        ctypes = ['application/json', 'application/xml']
-
-        #Finally search in Accept-* headers
-        bm = self.accept.best_match(ctypes)
+        """Determine the requested response content-type."""
+        supported = ('application/json', 'application/xml')
+        bm = self.accept.best_match(supported)
         return bm or 'application/json'
 
-    def get_content_type(self):
-        allowed_types = ("application/xml", "application/json")
+    def get_content_type(self, allowed_content_types):
+        """Determine content type of the request body."""
         if not "Content-Type" in self.headers:
-            LOG.debug(_("Missing Content-Type"))
-            return None
-        type = self.content_type
-        if type in allowed_types:
-            return type
-        return None
+            raise exception.InvalidContentType(content_type=None)
+
+        content_type = self.content_type
+
+        if content_type not in allowed_content_types:
+            raise exception.InvalidContentType(content_type=content_type)
+        else:
+            return content_type
 
 
 class ActionDispatcher(object):
@@ -202,6 +186,12 @@ class XMLDictSerializer(DictSerializer):
         node = self._to_xml_node(doc, self.metadata, root_key, data[root_key])
 
         return self.to_xml_string(node)
+
+    def __call__(self, data):
+        # Provides a migration path to a cleaner WSGI layer, this
+        # "default" stuff and extreme extensibility isn't being used
+        # like originally intended
+        return self.default(data)
 
     def to_xml_string(self, node, has_atom=False):
         self._add_xmlns(node, has_atom)
