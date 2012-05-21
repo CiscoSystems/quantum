@@ -36,7 +36,7 @@ class Request(webob.Request):
                                       default_match='applicaton/json')
 
 
-def Resource():
+def Resource(controller, deserializer, serializer):
     def _args(request):
         route_args = request.environ.get('wsgiorg.routing_args')
         if not route_args:
@@ -48,7 +48,9 @@ def Resource():
     def resource(request):
         args = _args(request)
 
-        controller = args.pop('controller', None)
+        # NOTE(jkoelker) by now the controller is already found, remove
+        #                it from the args if it is in the matchdict
+        args.pop('controller', None)
         format = args.pop('format', None)
         action = args.pop('action', None)
 
