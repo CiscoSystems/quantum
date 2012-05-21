@@ -112,23 +112,22 @@ def create_resource(collection, resource, plugin, conf):
     #xml_serializer = wsgi.XMLDictSerializer(metadata, xmlns)
     #xml_deserializer = wsgi.XMLDeserializer(metadata)
 
-    body_serializers = {
+    serializers = {
     #    'application/xml': xml_serializer,
     }
 
-    body_deserializers = {
+    deserializers = {
     #    'application/xml': xml_deserializer,
     }
 
-    serializer = wsgi2.ResponseSerializer(body_serializers,
-                                         api_common.HeaderSerializer11())
-    deserializer = wsgi.RequestDeserializer(body_deserializers)
+    serializer = wsgi2.ResponseSerializer(serializers)
+    deserializer = wsgi2.RequestDeserializer(deserializers)
 
     # TODO(cerberus): fix the faults crap later
-    return Resource(controller,
-                         faults.fault_body_function_v11,
-                         deserializer,
-                         serializer)
+    return wsgi2.Resource(controller,
+                          faults.fault_body_function_v11,
+                          deserializer,
+                          serializer)
 
 
 def _fault_wrapper(func):
@@ -163,21 +162,6 @@ class FaultWrapper(object):
     def __getattribute__(self, name):
         plugin = object.__getattribute__(self, '_plugin')
         return _fault_wrapper(object.__getattribute__(plugin, name))
-
-
-class Request(webob.Request):
-    def best_match_content_type(self):
-        supported = ('application/json')
-        return self.accept.best_match(supported,
-                                      default_match='applicaton/json')
-
-
-def Resource():
-    @webob.dec.wsgify(RequestClass=Request)
-    def resource(request):
-        pass
-
-    return resource
 
 
 # TODO(anyone): super generic first cut

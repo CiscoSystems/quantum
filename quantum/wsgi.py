@@ -432,6 +432,10 @@ class XMLDeserializer(TextDeserializer):
     def default(self, datastring):
         return {'body': self._from_xml(datastring)}
 
+    def __call__(self, datastring):
+        # Adding a migration path to allow us to remove unncessary classes
+        return self.default(datastring)
+
 
 class RequestHeadersDeserializer(ActionDispatcher):
     """Default request headers deserializer"""
