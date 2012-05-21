@@ -26,6 +26,7 @@ from quantum.api import faults
 from quantum.common import utils
 from quantum.api.v2 import views
 from quantum import wsgi
+from quantum import wsgi2
 
 LOG = logging.getLogger(__name__)
 XML_NS_V20 = 'http://openstack.org/quantum/api/v2.0'
@@ -113,15 +114,13 @@ def create_resource(collection, resource, plugin, conf):
 
     body_serializers = {
     #    'application/xml': xml_serializer,
-        'application/json': lambda x: json.dumps(x)
     }
 
     body_deserializers = {
     #    'application/xml': xml_deserializer,
-        'application/json': lambda x: json.loads(x)
     }
 
-    serializer = wsgi.ResponseSerializer(body_serializers,
+    serializer = wsgi2.ResponseSerializer(body_serializers,
                                          api_common.HeaderSerializer11())
     deserializer = wsgi.RequestDeserializer(body_deserializers)
 
