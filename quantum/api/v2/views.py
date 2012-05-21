@@ -17,7 +17,7 @@
 # NOTE(cerberus): see http://pyvideo.org/video/880/stop-writing-classes for
 # justification of everything below
 def tagger(data):
-    return data.get('tags', [])
+    return data.get('tags', list())
 
 
 def filter_keys(data, keys):
