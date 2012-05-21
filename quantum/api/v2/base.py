@@ -162,32 +162,6 @@ class FaultWrapper(object):
         return _fault_wrapper(object.__getattribute__(plugin, name))
 
 
-class Request(webob.Request):
-    def best_match_content_type(self):
-        supported = ('application/json')
-        return self.accept.best_match(supported,
-                                      default_match='applicaton/json')
-
-
-def Resource():
-    def _args(request):
-        route_args = request.environ.get('wsgiorg.routing_args')
-        if not route_args:
-            return {}
-
-        return route_args[1].copy()
-
-    @webob.dec.wsgify(RequestClass=Request)
-    def resource(request):
-        args = _args(request)
-
-        controller = args.pop('controller', None)
-        format = args.pop('format', None)
-        action = args.pop('action', None)
-
-    return resource
-
-
 # TODO(anyone): super generic first cut
 class Controller(object):
     def __init__(self, plugin, collection, resource):
