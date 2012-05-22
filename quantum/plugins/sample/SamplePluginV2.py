@@ -1,26 +1,24 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-# Copyright 2011, Nicira Networks, Inc.
+# Copyright (c) 2012 OpenStack, LLC.
 #
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-#         http://www.apache.org/licenses/LICENSE-2.0
+#    http://www.apache.org/licenses/LICENSE-2.0
 #
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
-# @author: Somik Behera, Nicira Networks, Inc.
-# @author: Salvatore Orlando, Citrix
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import ConfigParser
 import logging
 import os
 
-from quantum.api.api_common import OperationalStatus
+from quantum import quantum_plugin_base_v2
+from quantum.api import api_common as common
 from quantum.common import exceptions as exc
 from quantum.db import api as db
 
@@ -61,7 +59,7 @@ def find_config(basepath):
     return None
 
 
-class QuantumEchoPlugin(object):
+class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     """
     QuantumEchoPlugin is a demo plugin that doesn't
@@ -158,7 +156,7 @@ class QuantumEchoPlugin(object):
         print("method_to_support_foxnsox_extension() called\n")
 
 
-class FakePlugin(object):
+class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     FakePlugin is a demo plugin that provides
     in-memory data structures to aid in quantum
@@ -251,7 +249,7 @@ class FakePlugin(object):
         new_net = db.network_create(tenant_id, net_name)
         # Put operational status UP
         db.network_update(new_net.uuid, net_name,
-                          op_status=OperationalStatus.UP)
+                          op_status=common.OperationalStatus.UP)
         # Return uuid for newly created network as net-id.
         return {'net-id': new_net.uuid}
 
@@ -319,7 +317,8 @@ class FakePlugin(object):
         self._get_network(tenant_id, net_id)
         port = db.port_create(net_id, port_state)
         # Put operational status UP
-        db.port_update(port.uuid, net_id, op_status=OperationalStatus.UP)
+        db.port_update(port.uuid, net_id,
+                       op_status=common.OperationalStatus.UP)
         port_item = {'port-id': str(port.uuid)}
         return port_item
 
