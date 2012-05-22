@@ -19,12 +19,16 @@
 Utility methods for working with WSGI servers redux
 """
 import json
+import logging
 
 import webob
 import webob.dec
 
-from quantum import exceptions as exception
+from quantum.common import exceptions as exception
 from quantum import wsgi
+
+
+LOG = logging.getLogger(__name__)
 
 
 class Request(webob.Request):
@@ -64,6 +68,10 @@ def Resource(controller, deserializer, serializer):
         fmt = args.pop('format', None)
         action = args.pop('action', None)
 
+        LOG.debug('*' * 80)
+        LOG.debug(fmt)
+        LOG.debug(action)
+
     return resource
 
 
@@ -74,7 +82,6 @@ class ResponseSerializer(object):
             'application/xml': wsgi.XMLDictSerializer()
         }
         self.response_status = dict(create=201, update=202, delete=204)
-        self.response_status.set_default(200)
         self.serializers.update(serializers or {})
 
     def __call__(self, request):
@@ -86,7 +93,7 @@ class ResponseSerializer(object):
         if not serializer:
             raise exception.InvalidContentType(content_type=content_type)
         response.body = serializer(response_data)
-        response.status_int = self.response_status[action]
+        response.status_int = self.response_status.get(action, 200)
         return response
 
 
