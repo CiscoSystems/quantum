@@ -22,6 +22,7 @@ that tests the database api method calls
 
 import unittest
 
+from quantum.context import get_admin_context
 from quantum.db import api as db
 from quantum.tests.unit import database_stubs as db_stubs
 
@@ -31,6 +32,7 @@ class QuantumDBTest(unittest.TestCase):
     def setUp(self):
         """Setup for tests"""
         db.configure_db({'sql_connection': 'sqlite:///:memory:'})
+        self.context = get_admin_context()
         self.dbtest = db_stubs.QuantumDB()
         self.tenant_id = "t1"
 
@@ -40,16 +42,19 @@ class QuantumDBTest(unittest.TestCase):
 
     def testa_create_network(self):
         """test to create network"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
         self.assertTrue(net1["name"] == "plugin_test1")
 
     def testb_get_networks(self):
         """test to get all networks"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
         self.assertTrue(net1["name"] == "plugin_test1")
-        net2 = self.dbtest.create_network(self.tenant_id, "plugin_test2")
+        net2 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test2")
         self.assertTrue(net2["name"] == "plugin_test2")
-        nets = self.dbtest.get_all_networks(self.tenant_id)
+        nets = self.dbtest.get_all_networks(self.context, self.tenant_id)
         count = 0
         for net in nets:
             if "plugin_test" in net["name"]:
@@ -58,56 +63,65 @@ class QuantumDBTest(unittest.TestCase):
 
     def testc_delete_network(self):
         """test to delete network"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
         self.assertTrue(net1["name"] == "plugin_test1")
-        self.dbtest.delete_network(net1["id"])
-        nets = self.dbtest.get_all_networks(self.tenant_id)
+        self.dbtest.delete_network(self.context, net1["id"])
+        nets = self.dbtest.get_all_networks(self.context, self.tenant_id)
         count = len(nets)
         self.assertTrue(count == 0)
 
     def testd_update_network(self):
         """test to rename network"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
         self.assertTrue(net1["name"] == "plugin_test1")
-        net = self.dbtest.update_network(self.tenant_id, net1["id"],
+        net = self.dbtest.update_network(self.context,
+                                         self.tenant_id,
+                                         net1["id"],
                                          {'name': "plugin_test1_renamed"})
         print net
         self.assertTrue(net["name"] == "plugin_test1_renamed")
 
     def teste_create_port(self):
         """test to create port"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
-        port = self.dbtest.create_port(net1["id"])
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
+        port = self.dbtest.create_port(self.context, net1["id"])
         self.assertTrue(port["net-id"] == net1["id"])
 
     def testf_get_ports(self):
         """test to get ports"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
-        port = self.dbtest.create_port(net1["id"])
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
+        port = self.dbtest.create_port(self.context, net1["id"])
         self.assertTrue(port["net-id"] == net1["id"])
-        ports = self.dbtest.get_all_ports(net1["id"])
+        ports = self.dbtest.get_all_ports(self.context, net1["id"])
         count = len(ports)
         self.assertTrue(count == 1)
 
     def testf_delete_port(self):
         """test to delete port"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
-        port = self.dbtest.create_port(net1["id"])
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
+        port = self.dbtest.create_port(self.context, net1["id"])
         self.assertTrue(port["net-id"] == net1["id"])
-        ports = self.dbtest.get_all_ports(net1["id"])
+        ports = self.dbtest.get_all_ports(self.context, net1["id"])
         for por in ports:
-            self.dbtest.delete_port(net1["id"], por["id"])
-        ports = self.dbtest.get_all_ports(net1["id"])
+            self.dbtest.delete_port(self.context, net1["id"], por["id"])
+        ports = self.dbtest.get_all_ports(self.context, net1["id"])
         count = len(ports)
         self.assertTrue(count == 0)
 
     def testg_plug_unplug_interface(self):
         """test to plug/unplug interface"""
-        net1 = self.dbtest.create_network(self.tenant_id, "plugin_test1")
-        port1 = self.dbtest.create_port(net1["id"])
-        self.dbtest.plug_interface(net1["id"], port1["id"], "vif1.1")
-        port = self.dbtest.get_port(net1["id"], port1["id"])
+        net1 = self.dbtest.create_network(self.context,
+                                          self.tenant_id, "plugin_test1")
+        port1 = self.dbtest.create_port(self.context, net1["id"])
+        self.dbtest.plug_interface(self.context, net1["id"],
+                                   port1["id"], "vif1.1")
+        port = self.dbtest.get_port(self.context, net1["id"], port1["id"])
         self.assertTrue(port[0]["attachment"] == "vif1.1")
-        self.dbtest.unplug_interface(net1["id"], port1["id"])
-        port = self.dbtest.get_port(net1["id"], port1["id"])
+        self.dbtest.unplug_interface(self.context, net1["id"], port1["id"])
+        port = self.dbtest.get_port(self.context, net1["id"], port1["id"])
         self.assertTrue(port[0]["attachment"] is None)

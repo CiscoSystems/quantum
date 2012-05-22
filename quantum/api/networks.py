@@ -54,15 +54,21 @@ class Controller(common.QuantumController):
               net_details=True, port_details=False):
         # We expect get_network_details to return information
         # concerning logical ports as well.
-        network = self._plugin.get_network_details(tenant_id, network_id)
+        network = self._plugin.get_network_details(request.context,
+                                                   tenant_id,
+                                                   network_id)
         # Doing this in the API is inefficient
         # TODO(salvatore-orlando): This should be fixed with Bug #834012
         # Don't pass filter options
         ports_data = None
         if port_details:
-            port_list = self._plugin.get_all_ports(tenant_id, network_id)
+            port_list = self._plugin.get_all_ports(request.context,
+                                                   tenant_id,
+                                                   network_id)
             ports_data = [
-                self._plugin.get_port_details(tenant_id, network_id,
+                self._plugin.get_port_details(request.context,
+                                              tenant_id,
+                                              network_id,
                                               port['port-id'])
                 for port in port_list]
         builder = networks_view.get_view_builder(request, self.version)
@@ -82,7 +88,7 @@ class Controller(common.QuantumController):
         """
         filter_opts = {}
         filter_opts.update(request.GET)
-        networks = self._plugin.get_all_networks(tenant_id,
+        networks = self._plugin.get_all_networks(request.context, tenant_id,
                                                  filter_opts=filter_opts)
         # Inefficient, API-layer filtering
         # will be performed only for the filters not implemented by the plugin
@@ -90,6 +96,7 @@ class Controller(common.QuantumController):
         # it does not implement in filter_opts
         networks = filters.filter_networks(networks,
                                            self._plugin,
+                                           request.context,
                                            tenant_id,
                                            filter_opts)
         builder = networks_view.get_view_builder(request, self.version)
@@ -130,7 +137,8 @@ class Controller(common.QuantumController):
         # request_params but that would mean all the plugins would need to
         # change.
         body = self._prepare_request_body(body, self._network_ops_param_list)
-        network = self._plugin.create_network(tenant_id,
+        network = self._plugin.create_network(request.context,
+                                              tenant_id,
                                               body['network']['name'],
                                               **body)
         builder = networks_view.get_view_builder(request, self.version)
@@ -141,13 +149,14 @@ class Controller(common.QuantumController):
     def update(self, request, tenant_id, id, body):
         """ Updates the name for the network with the given id """
         body = self._prepare_request_body(body, self._network_ops_param_list)
-        self._plugin.update_network(tenant_id, id, **body['network'])
+        self._plugin.update_network(request.context, tenant_id, id,
+                                    **body['network'])
 
     @common.APIFaultWrapper([exception.NetworkNotFound,
                              exception.NetworkInUse])
     def delete(self, request, tenant_id, id):
         """ Destroys the network with the given id """
-        self._plugin.delete_network(tenant_id, id)
+        self._plugin.delete_network(request.context, tenant_id, id)
 
 
 class ControllerV10(Controller):

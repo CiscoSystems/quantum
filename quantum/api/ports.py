@@ -59,7 +59,7 @@ class Controller(common.QuantumController):
         """
         filter_opts = {}
         filter_opts.update(request.GET)
-        port_list = self._plugin.get_all_ports(tenant_id,
+        port_list = self._plugin.get_all_ports(request.context, tenant_id,
                                                network_id,
                                                filter_opts=filter_opts)
 
@@ -70,7 +70,8 @@ class Controller(common.QuantumController):
         # TODO(salvatore-orlando): the fix for bug #834012 should deal with it
         if port_details:
             port_list_detail = [
-                self._plugin.get_port_details(tenant_id, network_id,
+                self._plugin.get_port_details(request.context, tenant_id,
+                                              network_id,
                                               port['port-id'])
                 for port in port_list]
             port_list = port_list_detail
@@ -81,8 +82,11 @@ class Controller(common.QuantumController):
         # not support filtering
         # NOTE(salvatore-orlando): the plugin is supposed to leave only filters
         # it does not implement in filter_opts
-        port_list = filters.filter_ports(port_list, self._plugin,
-                                         tenant_id, network_id,
+        port_list = filters.filter_ports(port_list,
+                                         self._plugin,
+                                         request.context,
+                                         tenant_id,
+                                         network_id,
                                          filter_opts)
 
         result = [builder.build(port, port_details)['port']
@@ -92,7 +96,8 @@ class Controller(common.QuantumController):
     def _item(self, request, tenant_id, network_id, port_id,
               att_details=False):
         """ Returns a specific port. """
-        port = self._plugin.get_port_details(tenant_id, network_id, port_id)
+        port = self._plugin.get_port_details(request.context, tenant_id,
+                                             network_id, port_id)
         builder = ports_view.get_view_builder(request, self.version)
         result = builder.build(port, port_details=True,
                                att_details=att_details)['port']
@@ -132,7 +137,7 @@ class Controller(common.QuantumController):
 
         """
         body = self._prepare_request_body(body, self._port_ops_param_list)
-        port = self._plugin.create_port(tenant_id,
+        port = self._plugin.create_port(request.context, tenant_id,
                                         network_id, body['port']['state'],
                                         **body)
         builder = ports_view.get_view_builder(request, self.version)
@@ -145,14 +150,15 @@ class Controller(common.QuantumController):
     def update(self, request, tenant_id, network_id, id, body):
         """ Updates the state of a port for a given network """
         body = self._prepare_request_body(body, self._port_ops_param_list)
-        self._plugin.update_port(tenant_id, network_id, id, **body['port'])
+        self._plugin.update_port(request.context, tenant_id, network_id, id,
+                                 **body['port'])
 
     @common.APIFaultWrapper([exception.NetworkNotFound,
                              exception.PortNotFound,
                              exception.PortInUse])
     def delete(self, request, tenant_id, network_id, id):
         """ Destroys the port with the given id """
-        self._plugin.delete_port(tenant_id, network_id, id)
+        self._plugin.delete_port(request.context, tenant_id, network_id, id)
 
 
 class ControllerV10(Controller):

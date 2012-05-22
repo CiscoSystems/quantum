@@ -60,7 +60,10 @@ class Controller(common.QuantumController):
     @common.APIFaultWrapper([exception.NetworkNotFound,
                              exception.PortNotFound])
     def get_resource(self, request, tenant_id, network_id, id):
-        att_data = self._plugin.get_port_details(tenant_id, network_id, id)
+        att_data = self._plugin.get_port_details(request.context,
+                                                 tenant_id,
+                                                 network_id,
+                                                 id)
         builder = attachments_view.get_view_builder(request)
         result = builder.build(att_data)['attachment']
         return dict(attachment=result)
@@ -72,13 +75,16 @@ class Controller(common.QuantumController):
     def attach_resource(self, request, tenant_id, network_id, id, body):
         body = self._prepare_request_body(body,
                                           self._attachment_ops_param_list)
-        self._plugin.plug_interface(tenant_id, network_id, id,
+        self._plugin.plug_interface(request.context, tenant_id, network_id, id,
                                     body['attachment']['id'])
 
     @common.APIFaultWrapper([exception.NetworkNotFound,
                              exception.PortNotFound])
     def detach_resource(self, request, tenant_id, network_id, id):
-        self._plugin.unplug_interface(tenant_id, network_id, id)
+        self._plugin.unplug_interface(request.context,
+                                      tenant_id,
+                                      network_id,
+                                      id)
 
 
 class ControllerV10(Controller):

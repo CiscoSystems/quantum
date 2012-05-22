@@ -22,6 +22,7 @@ Utility methods for working with WSGI servers
 import logging
 import sys
 from xml.dom import minidom
+from xml.parsers import expat
 
 import eventlet.wsgi
 eventlet.patcher.monkey_patch(all=False, socket=True)
@@ -151,6 +152,16 @@ class Request(webob.Request):
         if type in allowed_types:
             return type
         return None
+
+    @property
+    def context(self):
+        #this is here due to some import loop issues.(mdragon)
+        from quantum.context import get_admin_context
+        #Eventually the Auth[NZ} code will supply this. (mdragon)
+        #when that happens this if block should raise instead.
+        if 'quantum.context' not in self.environ:
+            self.environ['quantum.context'] = get_admin_context()
+        return self.environ['quantum.context']
 
 
 class ActionDispatcher(object):
@@ -793,7 +804,8 @@ class Resource(Application):
         try:
             #NOTE(salvatore-orlando): the controller method must have
             # an argument whose name is 'request'
-            return controller_method(request=request, **action_args)
+            return controller_method(request=request,
+                                     **action_args)
         except TypeError as exc:
             LOG.exception(exc)
             return Fault(webob.exc.HTTPBadRequest(),

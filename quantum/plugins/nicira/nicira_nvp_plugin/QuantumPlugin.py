@@ -271,7 +271,7 @@ class NvpPlugin(object):
         # For testing..
         self.api_client = self.controller.api_client
 
-    def get_all_networks(self, tenant_id, **kwargs):
+    def get_all_networks(self, context,  tenant_id, **kwargs):
         """
         Returns a dictionary containing all <network_uuid, network_name> for
         the specified tenant.
@@ -296,7 +296,7 @@ class NvpPlugin(object):
                   (tenant_id, networks))
         return networks
 
-    def create_network(self, tenant_id, net_name, **kwargs):
+    def create_network(self, context,  tenant_id, net_name, **kwargs):
         """
         Creates a new Virtual Network, and assigns it a symbolic name.
         :returns: a sequence of mappings with the following signature:
@@ -310,14 +310,14 @@ class NvpPlugin(object):
         kwargs["controller"] = self.controller
         return nvplib.create_network(tenant_id, net_name, **kwargs)
 
-    def create_custom_network(self, tenant_id, net_name, transport_zone,
+    def create_custom_network(self, context,  tenant_id, net_name, transport_zone,
                               controller):
         return self.create_network(tenant_id, net_name,
                                    network_type="custom",
                                    transport_zone=transport_zone,
                                    controller=controller)
 
-    def delete_network(self, tenant_id, netw_id):
+    def delete_network(self, context,  tenant_id, netw_id):
         """
         Deletes the network with the specified network identifier
         belonging to the specified tenant.
@@ -336,7 +336,7 @@ class NvpPlugin(object):
         LOG.debug("delete_network() completed for tenant: %s" % tenant_id)
         return {'net-id': netw_id}
 
-    def get_network_details(self, tenant_id, netw_id):
+    def get_network_details(self, context,  tenant_id, netw_id):
         """
         Retrieves a list of all the remote vifs that
         are attached to the network.
@@ -379,7 +379,7 @@ class NvpPlugin(object):
                   (tenant_id, d))
         return d
 
-    def update_network(self, tenant_id, netw_id, **kwargs):
+    def update_network(self, context,  tenant_id, netw_id, **kwargs):
         """
         Updates the properties of a particular Virtual Network.
 
@@ -402,7 +402,7 @@ class NvpPlugin(object):
             'net-op-status': "UP",
             }
 
-    def get_all_ports(self, tenant_id, netw_id, **kwargs):
+    def get_all_ports(self, context,  tenant_id, netw_id, **kwargs):
         """
         Retrieves all port identifiers belonging to the
         specified Virtual Network.
@@ -438,7 +438,7 @@ class NvpPlugin(object):
         LOG.debug(ids)
         return ids
 
-    def create_port(self, tenant_id, netw_id, port_init_state=None, **params):
+    def create_port(self, context,  tenant_id, netw_id, port_init_state=None, **params):
         """
         Creates a port on the specified Virtual Network.
 
@@ -463,7 +463,7 @@ class NvpPlugin(object):
         LOG.debug("create_port() completed for tenant %s: %s" % (tenant_id, d))
         return d
 
-    def update_port(self, tenant_id, netw_id, portw_id, **params):
+    def update_port(self, context,  tenant_id, netw_id, portw_id, **params):
         """
         Updates the properties of a specific port on the
         specified Virtual Network.
@@ -490,7 +490,7 @@ class NvpPlugin(object):
         LOG.debug("returning updated port %s: " % port)
         return port
 
-    def delete_port(self, tenant_id, netw_id, portw_id):
+    def delete_port(self, context,  tenant_id, netw_id, portw_id):
         """
         Deletes a port on a specified Virtual Network,
         if the port contains a remote interface attachment,
@@ -511,7 +511,7 @@ class NvpPlugin(object):
         LOG.debug("delete_port() completed for tenant: %s" % tenant_id)
         return {"port-id": portw_id}
 
-    def get_port_details(self, tenant_id, netw_id, portw_id):
+    def get_port_details(self, context,  tenant_id, netw_id, portw_id):
         """
         This method allows the user to retrieve a remote interface
         that is attached to this particular port.
@@ -549,7 +549,7 @@ class NvpPlugin(object):
         LOG.debug("Port details for tenant %s: %s" % (tenant_id, d))
         return d
 
-    def plug_interface(self, tenant_id, netw_id, portw_id,
+    def plug_interface(self, context,  tenant_id, netw_id, portw_id,
                        remote_interface_id):
         """
         Attaches a remote interface to the specified port on the
@@ -568,7 +568,7 @@ class NvpPlugin(object):
         LOG.debug("plug_interface() completed for %s: %s" %
                   (tenant_id, result))
 
-    def unplug_interface(self, tenant_id, netw_id, portw_id):
+    def unplug_interface(self, context,  tenant_id, netw_id, portw_id):
         """
         Detaches a remote interface from the specified port on the
         specified Virtual Network.
@@ -584,7 +584,7 @@ class NvpPlugin(object):
         LOG.debug("unplug_interface() completed for tenant %s: %s" %
                   (tenant_id, result))
 
-    def get_port_stats(self, tenant_id, network_id, port_id):
+    def get_port_stats(self, context,  tenant_id, network_id, port_id):
         """
         Returns port statistics for a given port.
 
