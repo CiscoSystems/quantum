@@ -30,7 +30,7 @@ class QuantumPluginBaseV2(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def create_subnet(self, auth_context, subnet_data, **kwargs):
+    def create_subnet(self, context, subnet):
         """
         Create a subnet, which represents a range of IP addresses
         that can be allocated to devices
@@ -62,19 +62,25 @@ class QuantumPluginBaseV2(object):
         """
         pass
 
-    def update_subnet(self, auth_context, id, subnet_data, **kwargs):
+    @abstractmethod
+    def update_subnet(self, context, id, subnet):
         pass
 
     @abstractmethod
-    def get_subnet(self, auth_context, subnet_id):
+    def get_subnet(self, context, id, show=None, verbose=None):
         pass
 
     @abstractmethod
-    def get_all_subnets(self, auth_context, **kwargs):
+    def delete_subnet(self, context, id):
         pass
 
     @abstractmethod
-    def create_network(self, auth_context, net_data, **kwargs):
+    def get_all_subnets(self, context, filters=None, show=None,
+                        verbose=None):
+        pass
+
+    @abstractmethod
+    def create_network(self, context, network):
         """
         Creates a new Virtual Network, assigns a name and associates
 
@@ -94,23 +100,24 @@ class QuantumPluginBaseV2(object):
         pass
 
     @abstractmethod
-    def update_network(self, auth_context, net_data, **kwargs):
+    def update_network(self, context, id, network):
         pass
 
     @abstractmethod
-    def delete_network(self, auth_context, net_id):
+    def delete_network(self, context, id):
         pass
 
     @abstractmethod
-    def get_network(self, auth_context, net_id):
+    def get_network(self, context, id, show=None, verbose=None):
         pass
 
     @abstractmethod
-    def get_all_networks(self, auth_context, **kwargs):
+    def get_all_networks(self, context, filters=None, show=None,
+                         verbose=None):
         pass
 
     @abstractmethod
-    def create_port(self, auth_context, port_data, **kwargs):
+    def create_port(self, context, port):
         """
         Creates a port on the specified Virtual Network. Optionally
         specify customization of port IP-related attributes, otherwise
@@ -151,7 +158,7 @@ class QuantumPluginBaseV2(object):
         pass
 
     @abstractmethod
-    def update_port(self, auth_context, port_data, **kwargs):
+    def update_port(self, context, id, port):
         """
         Updates the attributes of a specific port on the
         specified Virtual Network.
@@ -167,7 +174,7 @@ class QuantumPluginBaseV2(object):
         pass
 
     @abstractmethod
-    def delete_port(self, auth_context, port_id):
+    def delete_port(self, context, id):
         """
         Deletes a port on a specified Virtual Network,
         if the port contains a remote interface attachment,
@@ -185,9 +192,9 @@ class QuantumPluginBaseV2(object):
         pass
 
     @abstractmethod
-    def get_port(self, auth_context, port_id):
+    def get_port(self, context, id, show=None, verbose=None):
         pass
 
     @abstractmethod
-    def get_all_ports(self, auth_context, **kwargs):
+    def get_all_ports(self, context, filters=None, show=None, verbose=None):
         pass
