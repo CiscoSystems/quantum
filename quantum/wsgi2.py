@@ -50,6 +50,9 @@ class Request(webob.Request):
 
 
 def Resource(controller, deserializers=None, serializers=None):
+    """Represents an API entity resource and the associated serialization and
+    deserialization logic
+    """
     deserializers = {'application/xml': wsgi.XMLDeserializer(),
                      'application/json': lambda x: json.loads(x)}
     serializers = {'application/xml': wsgi.XMLDictSerializer(),
