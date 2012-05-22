@@ -24,7 +24,6 @@ import logging
 import webob
 import webob.dec
 
-from quantum.common import exceptions as exception
 from quantum import wsgi
 
 
@@ -50,17 +49,24 @@ class Request(webob.Request):
         return self.environ['quantum.context']
 
 
-def Resource(controller, deserializer, serializer):
-    def _args(request):
-        route_args = request.environ.get('wsgiorg.routing_args')
-        if not route_args:
-            return {}
+def Resource(controller, deserializers=None, serializers=None):
+    deserializers = {'application/xml': wsgi.XMLDeserializer(),
+                     'application/json': lambda x: json.loads(x)}
+    serializers = {'application/xml': wsgi.XMLDictSerializer(),
+                   'application/json': lambda x: json.dumps(x)}
+    format_types = {'xml': 'application/xml',
+                    'json': 'application/json'}
 
-        return route_args[1].copy()
+    deserializers.update(deserializers or {})
+    serializers.update(serializers or {})
 
     @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
-        args = _args(request)
+        route_args = request.environ.get('wsgiorg.routing_args')
+        if route_args:
+            args = route_args[1].copy()
+        else:
+            args = {}
 
         # NOTE(jkoelker) by now the controller is already found, remove
         #                it from the args if it is in the matchdict
@@ -68,71 +74,21 @@ def Resource(controller, deserializer, serializer):
         fmt = args.pop('format', None)
         action = args.pop('action', None)
 
-        LOG.debug('*' * 80)
-        LOG.debug(fmt)
+        content_type = format_types.get(fmt,
+                                        request.best_match_content_type())
+        deserializer = deserializers.get(content_type)
+
+        body = deserializer(request.body)
+
+        # NOTE(jkoelker) Prevent the body from overriding values in args
+        for k, v in body.iteritems():
+            if k not in args:
+                args[k] = v
+
+        LOG.debug('*' * 40)
+        LOG.debug(content_type)
         LOG.debug(action)
+        LOG.debug(args)
+        LOG.debug('*' * 40)
 
     return resource
-
-
-class ResponseSerializer(object):
-    def __init__(self, serializers=None):
-        self.serializers = {
-            'application/json': lambda x: json.dumps(x),
-            'application/xml': wsgi.XMLDictSerializer()
-        }
-        self.response_status = dict(create=201, update=202, delete=204)
-        self.serializers.update(serializers or {})
-
-    def __call__(self, request):
-        return self.serialize(request)
-
-    def serialize(self, response_data, content_type, action):
-        response = webob.Response()
-        serializer = self.serializers.get(content_type, None)
-        if not serializer:
-            raise exception.InvalidContentType(content_type=content_type)
-        response.body = serializer(response_data)
-        response.status_int = self.response_status.get(action, 200)
-        return response
-
-
-class RequestDeserializer(object):
-    def __init__(self, deserializers=None):
-        self.deserializers = {
-            'application/xml': wsgi.XMLDeserializer(),
-            'application/json': lambda x: json.loads(x)
-        }
-        self.deserializers.update(deserializers or {})
-
-    def __call__(self, request):
-        return self.deserialize(request)
-
-    def deserialize(self, request):
-        args = environ['wsgiorg.routing_args'][1].copy()
-        for key in ['format', 'controller']:
-            args.pop(key, None)
-        action = args.pop('action', None)
-
-        action_args.update(self.deserialize_body(request, action))
-
-        accept = request.best_match_content_type()
-
-        return (action, args, accept)
-
-    def deserialize_body(self, request, action):
-        if len(request.body) == 0:
-            LOG.debug(_("Empty request body"))
-            return {}
-
-        content_type = request.best_match_content_type()
-        deserializer = self.deserializers.get(content_type)
-        if not deserializer:
-            LOG.debug(_("Unrecognized Content-Type provided in request"))
-            raise exception.InvalidContentType(content_type)
-
-        try:
-            return deserializer(request.body, action)
-        except exception.InvalidContentType:
-            LOG.debug(_("Unable to deserialize body as provided Content-Type"))
-            raise

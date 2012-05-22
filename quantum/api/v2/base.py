@@ -21,7 +21,6 @@ import webob.dec
 import webob.exc
 
 from quantum.common import exceptions
-from quantum.api import faults
 from quantum.common import utils
 from quantum.api.v2 import views
 from quantum import wsgi2
@@ -118,14 +117,10 @@ def create_resource(collection, resource, plugin, conf):
     #    'application/xml': xml_deserializer,
     }
 
-    serializer = wsgi2.ResponseSerializer(serializers)
-    deserializer = wsgi2.RequestDeserializer(deserializers)
-
     # TODO(cerberus): fix the faults crap later
     return wsgi2.Resource(controller,
-                          faults.fault_body_function_v11,
-                          deserializer,
-                          serializer)
+                          deserializers,
+                          serializers)
 
 
 def _fault_wrapper(func):
