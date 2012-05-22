@@ -137,10 +137,10 @@ def _fault_wrapper(func):
                 fault = FAULT_MAP[e_type]
                 fault_data = json.dumps({'QuantumError': {
                                             'type': e.__class__.__name__,
-                                            'message': e.message,
+                                            'message': str(e),
                                             'detail': '${detail}',
                                             }})
-                raise fault(body_template=fault_data)
+                raise fault(body=fault_data)
             raise e
     return wrapper
 
