@@ -17,43 +17,38 @@
 # NOTE(cerberus): see http://pyvideo.org/video/880/stop-writing-classes for
 # justification of everything below
 def tagger(data):
+    """Adds the metadata tags to the view for the requested entity"""
     return data.get('tags', list())
 
 
 def filter_keys(data, keys):
+    """Strips the specified keys from the dictionary 'data'"""
     return dict((item for item in data.iteritems() if item[0] in keys))
 
 
 def resource(data, keys):
+    """Formats the specified entity"""
     res = filter_keys(data, keys)
     res['tags'] = tagger(data)
     return res
 
 
 def port(port_data):
+    """Represents a view for a port object"""
     keys = ('id', 'network_id', 'mac_address', 'fixed_ips',
             'device_id', 'admin_state_up', 'tenant_id', 'op_status')
     return resource(port_data, keys)
 
 
 def network(network_data):
+    """Represents a view for a network object"""
     keys = ('id', 'name', 'subnets', 'admin_state_up', 'op_status',
-            'tenant_id')
+            'tenant_id', 'mac_ranges')
     return resource(network_data, keys)
 
 
 def subnet(subnet_data):
+    """Represents a view for a subnet object"""
     keys = ('id', 'network_id', 'tenant_id', 'gateway_ip', 'ip_version',
             'prefix')
     return resource(subnet_data, keys)
-
-
-def ip(ip_data):
-    keys = ('id', 'subnet', 'device_id', 'tenant_id', 'ports', 'version',
-            'address')
-    return resource(ip_data, keys)
-
-
-def route(route_data):
-    keys = ('id', 'cidr', 'version', 'gateway')
-    return resource(route_data, keys)

@@ -37,6 +37,7 @@ REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
 class Index(wsgi.Application):
+    """Base resource for discovering API versions"""
     def __init__(self, resources):
         self.resources = resources
 
@@ -80,9 +81,7 @@ class APIRouter(wsgi.Router):
 
         resources = {'network': 'networks',
                      'subnet': 'subnets',
-                     'route': 'routes',
-                     'port': 'ports',
-                     'ip': 'ips'}
+                     'port': 'ports'}
 
         def _map_resource(collection, resource, req=None):
             controller = base.create_resource(collection, resource,

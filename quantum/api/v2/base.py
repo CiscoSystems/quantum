@@ -166,6 +166,7 @@ class Controller(object):
         self._view = getattr(views, self._resource_name)
 
     def _items(self, request):
+        """Retrieves and formats a list of elements of the requested entity"""
         kwargs = dict(filters=filters(request),
                       verbose=verbose(request),
                       show=show(request),
@@ -177,6 +178,7 @@ class Controller(object):
         return {self._collection: [self._view(obj) for obj in obj_list]}
 
     def _item(self, request, id):
+        """Retrieves and formats a single element of the requested entity"""
         kwargs = dict(verbose=verbose(request),
                       show=show(request),
                       context=request.context)
@@ -186,23 +188,28 @@ class Controller(object):
         return {self._resource: self._view(obj)}
 
     def index(self, request):
+        """Returns a list of the requested entity"""
         return self._items(request)
 
     def show(self, request, id):
+        """Returns detailed information about the requested entity"""
         return self._item(request, id)
 
     def create(self, request, body):
+        """Creates a new instance of the requested entity"""
         obj_creator = getattr(self._plugin,
                               "create_%s" % self._resource)
         obj = obj_creator(body, context=request.context)
         return {self._resource: self._view(obj)}
 
     def delete(self, request, id):
+        """Deletes the specified entity"""
         obj_deleter = getattr(self._plugin,
                               "delete_%s" % self._resource)
         obj_deleter(id, context=request.context)
 
     def update(self, request, id, body):
+        """Updates the specified entity's attributes"""
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
                               "update_%s" % self._resource)
