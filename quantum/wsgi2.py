@@ -22,6 +22,7 @@ import json
 import logging
 
 import webob
+import webob.exc
 import webob.dec
 
 from quantum import wsgi
@@ -81,16 +82,23 @@ def Resource(controller, deserializers=None, serializers=None):
                                         request.best_match_content_type())
         deserializer = deserializers.get(content_type)
 
-        body = deserializer(request.body)
+        body = {}
+        if request.body:
+            body = deserializer(request.body)
 
         # NOTE(jkoelker) Prevent the body from overriding values in args
         body.update(args)
         args = body
 
-        LOG.debug('*' * 40)
-        LOG.debug(content_type)
-        LOG.debug(action)
-        LOG.debug(args)
-        LOG.debug('*' * 40)
+        method = getattr(controller, action)
 
+        result = method(request=request, **args)
+
+        if isinstance(result, webob.exc.HTTPException):
+            return result
+
+        serializer = serializers.get(content_type)
+        return  webob.Response(request=request,
+                               content_type=content_type,
+                               body=serializer(result))
     return resource

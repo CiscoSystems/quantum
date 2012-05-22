@@ -135,12 +135,13 @@ def _fault_wrapper(func):
             e_type = type(e)
             if e_type in FAULT_MAP:
                 fault = FAULT_MAP[e_type]
+                # TODO(anyone) XML body support ;(
                 fault_data = json.dumps({'QuantumError': {
                                             'type': e.__class__.__name__,
-                                            'message': e.message,
+                                            'message': str(e),
                                             'detail': '${detail}',
                                             }})
-                raise fault(body_template=fault_data)
+                raise fault(body=fault_data)
             raise e
     return wrapper
 
