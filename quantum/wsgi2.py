@@ -35,6 +35,16 @@ class Request(webob.Request):
         return self.accept.best_match(supported,
                                       default_match='applicaton/json')
 
+    @property
+    def context(self):
+        #this is here due to some import loop issues.(mdragon)
+        from quantum.context import get_admin_context
+        #Eventually the Auth[NZ] code will supply this. (mdragon)
+        #when that happens this if block should raise instead.
+        if 'quantum.context' not in self.environ:
+            self.environ['quantum.context'] = get_admin_context()
+        return self.environ['quantum.context']
+
 
 def Resource(controller, deserializer, serializer):
     def _args(request):
@@ -51,7 +61,7 @@ def Resource(controller, deserializer, serializer):
         # NOTE(jkoelker) by now the controller is already found, remove
         #                it from the args if it is in the matchdict
         args.pop('controller', None)
-        format = args.pop('format', None)
+        fmt = args.pop('format', None)
         action = args.pop('action', None)
 
     return resource
