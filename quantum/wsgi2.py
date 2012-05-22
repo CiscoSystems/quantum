@@ -81,9 +81,8 @@ def Resource(controller, deserializers=None, serializers=None):
         body = deserializer(request.body)
 
         # NOTE(jkoelker) Prevent the body from overriding values in args
-        for k, v in body.iteritems():
-            if k not in args:
-                args[k] = v
+        body.update(args)
+        args = body
 
         LOG.debug('*' * 40)
         LOG.debug(content_type)
