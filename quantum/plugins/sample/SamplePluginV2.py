@@ -69,6 +69,12 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     the name of the method that was called.
     """
 
+    def create_subnet(self, context, subnet, **kwargs):
+        print ("create_subnet() called\n")
+
+    def update_subnet(self, context, id, subnet, **kwargs):
+        print ("update_subnet\n")
+
     def get_all_networks(self, tenant_id):
         """
         Returns a dictionary containing all
