@@ -129,12 +129,9 @@ def unregister_models():
     assert _ENGINE
     BASE.metadata.drop_all(_ENGINE)
 
-########### real API. ##########################
 
-
-def network_create(context, tenant_id, name,
-                   op_status=OperationalStatus.UNKNOWN):
-    session = context.session
+def network_create(tenant_id, name, op_status=OperationalStatus.UNKNOWN):
+    session = get_session()
 
     with session.begin():
         net = models.Network(tenant_id, name, op_status)
@@ -143,20 +140,20 @@ def network_create(context, tenant_id, name,
         return net
 
 
-def network_all_tenant_list(context):
-    session = context.session
+def network_all_tenant_list():
+    session = get_session()
     return session.query(models.Network).all()
 
 
-def network_list(context, tenant_id):
-    session = context.session
+def network_list(tenant_id):
+    session = get_session()
     return (session.query(models.Network).
             filter_by(tenant_id=tenant_id).
             all())
 
 
-def network_get(context, net_id):
-    session = context.session
+def network_get(net_id):
+    session = get_session()
     try:
         return (session.query(models.Network).
                 filter_by(uuid=net_id).
@@ -165,9 +162,9 @@ def network_get(context, net_id):
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
-def network_update(context, net_id, tenant_id, **kwargs):
-    session = context.session
-    net = network_get(context, net_id)
+def network_update(net_id, tenant_id, **kwargs):
+    session = get_session()
+    net = network_get(net_id)
     for key in kwargs.keys():
         net[key] = kwargs[key]
     session.merge(net)
@@ -175,8 +172,8 @@ def network_update(context, net_id, tenant_id, **kwargs):
     return net
 
 
-def network_destroy(context, net_id):
-    session = context.session
+def network_destroy(net_id):
+    session = get_session()
     try:
         net = (session.query(models.Network).
                filter_by(uuid=net_id).
@@ -195,8 +192,8 @@ def network_destroy(context, net_id):
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
-def validate_network_ownership(context, tenant_id, net_id):
-    session = context.session
+def validate_network_ownership(tenant_id, net_id):
+    session = get_session()
     try:
         return (session.query(models.Network).
                 filter_by(uuid=net_id).
@@ -206,12 +203,11 @@ def validate_network_ownership(context, tenant_id, net_id):
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
-def port_create(context, net_id, state=None,
-                op_status=OperationalStatus.UNKNOWN):
+def port_create(net_id, state=None, op_status=OperationalStatus.UNKNOWN):
     # confirm network exists
-    session = context.session
-    network_get(context, net_id)
+    network_get(net_id)
 
+    session = get_session()
     with session.begin():
         port = models.Port(net_id, op_status)
         if state is None:
@@ -224,19 +220,20 @@ def port_create(context, net_id, state=None,
         return port
 
 
-def port_list(context, net_id):
-    session = context.session
+def port_list(net_id):
     # confirm network exists
-    network_get(context, net_id)
+    network_get(net_id)
+    session = get_session()
     return (session.query(models.Port).
             filter_by(network_id=net_id).
             all())
 
 
-def port_get(context, port_id, net_id):
+def port_get(port_id, net_id, session=None):
     # confirm network exists
-    network_get(context, net_id)
-    session = context.session
+    network_get(net_id)
+    if not session:
+        session = get_session()
     try:
         return (session.query(models.Port).
                 filter_by(uuid=port_id).
@@ -246,11 +243,11 @@ def port_get(context, port_id, net_id):
         raise q_exc.PortNotFound(net_id=net_id, port_id=port_id)
 
 
-def port_update(context, port_id, net_id, **kwargs):
+def port_update(port_id, net_id, **kwargs):
     # confirm network exists
-    network_get(context, net_id)
-    port = port_get(context, port_id, net_id)
-    session = context.session
+    network_get(net_id)
+    port = port_get(port_id, net_id)
+    session = get_session()
     for key in kwargs:
         if key == "state":
             if kwargs[key] not in ('ACTIVE', 'DOWN'):
@@ -261,11 +258,12 @@ def port_update(context, port_id, net_id, **kwargs):
     return port
 
 
-def port_set_attachment(context, port_id, net_id, new_interface_id):
-    session = context.session
+def port_set_attachment(port_id, net_id, new_interface_id):
     # confirm network exists
-    network_get(context, net_id)
-    port = port_get(context, port_id, net_id)
+    network_get(net_id)
+
+    session = get_session()
+    port = port_get(port_id, net_id)
 
     if new_interface_id != "":
         # We are setting, not clearing, the attachment-id
@@ -290,21 +288,22 @@ def port_set_attachment(context, port_id, net_id, new_interface_id):
     return port
 
 
-def port_unset_attachment(context, port_id, net_id):
-    session = context.session
+def port_unset_attachment(port_id, net_id):
     # confirm network exists
-    network_get(context, net_id)
-    port = port_get(context, port_id, net_id)
+    network_get(net_id)
+
+    session = get_session()
+    port = port_get(port_id, net_id, session)
     port.interface_id = None
     session.add(port)
     session.flush()
 
 
-def port_destroy(context, port_id, net_id):
+def port_destroy(port_id, net_id):
     # confirm network exists
-    network_get(context, net_id)
+    network_get(net_id)
 
-    session = context.session
+    session = get_session()
     try:
         port = (session.query(models.Port).
                 filter_by(uuid=port_id).
@@ -320,6 +319,6 @@ def port_destroy(context, port_id, net_id):
         raise q_exc.PortNotFound(port_id=port_id)
 
 
-def validate_port_ownership(context, tenant_id, net_id, port_id, session=None):
-    validate_network_ownership(context, tenant_id, net_id)
-    port_get(context, port_id, net_id)
+def validate_port_ownership(tenant_id, net_id, port_id, session=None):
+    validate_network_ownership(tenant_id, net_id)
+    port_get(port_id, net_id)

@@ -172,8 +172,7 @@ class Controller(object):
     def _items(self, request):
         kwargs = dict(filters=filters(request),
                       verbose=verbose(request),
-                      show=show(request),
-                      context=request.context)
+                      show=show(request))
 
         obj_getter = getattr(self._plugin,
                              "get_all_%s" % self._collection)
@@ -183,8 +182,7 @@ class Controller(object):
 
     def _item(self, request, id):
         kwargs = dict(verbose=verbose(request),
-                      show=show(request),
-                      context=request.context)
+                      show=show(request))
         obj_getter = getattr(self._plugin,
                              "get_%s_details" % self._resource)
         obj = obj_getter(id, **kwargs)
@@ -200,17 +198,17 @@ class Controller(object):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin,
                               "create_%s" % self._resource)
-        obj = obj_creator(body, context=req.context)
+        obj = obj_creator(body)
         return {self._resource: self._view(obj)}
 
     def delete(self, request, id):
         obj_deleter = getattr(self._plugin,
                               "delete_%s" % self._resource)
-        obj_deleter(id, context=req.context)
+        obj_deleter(id)
 
     def update(self, request, id, body):
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
                               "update_%s" % self._resource)
-        obj = obj_updater(body, context=req.context)
+        obj = obj_updater(body)
         return {self._resource: self._view(obj)}

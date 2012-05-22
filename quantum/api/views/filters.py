@@ -24,13 +24,12 @@ LOG = logging.getLogger(__name__)
 
 def _load_network_ports_details(network, **kwargs):
     plugin = kwargs.get('plugin', None)
-    context = kwargs.get('context', None)
     tenant_id = kwargs.get('tenant_id', None)
     #load network details only if required
     if not 'net-ports' in network:
         # Don't pass filter options, don't care about unused filters
-        port_list = plugin.get_all_ports(context, tenant_id, network['net-id'])
-        ports_data = [plugin.get_port_details(context,
+        port_list = plugin.get_all_ports(tenant_id, network['net-id'])
+        ports_data = [plugin.get_port_details(
                                    tenant_id, network['net-id'],
                                    port['port-id'])
                       for port in port_list]
@@ -98,7 +97,7 @@ def _filter_port_has_interface(port, has_interface, **kwargs):
     return match_has_interface == really_has_interface
 
 
-def _do_filtering(items, filters, filter_opts, plugin, context,
+def _do_filtering(items, filters, filter_opts, plugin,
                   tenant_id, network_id=None):
     filtered_items = []
     for item in items:
@@ -108,7 +107,6 @@ def _do_filtering(items, filters, filter_opts, plugin, context,
                 is_filter_match = filters[flt](item,
                                                filter_opts[flt],
                                                plugin=plugin,
-                                               context=context,
                                                tenant_id=tenant_id,
                                                network_id=network_id)
                 if not is_filter_match:
@@ -118,7 +116,7 @@ def _do_filtering(items, filters, filter_opts, plugin, context,
     return filtered_items
 
 
-def filter_networks(networks, plugin, context, tenant_id, filter_opts):
+def filter_networks(networks, plugin, tenant_id, filter_opts):
     # Do filtering only if the plugin supports it
     # and if filtering options have been specific
     if len(filter_opts) == 0:
@@ -134,15 +132,10 @@ def filter_networks(networks, plugin, context, tenant_id, filter_opts):
         'attachment': _filter_network_by_interface,
         'port': _filter_network_by_port}
     # filter networks
-    return _do_filtering(networks,
-                         filters,
-                         filter_opts,
-                         plugin,
-                         context,
-                         tenant_id)
+    return _do_filtering(networks, filters, filter_opts, plugin, tenant_id)
 
 
-def filter_ports(ports, plugin, context, tenant_id, network_id, filter_opts):
+def filter_ports(ports, plugin, tenant_id, network_id, filter_opts):
     # Do filtering only if the plugin supports it
     # and if filtering options have been specific
     if len(filter_opts) == 0:
@@ -155,7 +148,7 @@ def filter_ports(ports, plugin, context, tenant_id, network_id, filter_opts):
         'has-attachment': _filter_port_has_interface,
         'attachment': _filter_port_by_interface}
     # port details are need for filtering
-    ports = [plugin.get_port_details(context, tenant_id, network_id,
+    ports = [plugin.get_port_details(tenant_id, network_id,
                                      port['port-id'])
               for port in ports]
     # filter ports
@@ -163,6 +156,5 @@ def filter_ports(ports, plugin, context, tenant_id, network_id, filter_opts):
                          filters,
                          filter_opts,
                          plugin,
-                         context,
                          tenant_id,
                          network_id)
