@@ -191,14 +191,3 @@ class QuantumPluginBaseV2(object):
     @abstractmethod
     def get_all_ports(self, auth_context, **kwargs):
         pass
-
-    @abstractmethod
-    def clear_state(self):
-        """
-        Clears all persistent state created by the plugin due to previous
-        API calls.  For example, if a plugin uses a database to store
-        networks, and a network is created, then, clear_state is called,
-        a subsequent call to get_all_networks() should return an empty list.
-        This is primarily used by unit testing code to reset between tests.
-        """
-        pass
