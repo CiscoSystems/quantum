@@ -185,7 +185,7 @@ class Controller(object):
         obj_getter = getattr(self._plugin,
                              "get_%s_details" % self._resource)
         obj = obj_getter(id, **kwargs)
-        return {self._resource: self._view(obj)}
+        return {self._resource_name: self._view(obj)}
 
     def index(self, request):
         """Returns a list of the requested entity"""
@@ -198,9 +198,9 @@ class Controller(object):
     def create(self, request, body):
         """Creates a new instance of the requested entity"""
         obj_creator = getattr(self._plugin,
-                              "create_%s" % self._resource)
+                              "create_%s" % self._resource_name)
         obj = obj_creator(body, context=request.context)
-        return {self._resource: self._view(obj)}
+        return {self._resource_name: self._view(obj)}
 
     def delete(self, request, id):
         """Deletes the specified entity"""
@@ -212,6 +212,29 @@ class Controller(object):
         """Updates the specified entity's attributes"""
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
-                              "update_%s" % self._resource)
+                              "update_%s" % self._resource_name)
         obj = obj_updater(body, context=request.context)
-        return {self._resource: self._view(obj)}
+        return {self._resource_name: self._view(obj)}
+
+    def _prepare_request_body(self, body, params):
+        """ verifies required parameters are in request body.
+            Parameters with default values are considered to be
+            optional.
+
+            body argument must be the deserialized body
+        """
+        body = body or {self._resource_name: {}}
+        res_dict = body.get(self._resource_name)
+        if res_dict is None:
+            raise exc.HTTPBadRequest("Unable to find '%s' in request body"\
+                                     % self._resource_name)
+
+        for param in params:
+            param_value = res_dict.get(param['attr'], param.get('default'))
+            if param_value is None:
+                msg = _("Failed to parse request. Parameter: %s not specified"
+                        % param)
+                LOG.error(msg)
+                raise exc.HTTPUnprocessableEntity(msg)
+            res_dict[param['attr']] = param_value
+        return body

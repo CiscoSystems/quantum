@@ -36,6 +36,19 @@ MEMBER_ACTIONS = ['show', 'update', 'delete']
 REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
+RESOURCE_PARAM_MAP = {
+    "networks":{
+        {"attr": "name"}
+    },
+    "ports": {
+        {"attr": "state", "default": "DOWN"}
+    },
+    "subnets": {
+        {"attr": "network_id"},
+        {"attr": "cidr"}
+    }
+}
+
 class Index(wsgi.Application):
     """Base resource for discovering API versions"""
     def __init__(self, resources):
@@ -85,7 +98,8 @@ class APIRouter(wsgi.Router):
 
         def _map_resource(collection, resource, req=None):
             controller = base.create_resource(collection, resource,
-                                              plugin, conf)
+                                              plugin, conf,
+                                              RESOURCE_PARAM_MAP)
             mapper_kwargs = dict(controller=controller,
                                  requirements=req or REQUIREMENTS,
                                  **col_kwargs)
