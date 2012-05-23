@@ -166,10 +166,14 @@ class FakePlugin(object):
     """
 
     def __init__(self):
-        config = init_config()
         sql_connection = 'sqlite:///:memory:'
-        if config.has_section('db'):
-            sql_connection = config.get('db', 'sql_connection')
+        try:
+            config = init_config()
+            if config.has_section('db'):
+                sql_connection = config.get('db', 'sql_connection')
+        except Exception:
+            # Don't worry about it, configuring the sample plugin is optional
+            pass
         db.configure_db({'sql_connection': sql_connection})
         FakePlugin._net_counter = 0
 
