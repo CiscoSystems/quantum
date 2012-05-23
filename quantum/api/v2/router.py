@@ -111,6 +111,7 @@ class APIRouter(wsgi.Router):
         mapper.connect('index', '/', controller=Index(resources))
         for resource in resources:
             _map_resource(resources[resource], resource,
-                          RESOURCE_PARAM_MAP.get(resource, dict()))
+                          RESOURCE_PARAM_MAP.get(resources[resource],
+                                                 dict()))
 
         super(APIRouter, self).__init__(mapper)
