@@ -78,60 +78,60 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         LOG.debug('%s %s' % (name, kwarg_msg))
 
     def create_subnet(self, context, subnet):
-        self._log(self, "create_subnet", context, subnet=subnet)
+        self._log("create_subnet", context, subnet=subnet)
 
     def update_subnet(self, context, id, subnet):
-        self._log(self, "update_subnet", context, id=id, subnet=subnet)
+        self._log("update_subnet", context, id=id, subnet=subnet)
 
     def get_subnet(self, context, id, show=None, verbose=None):
-        self._log(self, "get_subnet", context, id=id, show=show,
+        self._log("get_subnet", context, id=id, show=show,
                   verbose=verbose)
 
     def delete_subnet(self, context, id):
-        self._log(self, "delete_subnet", context, id=id)
+        self._log("delete_subnet", context, id=id)
 
     def get_subnets(self, context, filters=None, show=None, verbose=None):
-        self._log(self, "get_subnets", context, filters=None, show=show,
+        self._log("get_subnets", context, filters=None, show=show,
                   verbose=verbose)
 
     def create_network(self, context, network):
-        self._log(self, "create_network", context, network=network)
+        self._log("create_network", context, network=network)
 
     def update_network(self, context, id, network):
-        self._log(self, "update_network", context, id=id, network=network)
+        self._log("update_network", context, id=id, network=network)
 
     def get_network(self, context, id, show=None, verbose=None):
-        self._log(self, "get_network", context, id=id, show=show,
+        self._log("get_network", context, id=id, show=show,
                   verbose=verbose)
 
     def delete_network(self, context, id):
-        self._log(self, "delete_network", context, id=id)
+        self._log("delete_network", context, id=id)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        self._log(self, "get_networks", context, filters=None, show=show,
+        self._log("get_networks", context, filters=None, show=show,
                   verbose=verbose)
 
     def create_port(self, context, port):
-        self._log(self, "create_port", context, port=port)
+        self._log("create_port", context, port=port)
 
     def update_port(self, context, id, port):
-        self._log(self, "update_port", context, id=id, port=port)
+        self._log("update_port", context, id=id, port=port)
 
     def get_port(self, context, id, show=None, verbose=None):
-        self._log(self, "get_port", context, id=id, show=show,
+        self._log("get_port", context, id=id, show=show,
                   verbose=verbose)
 
     def delete_port(self, context, id):
-        self._log(self, "delete_port", context, id=id)
+        self._log("delete_port", context, id=id)
 
     def get_ports(self, context, filters=None, show=None, verbose=None):
-        self._log(self, "get_ports", context, filters=None, show=show,
+        self._log("get_ports", context, filters=None, show=show,
                   verbose=verbose)
 
     supported_extension_aliases = ["FOXNSOX"]
 
-    def method_to_support_foxnsox_extension(self):
-        print("method_to_support_foxnsox_extension() called\n")
+    def method_to_support_foxnsox_extension(self, context):
+        self._log("method_to_support_foxnsox_extension", context)
 
 
 class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
