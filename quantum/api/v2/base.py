@@ -184,7 +184,7 @@ class Controller(object):
                       show=show(request),
                       context=request.context)
         obj_getter = getattr(self._plugin,
-                             "get_%s_details" % self._resource)
+                             "get_%s" % self._resource)
         obj = obj_getter(id, **kwargs)
         return {self._resource: self._view(obj)}
 
