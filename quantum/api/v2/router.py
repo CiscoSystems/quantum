@@ -51,7 +51,6 @@ RESOURCE_PARAM_MAP = {
 
 
 class Index(wsgi.Application):
-    """Base resource for discovering API versions"""
     def __init__(self, resources):
         self.resources = resources
 
@@ -111,6 +110,7 @@ class APIRouter(wsgi.Router):
         mapper.connect('index', '/', controller=Index(resources))
         for resource in resources:
             _map_resource(resources[resource], resource,
-                          RESOURCE_PARAM_MAP.get(resource, dict()))
+                          RESOURCE_PARAM_MAP.get(resources[resource],
+                                                 dict()))
 
         super(APIRouter, self).__init__(mapper)

@@ -72,4 +72,3 @@ class Network(model_base.BASE):
     def __repr__(self):
         return "<Network(%s,%s,%s,%s)>" % \
           (self.uuid, self.name, self.op_status, self.tenant_id)
-

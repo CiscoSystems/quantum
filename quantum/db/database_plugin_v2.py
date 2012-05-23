@@ -27,12 +27,11 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         db.configure_db(options)
 
     def _make_network_dict(self, network):
-        return { "id": network.uuid,
-                 "name": network.name,
-                 "admin_state_up": network.admin_state_up,
-                 "op_status": network.op_status,
-                 "subnets": [ s['uuid'] for s in network.subnets ]
-               }
+        return {"id": network.uuid,
+                "name": network.name,
+                "admin_state_up": network.admin_state_up,
+                "op_status": network.op_status,
+                "subnets": [s['uuid'] for s in network.subnets]}
 
     def create_network(self, auth_context, network_data, **kwargs):
         n = network_data['network']
@@ -79,15 +78,14 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_networks = (session.query(models_v2.Network).all())
-        return [ self._make_network_dict(s) for s in all_networks ]
+        return [self._make_network_dict(s) for s in all_networks]
 
     def _make_subnet_dict(self, subnet):
-        return { "id" : subnet.uuid,
-                 "network_id": subnet.network_uuid,
-                 "ip_version" : subnet.ip_version,
-                 "prefix" : subnet.prefix,
-                 "gateway_ip" : subnet.gateway_ip
-               }
+        return {"id": subnet.uuid,
+                "network_id": subnet.network_uuid,
+                "ip_version": subnet.ip_version,
+                "prefix": subnet.prefix,
+                "gateway_ip": subnet.gateway_ip}
 
     def create_subnet(self, auth_context, subnet_data, **kwargs):
         s = subnet_data['subnet']
@@ -102,8 +100,8 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
             session.add(subnet)
             netrange = netaddr.IPNetwork(s['prefix'])
             #TODO(danwent): apply policy to avoid additional ranges
-            avoid = [ s['gateway_ip'], str(netrange[0]),
-                      str(netrange.broadcast) ]
+            avoid = [s['gateway_ip'], str(netrange[0]),
+                      str(netrange.broadcast)]
             for ip in netrange:
                 ip_str = str(ip)
                 if ip_str in avoid:
@@ -146,20 +144,19 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_subnets = (session.query(models_v2.Subnet).all())
-        return [ self._make_subnet_dict(s) for s in all_subnets ]
+        return [self._make_subnet_dict(s) for s in all_subnets]
 
     def _make_port_dict(self, port):
-        ips = [ { "address": f.address,
-                  "subnet_id": f.subnet_uuid }
-                for f in port.fixed_ips ]
-        return { "id" : port.uuid,
-                 "network_id": port.network_uuid,
-                 "mac_address": port.mac_address,
-                 "admin_state_up": port.admin_state_up,
-                 "op_status": port.op_status,
-                 "fixed_ips": ips,
-                 "device_id": port.device_uuid
-               }
+        ips = [{"address": f.address,
+                "subnet_id": f.subnet_uuid}
+                    for f in port.fixed_ips]
+        return {"id": port.uuid,
+                "network_id": port.network_uuid,
+                "mac_address": port.mac_address,
+                "admin_state_up": port.admin_state_up,
+                "op_status": port.op_status,
+                "fixed_ips": ips,
+                "device_id": port.device_uuid}
 
     def create_port(self, auth_context, port_data, **kwargs):
         p = port_data['port']
@@ -178,7 +175,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
                                     filter_by(uuid=network_uuid).\
                                     first()
 
-            ip_found = { 4 : False, 6 : False}
+            ip_found = {4: False, 6: False}
             for subnet in network.subnets:
                 if not ip_found[subnet.ip_version]:
                     ip_alloc = session.query(models_v2.IP_Allocation).\
@@ -230,7 +227,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_ports = (session.query(models_v2.Port).all())
-        return [ self._make_port_dict(p) for p in all_ports ]
+        return [self._make_port_dict(p) for p in all_ports]
 
     def clear_state(self):
         db.clear_db()
