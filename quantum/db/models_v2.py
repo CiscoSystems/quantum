@@ -6,7 +6,7 @@ from sqlalchemy.orm import relation, object_mapper
 from quantum.db import model_base
 
 # we can clearly do better than this, but its a simple start
-class IP_Allocation(model_base.BASE, model_base.QuantumBase):
+class IP_Allocation(model_base.BASEV2):
     """Internal representation of a IP address allocation in a Quantum subnet"""
     __tablename__ = "ip_allocations"
 
@@ -26,7 +26,7 @@ class IP_Allocation(model_base.BASE, model_base.QuantumBase):
           (self.address, self.allocated, self.port_uuid, self.subnet_uuid)
 
 
-class Port(model_base.BASE, model_base.QuantumBase):
+class Port(model_base.BASEV2):
     """Represents a port on a quantum v2 network"""
     __tablename__ = 'ports'
 
@@ -64,7 +64,7 @@ class Port(model_base.BASE, model_base.QuantumBase):
                                                  self.op_status)
 
 
-class Subnet(model_base.BASE, model_base.QuantumBase):
+class Subnet(model_base.BASEV2):
     """Represents a quantum subnet"""
     __tablename__ = 'subnets'
 
@@ -97,7 +97,7 @@ class Subnet(model_base.BASE, model_base.QuantumBase):
           (self.uuid, self.ip_version, self.prefix, self.gateway_ip)
 
 
-class Network(model_base.BASE, model_base.QuantumBase):
+class Network(model_base.BASEV2):
     """Represents a v2 quantum network"""
     __tablename__ = 'networks'
 

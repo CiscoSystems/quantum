@@ -16,7 +16,6 @@
 from sqlalchemy.orm import relation, object_mapper
 from sqlalchemy.ext.declarative import declarative_base
 
-BASE = declarative_base()
 
 class QuantumBase(object):
     """Base class for Quantum Models."""
@@ -53,3 +52,5 @@ class QuantumBase(object):
         return local.iteritems()
 
 
+BASE   = declarative_base(cls=QuantumBase)
+BASEV2 = declarative_base(cls=QuantumBase)
