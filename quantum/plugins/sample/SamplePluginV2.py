@@ -16,6 +16,7 @@
 import ConfigParser
 import logging
 import os
+import uuid
 
 from quantum import quantum_plugin_base_v2
 from quantum.api import api_common as common
@@ -59,6 +60,10 @@ def find_config(basepath):
     return None
 
 
+def new_id():
+    return str(uuid.uuid4())
+
+
 class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     """
@@ -79,54 +84,78 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def create_subnet(self, context, subnet):
         self._log("create_subnet", context, subnet=subnet)
+        res = {"id": new_id()}
+        res.update(subnet)
+        return res
 
     def update_subnet(self, context, id, subnet):
         self._log("update_subnet", context, id=id, subnet=subnet)
+        res = {"id": id}
+        res.update(subnet)
+        return res
 
     def get_subnet(self, context, id, show=None, verbose=None):
         self._log("get_subnet", context, id=id, show=show,
                   verbose=verbose)
+        return {"id": id}
 
     def delete_subnet(self, context, id):
         self._log("delete_subnet", context, id=id)
 
     def get_subnets(self, context, filters=None, show=None, verbose=None):
-        self._log("get_subnets", context, filters=None, show=show,
+        self._log("get_subnets", context, filters=filters, show=show,
                   verbose=verbose)
+        return []
 
     def create_network(self, context, network):
         self._log("create_network", context, network=network)
+        res = {"id": new_id()}
+        res.update(network)
+        return res
 
     def update_network(self, context, id, network):
         self._log("update_network", context, id=id, network=network)
+        res = {"id": id}
+        res.update(network)
+        return res
 
     def get_network(self, context, id, show=None, verbose=None):
         self._log("get_network", context, id=id, show=show,
                   verbose=verbose)
+        return {"id": id}
 
     def delete_network(self, context, id):
         self._log("delete_network", context, id=id)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        self._log("get_networks", context, filters=None, show=show,
+        self._log("get_networks", context, filters=filters, show=show,
                   verbose=verbose)
+        return []
 
     def create_port(self, context, port):
         self._log("create_port", context, port=port)
+        res = {"id": new_id()}
+        res.update(port)
+        return res
 
     def update_port(self, context, id, port):
         self._log("update_port", context, id=id, port=port)
+        res = {"id": id}
+        res.update(port)
+        return res
 
     def get_port(self, context, id, show=None, verbose=None):
         self._log("get_port", context, id=id, show=show,
                   verbose=verbose)
+        return {"id": id}
 
     def delete_port(self, context, id):
         self._log("delete_port", context, id=id)
 
     def get_ports(self, context, filters=None, show=None, verbose=None):
-        self._log("get_ports", context, filters=None, show=show,
+        self._log("get_ports", context, filters=filters, show=show,
                   verbose=verbose)
+        return []
 
     supported_extension_aliases = ["FOXNSOX"]
 
