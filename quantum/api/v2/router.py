@@ -37,16 +37,16 @@ REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
 RESOURCE_PARAM_MAP = {
-    "networks": {
+    "networks": [
         {"attr": "name"}
-    },
-    "ports": {
+    ],
+    "ports": [
         {"attr": "state", "default": "DOWN"}
-    },
-    "subnets": {
+    ],
+    "subnets": [
         {"attr": "network_id"},
         {"attr": "cidr"}
-    }
+    ]
 }
 
 
