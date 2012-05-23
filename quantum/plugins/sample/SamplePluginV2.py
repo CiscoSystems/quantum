@@ -65,96 +65,68 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     QuantumEchoPlugin is a demo plugin that doesn't
     do anything but demonstrated the concept of a
     concrete Quantum Plugin. Any call to this plugin
-    will result in just a "print" to std. out with
-    the name of the method that was called.
+    will result in just a log statement with the name
+    method that was called and its arguments.
     """
 
-    def create_subnet(self, context, subnet, **kwargs):
-        print ("create_subnet() called\n")
+    def _log(self, name, context, **kwargs):
+        kwarg_msg = ' '.join([('%s: |%s|' % (str(key), kwargs[key]))
+                              for key in kwargs])
 
-    def update_subnet(self, context, id, subnet, **kwargs):
-        print ("update_subnet\n")
+        # TODO(anyone) Add a nice __repr__ and __str__ to context
+        #LOG.debug('%s context: %s %s' % (name, context, kwarg_msg))
+        LOG.debug('%s %s' % (name, kwarg_msg))
 
-    def get_all_networks(self, tenant_id):
-        """
-        Returns a dictionary containing all
-        <network_uuid, network_name> for
-        the specified tenant.
-        """
-        print("get_all_networks() called\n")
+    def create_subnet(self, context, subnet):
+        self._log(self, "create_subnet", context, subnet=subnet)
 
-    def create_network(self, tenant_id, net_name, **kwargs):
-        """
-        Creates a new Virtual Network, and assigns it
-        a symbolic name.
-        """
-        print("create_network() called\n")
+    def update_subnet(self, context, id, subnet):
+        self._log(self, "update_subnet", context, id=id, subnet=subnet)
 
-    def delete_network(self, tenant_id, net_id):
-        """
-        Deletes the network with the specified network identifier
-        belonging to the specified tenant.
-        """
-        print("delete_network() called\n")
+    def get_subnet(self, context, id, show=None, verbose=None):
+        self._log(self, "get_subnet", context, id=id, show=show,
+                  verbose=verbose)
 
-    def get_network_details(self, tenant_id, net_id):
-        """
-        Deletes the Virtual Network belonging to a the
-        spec
-        """
-        print("get_network_details() called\n")
+    def delete_subnet(self, context, id):
+        self._log(self, "delete_subnet", context, id=id)
 
-    def update_network(self, tenant_id, net_id, **kwargs):
-        print("update_network() called")
+    def get_subnets(self, context, filters=None, show=None, verbose=None):
+        self._log(self, "get_subnets", context, filters=None, show=show,
+                  verbose=verbose)
 
-    def get_all_ports(self, tenant_id, net_id):
-        """
-        Retrieves all port identifiers belonging to the
-        specified Virtual Network.
-        """
-        print("get_all_ports() called\n")
+    def create_network(self, context, network):
+        self._log(self, "create_network", context, network=network)
 
-    def create_port(self, tenant_id, net_id, **kwargs):
-        """
-        Creates a port on the specified Virtual Network.
-        """
-        print("create_port() called\n")
+    def update_network(self, context, id, network):
+        self._log(self, "update_network", context, id=id, network=network)
 
-    def delete_port(self, tenant_id, net_id, port_id):
-        """
-        Deletes a port on a specified Virtual Network,
-        if the port contains a remote interface attachment,
-        the remote interface is first un-plugged and then the port
-        is deleted.
-        """
-        print("delete_port() called\n")
+    def get_network(self, context, id, show=None, verbose=None):
+        self._log(self, "get_network", context, id=id, show=show,
+                  verbose=verbose)
 
-    def update_port(self, tenant_id, net_id, port_id, **kwargs):
-        """
-        Updates the attributes of a port on the specified Virtual Network.
-        """
-        print("update_port() called\n")
+    def delete_network(self, context, id):
+        self._log(self, "delete_network", context, id=id)
 
-    def get_port_details(self, tenant_id, net_id, port_id):
-        """
-        This method allows the user to retrieve a remote interface
-        that is attached to this particular port.
-        """
-        print("get_port_details() called\n")
+    def get_networks(self, context, filters=None, show=None, verbose=None):
+        self._log(self, "get_networks", context, filters=None, show=show,
+                  verbose=verbose)
 
-    def plug_interface(self, tenant_id, net_id, port_id, remote_interface_id):
-        """
-        Attaches a remote interface to the specified port on the
-        specified Virtual Network.
-        """
-        print("plug_interface() called\n")
+    def create_port(self, context, port):
+        self._log(self, "create_port", context, port=port)
 
-    def unplug_interface(self, tenant_id, net_id, port_id):
-        """
-        Detaches a remote interface from the specified port on the
-        specified Virtual Network.
-        """
-        print("unplug_interface() called\n")
+    def update_port(self, context, id, port):
+        self._log(self, "update_port", context, id=id, port=port)
+
+    def get_port(self, context, id, show=None, verbose=None):
+        self._log(self, "get_port", context, id=id, show=show,
+                  verbose=verbose)
+
+    def delete_port(self, context, id):
+        self._log(self, "delete_port", context, id=id)
+
+    def get_ports(self, context, filters=None, show=None, verbose=None):
+        self._log(self, "get_ports", context, filters=None, show=show,
+                  verbose=verbose)
 
     supported_extension_aliases = ["FOXNSOX"]
 
