@@ -92,7 +92,7 @@ version = quantum_version.canonical_version_string()
 #today_fmt = '%B %d, %Y'
 
 # List of documents that shouldn't be included in the build.
-#unused_docs = []
+# unused_docs = []
 
 # List of directories, relative to source directory, that shouldn't be searched
 # for source files.
@@ -123,10 +123,10 @@ modindex_common_prefix = ['quantum.']
 # Grouping the document tree for man pages.
 # List of tuples 'sourcefile', 'target', u'title', u'Authors name', 'manual'
 
-#man_pages = [
-#    ('man/cli', 'quantum', u'Quantum Command Line Interface',
-#     [u'OpenStack'], 1)
-# ]
+man_pages = [
+    ('man/quantum-server', 'quantum-server', u'Quantum Server',
+     [u'OpenStack'], 1)
+]
 
 
 # -- Options for HTML output -------------------------------------------------
