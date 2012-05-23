@@ -35,9 +35,9 @@ class Request(webob.Request):
     """Add some Openstack API-specific logic to the base webob.Request."""
 
     def best_match_content_type(self):
-        supported = ('application/json')
+        supported = ('application/json', )
         return self.accept.best_match(supported,
-                                      default_match='applicaton/json')
+                                      default_match='application/json')
 
     @property
     def context(self):
@@ -54,15 +54,19 @@ def Resource(controller, deserializers=None, serializers=None):
     """Represents an API entity resource and the associated serialization and
     deserialization logic
     """
-    deserializers = {'application/xml': wsgi.XMLDeserializer(),
-                     'application/json': lambda x: json.loads(x)}
-    serializers = {'application/xml': wsgi.XMLDictSerializer(),
-                   'application/json': lambda x: json.dumps(x)}
+    # NOTE(jkoelker) bit of a nameing collision here
+    ds = {'application/xml': wsgi.XMLDeserializer(),
+          'application/json': lambda x: json.loads(x)}
+    s = {'application/xml': wsgi.XMLDictSerializer(),
+        'application/json': lambda x: json.dumps(x)}
     format_types = {'xml': 'application/xml',
                     'json': 'application/json'}
 
-    deserializers.update(deserializers or {})
-    serializers.update(serializers or {})
+    ds.update(deserializers or {})
+    s.update(serializers or {})
+
+    deserializers = ds
+    serializers = s
 
     @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
