@@ -92,11 +92,11 @@ def verbose(request):
     return verbose
 
 
-def create_resource(collection, resource, plugin, conf):
+def create_resource(collection, resource, plugin, conf, params):
     # NOTE(cerberus): total punt on using the 1.0 and 1.1 API common
     # stuff because I want a clean decoupling. If it makes sense later
     # in the patch, let's reintroduce them as a v2 construct
-    controller = Controller(plugin, collection, resource)
+    controller = Controller(plugin, collection, resource, params)
 
     # NOTE(jkoelker) punt on XML for now until we can genericizle it
     # NOTE(jkoelker) genericizle is a word
@@ -159,11 +159,12 @@ class FaultWrapper(object):
 
 
 class Controller(object):
-    def __init__(self, plugin, collection, resource):
+    def __init__(self, plugin, collection, resource, params):
         self._plugin = FaultWrapper(plugin)
         self._collection = collection
-        self._resource_name = resource
-        self._view = getattr(views, self._resource_name)
+        self._resource = resource
+        self._params = params
+        self._view = getattr(views, self._resource)
 
     def _items(self, request):
         """Retrieves and formats a list of elements of the requested entity"""
@@ -185,7 +186,7 @@ class Controller(object):
         obj_getter = getattr(self._plugin,
                              "get_%s_details" % self._resource)
         obj = obj_getter(id, **kwargs)
-        return {self._resource_name: self._view(obj)}
+        return {self._resource: self._view(obj)}
 
     def index(self, request):
         """Returns a list of the requested entity"""
@@ -198,9 +199,9 @@ class Controller(object):
     def create(self, request, body):
         """Creates a new instance of the requested entity"""
         obj_creator = getattr(self._plugin,
-                              "create_%s" % self._resource_name)
+                              "create_%s" % self._resource)
         obj = obj_creator(body, context=request.context)
-        return {self._resource_name: self._view(obj)}
+        return {self._resource: self._view(obj)}
 
     def delete(self, request, id):
         """Deletes the specified entity"""
@@ -212,29 +213,29 @@ class Controller(object):
         """Updates the specified entity's attributes"""
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
-                              "update_%s" % self._resource_name)
+                              "update_%s" % self._resource)
         obj = obj_updater(body, context=request.context)
-        return {self._resource_name: self._view(obj)}
+        return {self._resource: self._view(obj)}
 
-    def _prepare_request_body(self, body, params):
+    def _prepare_request_body(self, body):
         """ verifies required parameters are in request body.
             Parameters with default values are considered to be
             optional.
 
             body argument must be the deserialized body
         """
-        body = body or {self._resource_name: {}}
-        res_dict = body.get(self._resource_name)
+        body = body or {self._resource: {}}
+        res_dict = body.get(self._resource)
         if res_dict is None:
-            raise exc.HTTPBadRequest("Unable to find '%s' in request body"\
-                                     % self._resource_name)
+            msg = _("Unable to find '%s' in request body") % self._resource
+            raise webob.exc.HTTPBadRequest(msg)
 
-        for param in params:
+        for param in self._params:
             param_value = res_dict.get(param['attr'], param.get('default'))
             if param_value is None:
-                msg = _("Failed to parse request. Parameter: %s not specified"
-                        % param)
-                LOG.error(msg)
-                raise exc.HTTPUnprocessableEntity(msg)
+                msg = _("Failed to parse request. Parameter: %s not "
+                        "specified")
+                LOG.error(msg % param)
+                raise webob.exc.HTTPUnprocessableEntity(msg)
             res_dict[param['attr']] = param_value
         return body

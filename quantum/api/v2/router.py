@@ -37,7 +37,7 @@ REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
 RESOURCE_PARAM_MAP = {
-    "networks":{
+    "networks": {
         {"attr": "name"}
     },
     "ports": {
@@ -48,6 +48,7 @@ RESOURCE_PARAM_MAP = {
         {"attr": "cidr"}
     }
 }
+
 
 class Index(wsgi.Application):
     """Base resource for discovering API versions"""
@@ -96,12 +97,12 @@ class APIRouter(wsgi.Router):
                      'subnet': 'subnets',
                      'port': 'ports'}
 
-        def _map_resource(collection, resource, req=None):
+        def _map_resource(collection, resource, params):
             controller = base.create_resource(collection, resource,
                                               plugin, conf,
-                                              RESOURCE_PARAM_MAP)
+                                              params)
             mapper_kwargs = dict(controller=controller,
-                                 requirements=req or REQUIREMENTS,
+                                 requirements=REQUIREMENTS,
                                  **col_kwargs)
             LOG.debug(mapper_kwargs)
             return mapper.collection(collection, resource,
@@ -109,6 +110,7 @@ class APIRouter(wsgi.Router):
 
         mapper.connect('index', '/', controller=Index(resources))
         for resource in resources:
-            _map_resource(resources[resource], resource)
+            _map_resource(resources[resource], resource,
+                          RESOURCE_PARAM_MAP[resource])
 
         super(APIRouter, self).__init__(mapper)
