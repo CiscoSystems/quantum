@@ -61,7 +61,7 @@ def find_config(basepath):
 
 
 def new_id():
-    return str(uuid.uuid())
+    return str(uuid.uuid4())
 
 
 class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
