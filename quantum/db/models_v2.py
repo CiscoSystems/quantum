@@ -5,9 +5,12 @@ from sqlalchemy.orm import relation, object_mapper
 
 from quantum.db import model_base
 
+
 # we can clearly do better than this, but its a simple start
 class IP_Allocation(model_base.BASE, model_base.QuantumBase):
-    """Internal representation of a IP address allocation in a Quantum subnet"""
+    """Internal representation of a IP address allocation in a Quantum
+       subnet
+    """
     __tablename__ = "ip_allocations"
 
     port_uuid = Column(String(255), ForeignKey('ports.uuid'))
@@ -123,6 +126,5 @@ class Network(model_base.BASE, model_base.QuantumBase):
 
     def __repr__(self):
         return "<Network(%s,%s,%s,%s,%s)>" % \
-          (self.uuid, self.name, self.op_status, self.tenant_uuid, self.subnets)
-
-
+          (self.uuid, self.name, self.op_status, self.tenant_uuid,
+           self.subnets)

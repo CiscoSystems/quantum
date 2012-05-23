@@ -9,12 +9,14 @@ from quantum.manager import QuantumManager
 from quantum.tests.unit.testlib_api import create_request
 from quantum.wsgi import Serializer, XMLDeserializer, JSONDeserializer
 
+
 LOG = logging.getLogger('quantum.tests.api_v2_test')
+
 
 class APIv2Test(unittest.TestCase):
 
-    api = APIRouter({ "plugin_provider":
-                    "quantum.db.database_plugin_v2.QuantumDBPlugin_V2" })
+    api = APIRouter({"plugin_provider":
+                     "quantum.db.database_plugin_v2.QuantumDBPlugin_V2"})
 
     def setUp(self):
         super(APIv2Test, self).setUp()
@@ -168,7 +170,8 @@ class APIv2Test(unittest.TestCase):
         show_res = show_req.get_response(self.api)
         self.assertEqual(show_res.status_int, 200)
 
-        del_req = self._delete_request(self._tenant_id, "networks", net_id, fmt)
+        del_req = self._delete_request(self._tenant_id, "networks", net_id,
+                                       fmt)
 
         del_res = del_req.get_response(self.api)
         self.assertEqual(del_res.status_int, 204)
@@ -176,7 +179,8 @@ class APIv2Test(unittest.TestCase):
         # confirm delete
         # FIXME(danwent): enable once fault handlers are
         # implemented
-        #show_req = self._show_request(self._tenant_id, "networks", net_id, fmt)
+        #show_req = self._show_request(self._tenant_id, "networks", net_id,
+        #                              fmt)
 
         #show_res = show_req.get_response(self.api)
         #self.assertEqual(show_res.status_int, 404)
@@ -224,7 +228,8 @@ class APIv2Test(unittest.TestCase):
         subnet_id = self._create_subnet(fmt, net_id, ip_version, prefix,
                                         gateway_ip)
 
-        show_req = self._show_request(self._tenant_id, "subnets", subnet_id, fmt)
+        show_req = self._show_request(self._tenant_id, "subnets", subnet_id,
+                                      fmt)
 
         show_res = show_req.get_response(self.api)
         self.assertEqual(show_res.status_int, 200)
@@ -243,7 +248,6 @@ class APIv2Test(unittest.TestCase):
                             deserialize(show_res.body)['body']['network']
         self.assertTrue(subnet_id in net_data['subnets'])
 
-
     def _test_create_and_list_subnets(self, fmt):
         content_type = "application/%s" % fmt
         subnet_net_id1 = self._create_network(fmt, "net1", True)
@@ -252,13 +256,17 @@ class APIv2Test(unittest.TestCase):
         subnet_gateway_ip1 = "10.0.1.254"
         subnet_net_id2 = self._create_network(fmt, "net2", True)
         subnet_ip_version2 = 6
-        subnet_prefix2 = "20.0.0.0/24" #"2001:0db8:85a3:0000:0000:8a2e:0:0/24"
-        subnet_gateway_ip2 = "20.0.0.1" #"2001:0db8:85a3:0000:0000:8a2e:0:1"
+        # 2001:0db8:85a3:0000:0000:8a2e:0:0/24
+        subnet_prefix2 = "20.0.0.0/24"
+        #2001:0db8:85a3:0000:0000:8a2e:0:1
+        subnet_gateway_ip2 = "20.0.0.1"
 
-        subnet_id1 = self._create_subnet(fmt, subnet_net_id1, subnet_ip_version1,
-                                         subnet_prefix1, subnet_gateway_ip1)
-        subnet_id2 = self._create_subnet(fmt, subnet_net_id2, subnet_ip_version2,
-                                         subnet_prefix2, subnet_gateway_ip2)
+        subnet_id1 = self._create_subnet(fmt, subnet_net_id1,
+                                         subnet_ip_version1, subnet_prefix1,
+                                         subnet_gateway_ip1)
+        subnet_id2 = self._create_subnet(fmt, subnet_net_id2,
+                                         subnet_ip_version2, subnet_prefix2,
+                                         subnet_gateway_ip2)
 
         list_req = self._list_request(self._tenant_id, "subnets", fmt)
 
@@ -286,18 +294,18 @@ class APIv2Test(unittest.TestCase):
         self.assertEqual(subnet2_data['prefix'], subnet_prefix2)
         self.assertEqual(subnet2_data['gateway_ip'], subnet_gateway_ip2)
 
-
     def _test_create_and_delete_subnet(self, fmt):
         content_type = "application/%s" % fmt
         net_id = self._create_network(fmt, "subnet1", True)
-        subnet_id = self._create_subnet(fmt, net_id, 4, "9.9.0.0/24", "9.9.0.1")
-
-        show_req = self._show_request(self._tenant_id, "subnets", subnet_id, fmt)
+        subnet_id = self._create_subnet(fmt, net_id, 4, "9.9.0.0/24",
+                                        "9.9.0.1")
+        show_req = self._show_request(self._tenant_id, "subnets", subnet_id,
+                                      fmt)
         show_res = show_req.get_response(self.api)
         self.assertEqual(show_res.status_int, 200)
 
-        del_req = self._delete_request(self._tenant_id, "subnets", subnet_id, fmt)
-
+        del_req = self._delete_request(self._tenant_id, "subnets", subnet_id,
+                                       fmt)
         del_res = del_req.get_response(self.api)
         self.assertEqual(del_res.status_int, 204)
 
@@ -359,8 +367,7 @@ class APIv2Test(unittest.TestCase):
         self.assertTrue('op_status' in port_data)
         ips = port_data['fixed_ips']
         self.assertEqual(len(ips), 1)
-        self.assertTrue(ips[0]['address'] in [ str(x) for x in iprange])
-
+        self.assertTrue(ips[0]['address'] in [str(x) for x in iprange])
 
     def _test_create_and_list_ports(self, fmt):
         content_type = "application/%s" % fmt
@@ -398,7 +405,7 @@ class APIv2Test(unittest.TestCase):
         self.assertEqual(port1_data['admin_state_up'], admin_state_up1)
         self.assertEqual(port1_data['device_id'], device_id1)
         self.assertTrue('mac_address' in port1_data)
-        iprange1 = [ str(x) for x in netaddr.IPNetwork(prefix1)]
+        iprange1 = [str(x) for x in netaddr.IPNetwork(prefix1)]
         self.assertTrue(port1_data['fixed_ips'][0]['address'] in iprange1)
         self.assertEqual(port1_data['fixed_ips'][0]['subnet_id'], subnet_id1)
 
@@ -407,15 +414,15 @@ class APIv2Test(unittest.TestCase):
         self.assertEqual(port2_data['admin_state_up'], admin_state_up2)
         self.assertEqual(port2_data['device_id'], device_id2)
         self.assertTrue('mac_address' in port2_data)
-        iprange2 = [ str(x) for x in netaddr.IPNetwork(prefix2)]
+        iprange2 = [str(x) for x in netaddr.IPNetwork(prefix2)]
         self.assertTrue(port2_data['fixed_ips'][0]['address'] in iprange2)
         self.assertEqual(port2_data['fixed_ips'][0]['subnet_id'], subnet_id2)
-
 
     def _test_create_and_delete_port(self, fmt):
         content_type = "application/%s" % fmt
         net_id = self._create_network(fmt, "net1", True)
-        subnet_id = self._create_subnet(fmt, net_id, 4, "20.0.0.0/24", "20.0.0.1")
+        subnet_id = self._create_subnet(fmt, net_id, 4, "20.0.0.0/24",
+                                        "20.0.0.1")
         port_id = self._create_port(fmt, net_id, True, "mydevice")
 
         show_req = self._show_request(self._tenant_id, "ports", port_id, fmt)
@@ -441,4 +448,3 @@ class APIv2Test(unittest.TestCase):
 
     def test_create_and_delete_port_json(self):
         self._test_create_and_delete_port("json")
-
