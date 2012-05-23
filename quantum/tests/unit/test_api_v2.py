@@ -15,9 +15,9 @@ LOG = logging.getLogger('quantum.tests.api_v2_test')
 
 class APIv2Test(unittest.TestCase):
 
-    api = APIRouter({"plugin_provider":
-                     "quantum.db.database_plugin_v2.QuantumDBPlugin_V2"})
-
+    def __init__(self):
+        self.api = APIRouter({"plugin_provider":
+                        "quantum.db.database_plugin_v2.QuantumDBPlugin_V2"})
     def setUp(self):
         super(APIv2Test, self).setUp()
         self._tenant_id = "test-tenant"

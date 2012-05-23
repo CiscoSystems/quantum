@@ -55,5 +55,5 @@ class QuantumBase(object):
         return local.iteritems()
 
 
-BASE   = declarative_base(cls=QuantumBase)
+BASE = declarative_base(cls=QuantumBase)
 BASEV2 = declarative_base(cls=QuantumBase)

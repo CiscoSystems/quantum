@@ -112,6 +112,7 @@ class AbstractAPITest(unittest.TestCase):
         self.tenant_id = "test_tenant"
         self.network_name = "test_network"
 
+
         # Prepare XML & JSON deserializers
         net_xml_deserializer = XMLDeserializer(xml_metadata_dict[NETS])
         port_xml_deserializer = XMLDeserializer(xml_metadata_dict[PORTS])

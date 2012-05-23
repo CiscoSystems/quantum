@@ -74,7 +74,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         except exc.NoResultFound:
             raise q_exc.NetworkNotFound(network_uuid=net_uuid)
 
-    def get_all_networks(self, auth_context, **kwargs):
+    def get_networks(self, auth_context, **kwargs):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_networks = (session.query(models_v2.Network).all())
@@ -140,7 +140,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         except exc.NoResultFound:
             raise q_exc.SubnetNotFound(subnet_uuid=subnet_uuid)
 
-    def get_all_subnets(self, tenant_id, **kwargs):
+    def get_subnets(self, tenant_id, **kwargs):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_subnets = (session.query(models_v2.Subnet).all())
@@ -223,7 +223,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
         except exc.NoResultFound:
             raise q_exc.PortNotFound(port_uuid=port_id)
 
-    def get_all_ports(self, auth_context, **kwargs):
+    def get_ports(self, auth_context, **kwargs):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_ports = (session.query(models_v2.Port).all())
