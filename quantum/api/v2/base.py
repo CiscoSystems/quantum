@@ -173,7 +173,7 @@ class Controller(object):
                       show=show(request),
                       context=request.context)
 
-        obj_getter = getattr(self._plugin, "get_all_%s" % self._collection)
+        obj_getter = getattr(self._plugin, "get_%s" % self._collection)
         obj_list = obj_getter(**kwargs)
 
         return {self._collection: [self._view(obj) for obj in obj_list]}
