@@ -90,12 +90,8 @@ def Resource(controller, deserializers=None, serializers=None):
         if request.body:
             body = deserializer(request.body)
 
-        # NOTE(jkoelker) Prevent the body from overriding values in args
-        body.update(args)
-        args = body
-
+        args['body'] = body
         method = getattr(controller, action)
-
         result = method(request=request, **args)
 
         if isinstance(result, webob.exc.HTTPException):
