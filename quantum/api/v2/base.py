@@ -127,6 +127,9 @@ def _fault_wrapper(func):
     """
     Wraps calls to the plugin to translate Exceptions to webob Faults
     """
+    def json_fault(e):
+        return json.dumps({'QuantumError': str(e)})
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -136,13 +139,13 @@ def _fault_wrapper(func):
             if e_type in FAULT_MAP:
                 fault = FAULT_MAP[e_type]
                 # TODO(anyone) XML body support ;(
-                fault_data = json.dumps({'QuantumError': {
-                                            'type': e.__class__.__name__,
-                                            'message': str(e),
-                                            'detail': '${detail}',
-                                            }})
+                fault_data = json_fault(e)
                 raise fault(body=fault_data)
             raise e
+        except webob.exc.HTTPException as e:
+            fault_data = json_fault(e)
+            raise type(e)(body=fault_data)
+
     return wrapper
 
 
@@ -198,6 +201,7 @@ class Controller(object):
 
     def create(self, request, body):
         """Creates a new instance of the requested entity"""
+        body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin,
                               "create_%s" % self._resource)
         kwargs = {'context': request.context,
@@ -221,6 +225,7 @@ class Controller(object):
         obj = obj_updater(**kwargs)
         return {self._resource: self._view(obj)}
 
+    @_fault_wrapper
     def _prepare_request_body(self, body):
         """ verifies required parameters are in request body.
             Parameters with default values are considered to be
@@ -238,8 +243,7 @@ class Controller(object):
             param_value = res_dict.get(param['attr'], param.get('default'))
             if param_value is None:
                 msg = _("Failed to parse request. Parameter: %s not "
-                        "specified")
-                LOG.error(msg % param)
+                        "specified") % param
                 raise webob.exc.HTTPUnprocessableEntity(msg)
             res_dict[param['attr']] = param_value
         return body
