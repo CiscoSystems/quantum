@@ -51,7 +51,6 @@ RESOURCE_PARAM_MAP = {
 
 
 class Index(wsgi.Application):
-    """Base resource for discovering API versions"""
     def __init__(self, resources):
         self.resources = resources
 
