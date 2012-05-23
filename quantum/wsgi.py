@@ -22,6 +22,7 @@ Utility methods for working with WSGI servers
 import logging
 import sys
 from xml.dom import minidom
+from xml.parsers import expat
 
 import eventlet.wsgi
 eventlet.patcher.monkey_patch(all=False, socket=True)
