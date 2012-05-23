@@ -54,19 +54,18 @@ def Resource(controller, deserializers=None, serializers=None):
     """Represents an API entity resource and the associated serialization and
     deserialization logic
     """
-    # NOTE(jkoelker) bit of a nameing collision here
-    ds = {'application/xml': wsgi.XMLDeserializer(),
-          'application/json': lambda x: json.loads(x)}
-    s = {'application/xml': wsgi.XMLDictSerializer(),
-        'application/json': lambda x: json.dumps(x)}
+    default_deserializers = {'application/xml': wsgi.XMLDeserializer(),
+                             'application/json': lambda x: json.loads(x)}
+    default_serializers = {'application/xml': wsgi.XMLDictSerializer(),
+                           'application/json': lambda x: json.dumps(x)}
     format_types = {'xml': 'application/xml',
                     'json': 'application/json'}
 
-    ds.update(deserializers or {})
-    s.update(serializers or {})
+    default_deserializers.update(deserializers or {})
+    default_serializers.update(serializers or {})
 
-    deserializers = ds
-    serializers = s
+    deserializers = default_deserializers
+    serializers = default_serializers
 
     @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
