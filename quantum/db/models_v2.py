@@ -13,60 +13,96 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sqlalchemy import Column, String, ForeignKey, Integer, Boolean
-from sqlalchemy.orm import relation
+import sqlalchemy as sa
+from sqlalchemy import orm
+from sqlalchemy.ext import declarative
+from sqlalchemy.ext import associationproxy
 
 from quantum.db import model_base
+
+
+class HasTags(object):
+    @declarative.declared_attr
+    def tag_association_id(cls):
+        return sa.Column(sa.String(36),
+                         sa. ForeignKey("tag_associations.uuid"))
+
+    @declarative.declared_attr
+    def tag_association(cls):
+        discriminator = cls.__name__.lower()
+        cls.tags = associationproxy.association_proxy(
+                    "tag_association", "tags",
+                    creator=TagAssociation.creator(discriminator)
+                )
+        return orm.relationship("TagAssociation",
+                    backref=orm.backref("%s_parent" % discriminator,
+                                        uselist=False))
+
+
+class TagAssociation(model_base.BASEV2):
+    __tablename__ = "tag_associations"
+    discriminator = sa.Column(sa.String(255))
+
+    @classmethod
+    def creator(cls, discriminator):
+        """Provide a 'creator' function to use with
+        the association proxy."""
+
+        return lambda tags: TagAssociation(tags=tags,
+                                           discriminator=discriminator)
+
+
+class Tag(model_base.BASEV2):
+    association_id = sa.Column(sa.String(36),
+                               sa.ForeignKey("tagassociation.uuid"))
+    tag = sa.Column(sa.String(255), nullable=False)
 
 
 class IPAllocation(model_base.BASEV2):
     """Internal representation of a IP address allocation in a Quantum
        subnet
     """
-    port_uuid = Column(String(255), ForeignKey('ports.uuid'))
-    address = Column(String(16), nullable=False, primary_key=True)
-    subnet_uuid = Column(String(255), ForeignKey('subnets.uuid'),
-                         primary_key=True)
-    allocated = Column(Boolean(), nullable=False)
+    port_uuid = sa.Column(sa.String(255), sa.ForeignKey('ports.uuid'))
+    address = sa.Column(sa.String(16), nullable=False, primary_key=True)
+    subnet_uuid = sa.Column(sa.String(255), sa.ForeignKey('subnets.uuid'),
+                            primary_key=True)
+    allocated = sa.Column(sa.Boolean(), nullable=False)
 
 
-class Port(model_base.BASEV2):
+class Port(model_base.BASEV2, HasTags):
     """Represents a port on a quantum v2 network"""
-    tenant_uuid = Column(String(255), nullable=False)
-    network_uuid = Column(String(255), ForeignKey("networks.uuid"),
-                        nullable=False)
-    fixed_ips = relation(IPAllocation, order_by=IPAllocation.address,
-                         backref="ip_allocations.port_uuid")
-    mac_address = Column(String(32), nullable=False)
-    admin_state_up = Column(Boolean(), nullable=False)
-    op_status = Column(String(16), nullable=False)
-    device_uuid = Column(String(255), nullable=False)
+    tenant_uuid = sa.Column(sa.String(255), nullable=False)
+    network_uuid = sa.Column(sa.String(255), sa.ForeignKey("networks.uuid"),
+                             nullable=False)
+    fixed_ips = orm.relationship(IPAllocation, backref='ports')
+    mac_address = sa.Column(sa.String(32), nullable=False)
+    admin_state_up = sa.Column(sa.Boolean(), nullable=False)
+    op_status = sa.Column(sa.String(16), nullable=False)
+    device_uuid = sa.Column(sa.String(255), nullable=False)
 
 
-class Subnet(model_base.BASEV2):
+class Subnet(model_base.BASEV2, HasTags):
     """Represents a quantum subnet"""
-    network_uuid = Column(String(255), ForeignKey('networks.uuid'))
-    tenant_uuid = Column(String(255), nullable=False)
-    allocations = relation(IPAllocation, order_by=IPAllocation.address,
-                              backref="ip_allocations.subnet_uuid")
-    ip_version = Column(Integer(), nullable=False)
-    prefix = Column(String, nullable=False)
-    gateway_ip = Column(String)
+    network_uuid = sa.Column(sa.String(255), sa.ForeignKey('networks.uuid'))
+    tenant_uuid = sa.Column(sa.String(255), nullable=False)
+    allocations = orm.relationship(IPAllocation,
+                                   backref=orm.backref('subnet',
+                                                       uselist=False))
+    ip_version = sa.Column(sa.Integer, nullable=False)
+    prefix = sa.Column(sa.String, nullable=False)
+    gateway_ip = sa.Column(sa.String)
 
     #TODO(danwent):
     # - dns_namservers
     # - excluded_ranges
     # - additional_routes
-    # - tags
 
 
-class Network(model_base.BASEV2):
+class Network(model_base.BASEV2, HasTags):
     """Represents a v2 quantum network"""
-    tenant_uuid = Column(String(255), nullable=False)
-    name = Column(String(255))
-    ports = relation(Port, order_by=Port.uuid,
-                     backref="ports.network_uuid")
-    subnets = relation(Subnet, order_by=Subnet.uuid,
-                       backref="subnets.network_uuid")
-    op_status = Column(String(16))
-    admin_state_up = Column(Boolean)
+    tenant_uuid = sa.Column(sa.String(255), nullable=False)
+    name = sa.Column(sa.String(255))
+    ports = orm.relationship(Port, backref='networks')
+    subnets = orm.relationship(Subnet, backref='networks')
+    op_status = sa.Column(sa.String(16))
+    admin_state_up = sa.Column(sa.Boolean)
