@@ -28,10 +28,6 @@ from quantum.db import models_v2
 LOG = logging.getLogger("q_database_plugin_v2")
 
 
-def new_id():
-    return str(uuid.uuid4())
-
-
 class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     """
@@ -52,7 +48,7 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def create_subnet(self, context, subnet):
         self._log("create_subnet", context, subnet=subnet)
-        res = {"id": new_id()}
+        res = {"id": str(uuid.uuid4())}
         res.update(subnet)
         return res
 
@@ -77,7 +73,7 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def create_network(self, context, network):
         self._log("create_network", context, network=network)
-        res = {"id": new_id()}
+        res = {"id": str(uuid.uuid4())}
         res.update(network)
         return res
 
@@ -102,7 +98,7 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def create_port(self, context, port):
         self._log("create_port", context, port=port)
-        res = {"id": new_id()}
+        res = {"id": str(uuid.uuid4())}
         res.update(port)
         return res
 
