@@ -134,7 +134,8 @@ class TestSubnetsV2(APIv2TestCase):
 #        net_admin_state_up = True
 #        net_id = self._create_network(fmt, net_name, net_admin_state_up)
 #
-#        show_req = self._show_request(self._tenant_id, "networks", net_id, fmt)
+#        show_req = self._show_request(self._tenant_id, "networks", net_id,
+#                                      fmt)
 #
 #        show_res = show_req.get_response(self.api)
 #        self.assertEqual(show_res.status_int, 200)
@@ -180,7 +181,8 @@ class TestSubnetsV2(APIv2TestCase):
 #        net_id = self._create_network(fmt, "net1", True)
 #
 #        # confirm create
-#        show_req = self._show_request(self._tenant_id, "networks", net_id, fmt)
+#        show_req = self._show_request(self._tenant_id, "networks", net_id,
+#                                      fmt)
 #
 #        show_res = show_req.get_response(self.api)
 #        self.assertEqual(show_res.status_int, 200)
@@ -256,7 +258,8 @@ class TestSubnetsV2(APIv2TestCase):
 #        self.assertEqual(subnet_data['gateway_ip'], gateway_ip)
 #
 #        # confirm that subnet shows up in network's list of subnets
-#        show_req = self._show_request(self._tenant_id, "networks", net_id, fmt)
+#        show_req = self._show_request(self._tenant_id, "networks", net_id,
+#                                      fmt)
 #        show_res = show_req.get_response(self.api)
 #        self.assertEqual(show_res.status_int, 200)
 #        net_data = self._deserializers[content_type].\
@@ -398,8 +401,10 @@ class TestSubnetsV2(APIv2TestCase):
 #        device_id2 = "device2"
 #        admin_state_up2 = True
 #
-#        port_id1 = self._create_port(fmt, net_id1, admin_state_up1, device_id1)
-#        port_id2 = self._create_port(fmt, net_id2, admin_state_up2, device_id2)
+#        port_id1 = self._create_port(fmt, net_id1, admin_state_up1,
+#                                     device_id1)
+#        port_id2 = self._create_port(fmt, net_id2, admin_state_up2,
+#                                     device_id2)
 #
 #        list_req = self._list_request(self._tenant_id, "ports", fmt)
 #
