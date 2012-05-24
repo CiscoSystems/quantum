@@ -127,7 +127,7 @@ class QuantumDBPlugin_V2(QuantumPluginBaseV2):
             session.delete(subnet)
             session.flush()
         except exc.NoResultFound:
-            raise q_exc.SubnetNotFound(subnet_id=subnet_uuid)
+            raise q_exc.SubnetNotFound(subnet_id=subnet_id)
 
     def get_subnet(self, tenant_id, subnet_uuid, **kwargs):
         session = db.get_session()
