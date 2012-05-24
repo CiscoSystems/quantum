@@ -23,8 +23,8 @@ class APIv2TestCase(unittest.TestCase):
             'application/json': json_deserializer,
         }
 
-        self.api = APIRouter({"plugin_provider":
-                        "quantum.db.database_plugin_v2.QuantumDBPlugin_V2"})
+        plugin = "quantum.pluginns.sample.SamplePluginV2.FakePlugin"
+        self.api = APIRouter({"plugin_provider": plugin})
 
     def tearDown(self):
         """Clear the test environment"""

@@ -90,12 +90,12 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
         deserializer = deserializers.get(content_type)
         serializer = serializers.get(content_type)
 
-        if request.body:
-            args['body'] = deserializer(request.body)
-
-        method = getattr(controller, action)
-
         try:
+            if request.body:
+                args['body'] = deserializer(request.body)
+
+            method = getattr(controller, action)
+
             result = method(request=request, **args)
         except exceptions.QuantumException as e:
             LOG.exception('%s failed' % action)

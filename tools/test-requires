@@ -3,7 +3,6 @@ distribute>=0.6.24
 coverage
 mock>=0.7.1
 mox==0.5.3
-netaddr
 nose
 nosexcover
 openstack.nose_plugin
