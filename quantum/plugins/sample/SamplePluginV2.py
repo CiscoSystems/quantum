@@ -176,7 +176,6 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         if config.has_section('db'):
             sql_connection = config.get('db', 'sql_connection')
         db.configure_db({'sql_connection': sql_connection})
-        FakePlugin._net_counter = 0
 
     def _get_network(self, tenant_id, network_id):
 
