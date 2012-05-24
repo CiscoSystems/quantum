@@ -151,10 +151,9 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         n = network['network']
         session = db.get_session()
         with session.begin():
-            network = models_v2.Network("",
-                                      n['name'],
-                                      n['admin_state_up'],
-                                      "ACTIVE")
+            network = models_v2.Network(name=n['name'],
+                                        admin_state_up=n['admin_state_up'],
+                                        op_status="ACTIVE")
             session.add(network)
             session.flush()
             return self._make_network_dict(network)

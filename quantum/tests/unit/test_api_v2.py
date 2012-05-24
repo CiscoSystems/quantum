@@ -33,35 +33,34 @@ class APIv2TestCase(unittest.TestCase):
         super(APIv2TestCase, self).tearDown()
         QuantumManager.get_plugin().clear_state()
 
-    def _req(self, method, resource, data=None, format='json', id=None):
+    def _req(self, method, resource, data=None, fmt='json', id=None):
         if id:
-            path = "/%(resource)s.%(format)s" % locals()
+            path = "/%(resource)s/%(id)s.%(fmt)s" % locals()
         else:
-            path = "/%s(resource)s/%(id)s.%(format)s" % locals()
-        content_type = "application/%s" % format
+            path = "/%(resource)s.%(fmt)s" % locals()
+        content_type = "application/%s" % fmt
         body = None
         if data:
             body = Serializer().serialize(data, content_type)
-        raise Exception(path, body, content_type, method)
         return create_request(path, body, content_type, method)
 
+    # Yeah, they're factories. And you better be ok with it.
+    def new_create_request(self, resource, data, fmt='json'):
+        return self._req('POST', resource, data, fmt)
 
-    def _create_request(self, resource, data, format='json'):
-        return self._req('POST', resource, data, format)
+    def new_list_request(self, resource, fmt='json'):
+        return self._req('GET', resource, None, fmt)
 
-    def _list_request(self, resource, format='json'):
-        return self._req('GET', resource, None, format)
+    def new_show_request(self, resource, id, fmt='json'):
+        return self._req('GET', resource, None, fmt, id=id)
 
-    def _show_request(self, resource, id, format='json'):
-        return self._req('GET', resource, None, format, id=id)
+    def new_delete_request(self, resource, id, fmt='json'):
+        return self._req('DELETE', resource, None, fmt, id=id)
 
-    def _delete_request(self, resource, id, format='json'):
-        return self._req('DELETE', resource, None, format, id=id)
+    def new_update_request(self, resource, id, fmt='json'):
+        return self._req('PUT', resource, data, fmt, id=id)
 
-    def _update_request(self, resource, id, format='json'):
-        return self._req('UPDATE', resource, data, format, id=id)
-
-    def _deserialize_response(self, content_type, response):
+    def deserialize_response(self, content_type, response):
         ctype = "application/%s" % content_type
         data = self._deserializers[ctype].\
                             deserialize(response.body)['body']
@@ -74,20 +73,11 @@ class APIv2TestCase(unittest.TestCase):
                         custom_req_body=None,
                         expected_res_status=None):
         LOG.debug("Creating network")
-        network_req = self._network_create_request(name,
-                                                   admin_status_up,
-                                                   fmt)
+        data = {'network': {'name': name,
+                            'admin_state_up': admin_status_up}}
+        network_req = self.new_create_request('networks', data, fmt)
         network_res = network_req.get_response(self.api)
         return network_res
-
-
-    def _network_create_request(self, tenant_id, name, admin_status_up,
-                                format='json'):
-        data = {'network': {'name': name,
-                            'admin_state_up': admin_status_up,
-                           }
-               }
-        return self._create_request('networks', data, format)
 
 
 class TestV2HTTPResponse(APIv2TestCase):
@@ -121,20 +111,81 @@ class TestV2HTTPResponse(APIv2TestCase):
         self.assertEquals(res.status_int, 404)
 
 
-#class TestPortsV2(APIv2TestCase):
-#    def setUp(self):
-#        super(TestPortsV2, self).setUp()
-#
-#    def _port_create_request(self, tenant_id, net_id, admin_state_up,
-#                             device_id, format='json'):
-#        data = {'port': {'network_id': net_id,
-#                         'admin_state_up': admin_state_up,
-#                         'device_id': device_id
-#                        }
-#               }
-#        return self._create_request(tenant_id, 'ports', data, format)
-#
-#
+class TestPortsV2(APIv2TestCase):
+    def setUp(self):
+        super(TestPortsV2, self).setUp()
+        res = self._create_network("json", "net1", True)
+        data = self._deserializers["application/json"].\
+                            deserialize(res.body)["body"]
+        self.net_id = data["network"]["id"]
+
+    def _create_port(self, fmt, net_id, admin_state_up, device_id,
+                     custom_req_body=None,
+                     expected_res_status=None):
+        content_type = "application/" + fmt
+        data = {'port': {'network_id': net_id,
+                         'admin_state_up': admin_state_up,
+                         'device_id': device_id}}
+        port_req = self.new_create_request('ports', data, fmt)
+        port_res = port_req.get_response(self.api)
+        return self._deserializers[content_type].\
+                            deserialize(response.body)['body']
+
+    def test_create_port_json(self):
+        port = self._create_port("json", self.net_id, True, "dev_id_1")
+        self.assertEqual(port_data['id'], "dev_id_1")
+        self.assertEqual(port_data['admin_state_up'], "DOWN")
+        self.assertEqual(port_data['device_id'], "dev_id_1")
+        self.assertTrue("mac_address" in port_data)
+        self.assertTrue('op_status' in port_data)
+
+    def test_list_ports(self):
+        port1 = self._create_port("json", self.net_id, True, "dev_id_1")
+        port2 = self._create_port("json", self.net_id, True, "dev_id_2")
+
+        res = self.new_list_request("ports", "json")
+        port_list = self._deserializers["application/json"].\
+                            deserialize(res.body)["body"]
+        self.assertTrue(port1 in port_list["ports"])
+        self.assertTrue(port2 in port_list["ports"])
+
+    def test_show_port(self):
+        port = self._create_port("json", self.net_id, True, "dev_id_1")
+        res = self.new_show_request("port", "json", port["id"])
+        port = self._deserializers["application/json"].\
+                            deserialize(res.body)["body"]
+
+        self.assertEquals(port["port"]["name"], "dev_id_1")
+
+    def test_delete_port(self):
+        port = self._create_port("json", self.net_id, True, "dev_id_1")
+        self.new_delete_request("port", "json", port["id"])
+
+        port = self.new_show_request("port", "json", port["id"])
+
+        self.assertEquals(res.status_int, 404)
+
+    def test_update_port(self):
+        port = self._create_port("json", self.net_id, True, "dev_id_1")
+        port_body = {"port": {"device_id": "Bob"}}
+        res = self.new_update_request("port", port_body, port["id"])
+        port = self._deserializers["application/json"].\
+                            deserialize(res.body)["body"]
+        self.assertEquals(port["device_id"], "Bob")
+
+    def test_delete_non_existent_port_404(self):
+        res = self.new_delete_request("port", "json", 1)
+        self.assertEquals(res.status_int, 404)
+
+    def test_show_non_existent_port_404(self):
+        res = self.new_show_request("port", "json", 1)
+        self.assertEquals(res.status_int, 404)
+
+    def test_update_non_existent_port_404(self):
+        res = self.new_update_request("port", "json", 1)
+        self.assertEquals(res.status_int, 404)
+
+
 #class TestNetworksV2(APIv2TestCase):
 #    def setUp(self):
 #        super(TestNetworksV2, self).setUp()
@@ -151,14 +202,14 @@ class TestV2HTTPResponse(APIv2TestCase):
 #        super(TestSubnetsV2, self).setUp()
 #
 #    def _subnet_create_request(self, tenant_id, net_id, ip_version, prefix,
-#                               gateway_ip, format='json'):
+#                               gateway_ip, fmt='json'):
 #        data = {'subnet': {'network_id': net_id,
 #                           'ip_version': ip_version,
 #                           'prefix': prefix,
 #                           'gateway_ip': gateway_ip
 #                          }
 #               }
-#        return self._create_request(tenant_id, 'subnets', data, format)
+#        return self._create_request(tenant_id, 'subnets', data, fmt)
 #
 #
 
@@ -372,127 +423,4 @@ class TestV2HTTPResponse(APIv2TestCase):
 #    def test_create_and_delete_subnet_json(self):
 #        self._test_create_and_delete_subnet("json")
 #
-#    def _create_port(self, fmt, net_id, admin_state_up, device_id,
-#                       custom_req_body=None,
-#                       expected_res_status=None):
-#        LOG.debug("Creating port")
-#        content_type = "application/" + fmt
-#        port_req = self._port_create_request(self._tenant_id, net_id,
-#                                             admin_state_up, device_id,
-#                                             fmt)
-#        port_res = port_req.get_response(self.api)
-#        expected_res_status = expected_res_status or 202
-#        self.assertEqual(port_res.status_int, expected_res_status)
-#        port_data = self._deserialize_response(content_type, port_res)
-#        return port_data['port']['id']
-#
-#    def _test_create_port(self, fmt):
-#        net_id = self._create_network(fmt, "net1", True)
-#
-#        self._create_subnet(fmt, net_id, 4, "10.0.0.0/24", "10.0.0.1")
-#        self._create_port(fmt, net_id, True, "dev_id_1")
-#
-#    def _test_create_and_show_port(self, fmt):
-#        content_type = "application/%s" % fmt
-#        prefix = "10.0.0.0/24"
-#        iprange = netaddr.IPNetwork(prefix)
-#        net_id = self._create_network(fmt, "net1", True)
-#        self._create_subnet(fmt, net_id, 4, prefix, "10.0.0.1")
-#        dev_id1 = "dev_id_1"
-#        admin_state_up = True
-#        port_id = self._create_port(fmt, net_id, admin_state_up, dev_id1)
-#
-#        show_req = self._show_request(self._tenant_id, "ports", port_id, fmt)
-#
-#        show_res = show_req.get_response(self.api)
-#        self.assertEqual(show_res.status_int, 200)
-#        port_data = self._deserializers[content_type].\
-#                            deserialize(show_res.body)['body']['port']
-#        self.assertEqual(port_data['id'], port_id)
-#        self.assertEqual(port_data['admin_state_up'], admin_state_up)
-#        self.assertEqual(port_data['device_id'], dev_id1)
-#        self.assertTrue("mac_address" in port_data)
-#        self.assertTrue('op_status' in port_data)
-#        ips = port_data['fixed_ips']
-#        self.assertEqual(len(ips), 1)
-#        self.assertTrue(ips[0]['address'] in [str(x) for x in iprange])
-#
-#    def _test_create_and_list_ports(self, fmt):
-#        content_type = "application/%s" % fmt
-#        prefix1 = "10.0.0.0/24"
-#        net_id1 = self._create_network(fmt, "net1", True)
-#        subnet_id1 = self._create_subnet(fmt, net_id1, 4, prefix1, "10.0.0.1")
-#        device_id1 = "device1"
-#        admin_state_up1 = False
-#
-#        prefix2 = "20.0.0.0/24"
-#        net_id2 = self._create_network(fmt, "net2", True)
-#        subnet_id2 = self._create_subnet(fmt, net_id2, 4, prefix2, "20.0.0.1")
-#        device_id2 = "device2"
-#        admin_state_up2 = True
-#
-#        port_id1 = self._create_port(fmt, net_id1, admin_state_up1, device_id1)
-#        port_id2 = self._create_port(fmt, net_id2, admin_state_up2, device_id2)
-#
-#        list_req = self._list_request(self._tenant_id, "ports", fmt)
-#
-#        list_res = list_req.get_response(self.api)
-#        self.assertEqual(list_res.status_int, 200)
-#        port_list = self._deserializers[content_type].\
-#                            deserialize(list_res.body)['body']['ports']
-#        self.assertEqual(len(port_list), 2)
-#        if port_list[0]['id'] == port_id1:
-#            port1_data = port_list[0]
-#            port2_data = port_list[1]
-#        else:
-#            port1_data = port_list[1]
-#            port2_data = port_list[0]
-#
-#        self.assertEqual(port1_data['id'], port_id1)
-#        self.assertEqual(port1_data['network_id'], net_id1)
-#        self.assertEqual(port1_data['admin_state_up'], admin_state_up1)
-#        self.assertEqual(port1_data['device_id'], device_id1)
-#        self.assertTrue('mac_address' in port1_data)
-#        iprange1 = [str(x) for x in netaddr.IPNetwork(prefix1)]
-#        self.assertTrue(port1_data['fixed_ips'][0]['address'] in iprange1)
-#        self.assertEqual(port1_data['fixed_ips'][0]['subnet_id'], subnet_id1)
-#
-#        self.assertEqual(port2_data['id'], port_id2)
-#        self.assertEqual(port2_data['network_id'], net_id2)
-#        self.assertEqual(port2_data['admin_state_up'], admin_state_up2)
-#        self.assertEqual(port2_data['device_id'], device_id2)
-#        self.assertTrue('mac_address' in port2_data)
-#        iprange2 = [str(x) for x in netaddr.IPNetwork(prefix2)]
-#        self.assertTrue(port2_data['fixed_ips'][0]['address'] in iprange2)
-#        self.assertEqual(port2_data['fixed_ips'][0]['subnet_id'], subnet_id2)
-#
-#    def _test_create_and_delete_port(self, fmt):
-#        content_type = "application/%s" % fmt
-#        net_id = self._create_network(fmt, "net1", True)
-#        subnet_id = self._create_subnet(fmt, net_id, 4, "20.0.0.0/24",
-#                                        "20.0.0.1")
-#        port_id = self._create_port(fmt, net_id, True, "mydevice")
-#
-#        show_req = self._show_request(self._tenant_id, "ports", port_id, fmt)
-#        show_res = show_req.get_response(self.api)
-#        self.assertEqual(show_res.status_int, 200)
-#
-#        del_req = self._delete_request(self._tenant_id, "ports", port_id, fmt)
-#
-#        del_res = del_req.get_response(self.api)
-#        self.assertEqual(del_res.status_int, 204)
-#
-#        #FIXME(danwent): once fault handler exists, check that we get
-#        # a 404 doing a show request.
-#
-#    def test_create_port_json(self):
-#        self._test_create_port("json")
-#
-#    def test_create_and_show_port_json(self):
-#        self._test_create_and_show_port("json")
-#
-#    def test_create_and_list_ports_json(self):
-#        self._test_create_and_list_ports("json")
-#
-#    def test_create_and_delete_port_json(self):
-#        self._test_create_and_delete_port("json")
+
