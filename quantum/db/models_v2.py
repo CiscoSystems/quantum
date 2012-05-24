@@ -58,21 +58,25 @@ class Tag(model_base.BASEV2):
     tag = sa.Column(sa.String(255), nullable=False)
 
 
+class HasTenant(object):
+    # NOTE(jkoelker) tenant_id is just a free form string ;(
+    tenant_id = sa.Column(sa.String(255), nullable=False)
+
+
 class IPAllocation(model_base.BASEV2):
     """Internal representation of a IP address allocation in a Quantum
        subnet
     """
-    port_uuid = sa.Column(sa.String(255), sa.ForeignKey('ports.uuid'))
+    port_uuid = sa.Column(sa.String(36), sa.ForeignKey('ports.uuid'))
     address = sa.Column(sa.String(16), nullable=False, primary_key=True)
-    subnet_uuid = sa.Column(sa.String(255), sa.ForeignKey('subnets.uuid'),
+    subnet_uuid = sa.Column(sa.String(36), sa.ForeignKey('subnets.uuid'),
                             primary_key=True)
     allocated = sa.Column(sa.Boolean(), nullable=False)
 
 
-class Port(model_base.BASEV2, HasTags):
+class Port(model_base.BASEV2, HasTags, HasTenant):
     """Represents a port on a quantum v2 network"""
-    tenant_uuid = sa.Column(sa.String(255), nullable=False)
-    network_uuid = sa.Column(sa.String(255), sa.ForeignKey("networks.uuid"),
+    network_uuid = sa.Column(sa.String(36), sa.ForeignKey("networks.uuid"),
                              nullable=False)
     fixed_ips = orm.relationship(IPAllocation, backref='ports')
     mac_address = sa.Column(sa.String(32), nullable=False)
@@ -81,10 +85,9 @@ class Port(model_base.BASEV2, HasTags):
     device_uuid = sa.Column(sa.String(255), nullable=False)
 
 
-class Subnet(model_base.BASEV2, HasTags):
+class Subnet(model_base.BASEV2, HasTags, HasTenant):
     """Represents a quantum subnet"""
-    network_uuid = sa.Column(sa.String(255), sa.ForeignKey('networks.uuid'))
-    tenant_uuid = sa.Column(sa.String(255), nullable=False)
+    network_uuid = sa.Column(sa.String(36), sa.ForeignKey('networks.uuid'))
     allocations = orm.relationship(IPAllocation,
                                    backref=orm.backref('subnet',
                                                        uselist=False))
@@ -98,9 +101,8 @@ class Subnet(model_base.BASEV2, HasTags):
     # - additional_routes
 
 
-class Network(model_base.BASEV2, HasTags):
+class Network(model_base.BASEV2, HasTags, HasTenant):
     """Represents a v2 quantum network"""
-    tenant_uuid = sa.Column(sa.String(255), nullable=False)
     name = sa.Column(sa.String(255))
     ports = orm.relationship(Port, backref='networks')
     subnets = orm.relationship(Subnet, backref='networks')
