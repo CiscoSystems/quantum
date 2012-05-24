@@ -116,7 +116,7 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
             body = serializer({'QuantumError': str(e)})
             raise webob.exc.HTTPInternalServerError(body=body)
 
-        return  webob.Response(request=request,
-                               content_type=content_type,
-                               body=serializer(result))
+        return webob.Response(request=request,
+                              content_type=content_type,
+                              body=serializer(result))
     return resource
