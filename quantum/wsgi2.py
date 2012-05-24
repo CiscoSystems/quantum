@@ -25,6 +25,7 @@ import webob
 import webob.exc
 import webob.dec
 
+from quantum.common import exceptions
 from quantum import wsgi
 
 
@@ -50,7 +51,7 @@ class Request(webob.Request):
         return self.environ['quantum.context']
 
 
-def Resource(controller, deserializers=None, serializers=None):
+def Resource(controller, faults=None, deserializers=None, serializers=None):
     """Represents an API entity resource and the associated serialization and
     deserialization logic
     """
@@ -60,12 +61,15 @@ def Resource(controller, deserializers=None, serializers=None):
                            'application/json': lambda x: json.dumps(x)}
     format_types = {'xml': 'application/xml',
                     'json': 'application/json'}
+    default_faults = {}
 
     default_deserializers.update(deserializers or {})
     default_serializers.update(serializers or {})
+    default_faults.update(faults or {})
 
     deserializers = default_deserializers
     serializers = default_serializers
+    faults = default_faults
 
     @webob.dec.wsgify(RequestClass=Request)
     def resource(request):
@@ -84,17 +88,34 @@ def Resource(controller, deserializers=None, serializers=None):
         content_type = format_types.get(fmt,
                                         request.best_match_content_type())
         deserializer = deserializers.get(content_type)
+        serializer = serializers.get(content_type)
 
         if request.body:
             args['body'] = deserializer(request.body)
 
         method = getattr(controller, action)
-        result = method(request=request, **args)
 
-        if isinstance(result, webob.exc.HTTPException):
-            return result
+        try:
+            result = method(request=request, **args)
+        except exceptions.QuantumException as e:
+            LOG.exception('%s failed' % action)
+            e_type = type(e)
+            body = serializer({'QuantumError': str(e)})
+            if e_type in faults:
+                fault = faults[e_type]
+                raise fault(body=body)
+            e.body = body
+            raise
+        except webob.exc.HTTPException as e:
+            LOG.exception('%s failed' % action)
+            e.body = serializer({'QuantumError': str(e)})
+            raise
+        except Exception as e:
+            # NOTE(jkoelker) Everyting else is 500
+            LOG.exception('%s failed' % action)
+            body = serializer({'QuantumError': str(e)})
+            raise webob.exc.HTTPInternalServerError(body=body)
 
-        serializer = serializers.get(content_type)
         return  webob.Response(request=request,
                                content_type=content_type,
                                body=serializer(result))

@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import functools
 import logging
-import json
 
-import webob.dec
 import webob.exc
 
 from quantum.common import exceptions
@@ -117,50 +114,12 @@ def create_resource(collection, resource, plugin, conf, params):
     #    'application/xml': xml_deserializer,
     }
 
-    return wsgi2.Resource(controller, deserializers, serializers)
-
-
-def _fault_wrapper(func):
-    """
-    Wraps calls to the plugin to translate Exceptions to webob Faults
-    """
-    def json_fault(e):
-        return json.dumps({'QuantumError': str(e)})
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except exceptions.QuantumException as e:
-            e_type = type(e)
-            if e_type in FAULT_MAP:
-                fault = FAULT_MAP[e_type]
-                # TODO(anyone) XML body support ;(
-                fault_data = json_fault(e)
-                raise fault(body=fault_data)
-            raise e
-        except webob.exc.HTTPException as e:
-            fault_data = json_fault(e)
-            raise type(e)(body=fault_data)
-
-    return wrapper
-
-
-class FaultWrapper(object):
-    """
-    Wrapper class to wrap all plugin functions with the fault_wrapper
-    """
-    def __init__(self, plugin):
-        self._plugin = plugin
-
-    def __getattribute__(self, name):
-        plugin = object.__getattribute__(self, '_plugin')
-        return _fault_wrapper(object.__getattribute__(plugin, name))
+    return wsgi2.Resource(controller, FAULT_MAP, deserializers, serializers)
 
 
 class Controller(object):
     def __init__(self, plugin, collection, resource, params):
-        self._plugin = FaultWrapper(plugin)
+        self._plugin = plugin
         self._collection = collection
         self._resource = resource
         self._params = params
@@ -218,7 +177,6 @@ class Controller(object):
         obj = obj_updater(request.context, **kwargs)
         return {self._resource: self._view(obj)}
 
-    @_fault_wrapper
     def _prepare_request_body(self, body):
         """ verifies required parameters are in request body.
             Parameters with default values are considered to be
