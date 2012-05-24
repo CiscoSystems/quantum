@@ -117,10 +117,7 @@ def create_resource(collection, resource, plugin, conf, params):
     #    'application/xml': xml_deserializer,
     }
 
-    # TODO(cerberus): fix the faults crap later
-    return wsgi2.Resource(controller,
-                          deserializers,
-                          serializers)
+    return wsgi2.Resource(controller, deserializers, serializers)
 
 
 def _fault_wrapper(func):
