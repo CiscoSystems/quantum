@@ -194,8 +194,8 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 "op_status": network.op_status,
                 "subnets": [s['uuid'] for s in network.subnets]}
 
-    def create_network(self, auth_context, network_data, **kwargs):
-        n = network_data['network']
+    def create_network(self, context, network):
+        n = network['network']
         session = db.get_session()
         with session.begin():
             network = models_v2.Network("",
@@ -206,14 +206,14 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             session.flush()
             return self._make_network_dict(network)
 
-    def update_network(self, auth_context, net_data, **kwargs):
+    def update_network(self, context, id, network):
         pass
 
-    def delete_network(self, auth_context, net_id):
+    def delete_network(self, context, id):
         session = db.get_session()
         try:
             net = (session.query(models_v2.Network).
-                   filter_by(uuid=net_id).
+                   filter_by(uuid=id).
                    one())
 
             for p in net.ports:
@@ -222,20 +222,20 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             session.delete(net)
             session.flush()
         except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(net_id=net_id)
+            raise q_exc.NetworkNotFound(net_id=id)
 
-    def get_network(self, auth_context, net_uuid, **kwargs):
+    def get_network(self, context, id, show=None, verbose=None):
         session = db.get_session()
         try:
             #TODO(danwent): filter by tenant
             network = (session.query(models_v2.Network).
-                      filter_by(uuid=net_uuid).
+                      filter_by(uuid=id).
                       one())
             return self._make_network_dict(network)
         except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(network_uuid=net_uuid)
+            raise q_exc.NetworkNotFound(network_uuid=id)
 
-    def get_networks(self, auth_context, **kwargs):
+    def get_networks(self, context, filters=None, show=None, verbose=None):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_networks = (session.query(models_v2.Network).all())
@@ -248,8 +248,8 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 "prefix": subnet.prefix,
                 "gateway_ip": subnet.gateway_ip}
 
-    def create_subnet(self, auth_context, subnet_data, **kwargs):
-        s = subnet_data['subnet']
+    def create_subnet(self, context, subnet):
+        s = subnet['subnet']
         session = db.get_session()
         with session.begin():
             subnet = models_v2.Subnet("",
@@ -271,37 +271,37 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             session.flush()
             return self._make_subnet_dict(subnet)
 
-    def update_subnet(self, tenant_id, subnet_uuid, subnet_data):
+    def update_subnet(self, context, id, subnet):
         pass
 
-    def delete_subnet(self, tenant_id, subnet_id):
+    def delete_subnet(self, context, id):
         session = db.get_session()
         try:
             subnet = (session.query(models_v2.Subnet).
-                   filter_by(uuid=subnet_id).
+                   filter_by(uuid=id).
                    one())
 
             session.query(models_v2.IP_Allocation).\
-                    filter_by(subnet_uuid=subnet_id).\
+                    filter_by(subnet_uuid=id).\
                     delete()
 
             session.delete(subnet)
             session.flush()
         except exc.NoResultFound:
-            raise q_exc.SubnetNotFound(subnet_id=subnet_id)
+            raise q_exc.SubnetNotFound(subnet_id=id)
 
-    def get_subnet(self, tenant_id, subnet_uuid, **kwargs):
+    def get_subnet(self, context, id, show=None, verbose=None):
         session = db.get_session()
         try:
             #TODO(danwent): filter by tenant
             subnet = (session.query(models_v2.Subnet).
-                      filter_by(uuid=subnet_uuid).
+                      filter_by(uuid=id).
                       one())
             return self._make_subnet_dict(subnet)
         except exc.NoResultFound:
-            raise q_exc.SubnetNotFound(subnet_uuid=subnet_uuid)
+            raise q_exc.SubnetNotFound(subnet_uuid=id)
 
-    def get_subnets(self, tenant_id, **kwargs):
+    def get_subnets(self, context, filters=None, show=None, verbose=None):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_subnets = (session.query(models_v2.Subnet).all())
@@ -319,8 +319,8 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 "fixed_ips": ips,
                 "device_id": port.device_uuid}
 
-    def create_port(self, auth_context, port_data, **kwargs):
-        p = port_data['port']
+    def create_port(self, context, port):
+        p = port['port']
         session = db.get_session()
         #FIXME(danwent): allocate MAC
         mac_address = "ca:fe:de:ad:be:ef"
@@ -358,37 +358,34 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             session.flush()
             return self._make_port_dict(port)
 
-    def update_port(self, auth_context, port_data, **kwargs):
+    def update_port(self, context, id, port):
         pass
 
-    def delete_port(self, auth_context, port_id):
+    def delete_port(self, context, id):
         session = db.get_session()
         try:
             port = (session.query(models_v2.Port).
-                   filter_by(uuid=port_id).
+                   filter_by(uuid=id).
                    one())
 
             session.delete(port)
             session.flush()
         except exc.NoResultFound:
-            raise q_exc.PortNotFound(port_id=port_id)
+            raise q_exc.PortNotFound(port_id=id)
 
-    def get_port(self, auth_context, port_id, **kwargs):
+    def get_port(self, context, id, show=None, verbose=None):
         session = db.get_session()
         try:
             #TODO(danwent): filter by tenant
             port = (session.query(models_v2.Port).
-                      filter_by(uuid=port_id).
+                      filter_by(uuid=id).
                       one())
             return self._make_port_dict(port)
         except exc.NoResultFound:
-            raise q_exc.PortNotFound(port_uuid=port_id)
+            raise q_exc.PortNotFound(port_uuid=id)
 
-    def get_ports(self, auth_context, **kwargs):
+    def get_ports(self, context, filters=None, show=None, verbose=None):
         session = db.get_session()
         #TODO(danwent): filter by tenant
         all_ports = (session.query(models_v2.Port).all())
         return [self._make_port_dict(p) for p in all_ports]
-
-    def clear_state(self):
-        db.clear_db()
