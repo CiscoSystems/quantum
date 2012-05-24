@@ -158,7 +158,7 @@ def network_get(net_id):
         return (session.query(models.Network).
                 filter_by(uuid=net_id).
                 one())
-    except exc.NoResultFound, e:
+    except exc.NoResultFound:
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
@@ -199,7 +199,7 @@ def validate_network_ownership(tenant_id, net_id):
                 filter_by(uuid=net_id).
                 filter_by(tenant_id=tenant_id).
                 one())
-    except exc.NoResultFound, e:
+    except exc.NoResultFound:
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
