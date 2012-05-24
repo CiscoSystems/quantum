@@ -170,22 +170,20 @@ class Controller(object):
         """Retrieves and formats a list of elements of the requested entity"""
         kwargs = {'filters': filters(request),
                   'verbose': verbose(request),
-                  'show': show(request),
-                  'context': request.context}
+                  'show': show(request)}
 
         obj_getter = getattr(self._plugin, "get_%s" % self._collection)
-        obj_list = obj_getter(**kwargs)
+        obj_list = obj_getter(request.context, **kwargs)
 
         return {self._collection: [self._view(obj) for obj in obj_list]}
 
     def _item(self, request, id):
         """Retrieves and formats a single element of the requested entity"""
         kwargs = {'verbose': verbose(request),
-                  'show': show(request),
-                  'context': request.context}
+                  'show': show(request)}
         obj_getter = getattr(self._plugin,
                              "get_%s" % self._resource)
-        obj = obj_getter(id, **kwargs)
+        obj = obj_getter(request.context, id, **kwargs)
         return {self._resource: self._view(obj)}
 
     def index(self, request):
@@ -201,25 +199,23 @@ class Controller(object):
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin,
                               "create_%s" % self._resource)
-        kwargs = {'context': request.context,
-                  self._resource: body}
-        obj = obj_creator(**kwargs)
+        kwargs = {self._resource: body}
+        obj = obj_creator(request.context, **kwargs)
         return {self._resource: self._view(obj)}
 
     def delete(self, request, id):
         """Deletes the specified entity"""
         obj_deleter = getattr(self._plugin,
                               "delete_%s" % self._resource)
-        obj_deleter(id, context=request.context)
+        obj_deleter(request.context, id)
 
     def update(self, request, id, body):
         """Updates the specified entity's attributes"""
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
                               "update_%s" % self._resource)
-        kwargs = {'context': request.context,
-                  self._resource: body}
-        obj = obj_updater(**kwargs)
+        kwargs = {self._resource: body}
+        obj = obj_updater(request.context, **kwargs)
         return {self._resource: self._view(obj)}
 
     @_fault_wrapper
