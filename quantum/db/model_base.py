@@ -13,8 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sqlalchemy.orm import object_mapper
-from sqlalchemy.ext.declarative import declarative_base
+import uuid
+
+import sqlalchemy as sa
+from sqlalchemy import orm
+from sqlalchemy.ext import declarative
+
+
+def str_uuid():
+    return str(uuid.uuid4)
 
 
 class QuantumBase(object):
@@ -30,7 +37,7 @@ class QuantumBase(object):
         return getattr(self, key, default)
 
     def __iter__(self):
-        self._i = iter(object_mapper(self).columns)
+        self._i = iter(orm.object_mapper(self).columns)
         return self
 
     def next(self):
@@ -52,5 +59,14 @@ class QuantumBase(object):
         return local.iteritems()
 
 
-BASE = declarative_base(cls=QuantumBase)
-BASEV2 = declarative_base(cls=QuantumBase)
+class QuantumBaseV2(QuantumBase):
+    uuid = sa.Column(sa.String(36), primary_key=True, default=str_uuid)
+
+    @declarative.declared_attr
+    def __tablename__(cls):
+        # NOTE(jkoelker) use the pluralized name of the class as the table
+        return cls.__name__.lower() + 's'
+
+
+BASE = declarative.declarative_base(cls=QuantumBase)
+BASEV2 = declarative.declarative_base(cls=QuantumBaseV2)
