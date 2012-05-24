@@ -18,10 +18,16 @@ import logging
 import os
 import uuid
 
+import netaddr
+from sqlalchemy.orm import exc
+
 from quantum import quantum_plugin_base_v2
-from quantum.api import api_common as common
-from quantum.common import exceptions as exc
+from quantum.common import exceptions as q_exc
 from quantum.db import api as db
+from quantum.db import models_v2
+
+
+LOG = logging.getLogger("q_database_plugin_v2")
 
 
 LOG = logging.getLogger('quantum.plugins.sample.SamplePlugin')
@@ -164,10 +170,12 @@ class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
 
 class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
-    """
-    FakePlugin is a demo plugin that provides
-    in-memory data structures to aid in quantum
-    client/cli/api development
+    """ A class that implements the v2 Quantum plugin interface
+        using SQLAlchemy models.  Whenever a non-read call happens
+        the plugin will call an event handler class method (e.g.,
+        network_created()).  The result is that this class can be
+        sub-classed by other classes that add custom behaviors on
+        certain events.
     """
 
     def __init__(self):
@@ -177,212 +185,208 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             sql_connection = config.get('db', 'sql_connection')
         db.configure_db({'sql_connection': sql_connection})
 
-    def _get_network(self, tenant_id, network_id):
+    def _make_network_dict(self, network):
+        return {"id": network.uuid,
+                "name": network.name,
+                "admin_state_up": network.admin_state_up,
+                "op_status": network.op_status,
+                "subnets": [s['uuid'] for s in network.subnets]}
 
-        db.validate_network_ownership(tenant_id, network_id)
+    def create_network(self, auth_context, network_data, **kwargs):
+        n = network_data['network']
+        session = db.get_session()
+        with session.begin():
+            network = models_v2.Network("",
+                                      n['name'],
+                                      n['admin_state_up'],
+                                      "ACTIVE")
+            session.add(network)
+            session.flush()
+            return self._make_network_dict(network)
+
+    def update_network(self, auth_context, net_data, **kwargs):
+        pass
+
+    def delete_network(self, auth_context, net_id):
+        session = db.get_session()
         try:
-            network = db.network_get(network_id)
-        except:
-            raise exc.NetworkNotFound(net_id=network_id)
-        return network
+            net = (session.query(models_v2.Network).
+                   filter_by(uuid=net_id).
+                   one())
 
-    def _get_port(self, tenant_id, network_id, port_id):
+            for p in net.ports:
+                session.delete(p)
 
-        db.validate_port_ownership(tenant_id, network_id, port_id)
-        net = self._get_network(tenant_id, network_id)
+            session.delete(net)
+            session.flush()
+        except exc.NoResultFound:
+            raise q_exc.NetworkNotFound(net_id=net_id)
+
+    def get_network(self, auth_context, net_uuid, **kwargs):
+        session = db.get_session()
         try:
-            port = db.port_get(port_id, network_id)
-        except:
-            raise exc.PortNotFound(net_id=network_id, port_id=port_id)
-        # Port must exist and belong to the appropriate network.
-        if port['network_id'] != net['uuid']:
-            raise exc.PortNotFound(net_id=network_id, port_id=port_id)
-        return port
+            #TODO(danwent): filter by tenant
+            network = (session.query(models_v2.Network).
+                      filter_by(uuid=net_uuid).
+                      one())
+            return self._make_network_dict(network)
+        except exc.NoResultFound:
+            raise q_exc.NetworkNotFound(network_uuid=net_uuid)
 
-    def _validate_port_state(self, port_state):
-        if port_state.upper() not in ('ACTIVE', 'DOWN'):
-            raise exc.StateInvalid(port_state=port_state)
-        return True
+    def get_networks(self, auth_context, **kwargs):
+        session = db.get_session()
+        #TODO(danwent): filter by tenant
+        all_networks = (session.query(models_v2.Network).all())
+        return [self._make_network_dict(s) for s in all_networks]
 
-    def _validate_attachment(self, tenant_id, network_id, port_id,
-                             remote_interface_id):
-        for port in db.port_list(network_id):
-            if port['interface_id'] == remote_interface_id:
-                raise exc.AlreadyAttached(net_id=network_id,
-                                          port_id=port_id,
-                                          att_id=port['interface_id'],
-                                          att_port_id=port['uuid'])
+    def _make_subnet_dict(self, subnet):
+        return {"id": subnet.uuid,
+                "network_id": subnet.network_uuid,
+                "ip_version": subnet.ip_version,
+                "prefix": subnet.prefix,
+                "gateway_ip": subnet.gateway_ip}
 
-    def get_all_networks(self, tenant_id, **kwargs):
-        """
-        Returns a dictionary containing all
-        <network_uuid, network_name> for
-        the specified tenant.
-        """
-        LOG.debug("FakePlugin.get_all_networks() called")
-        filter_opts = kwargs.get('filter_opts', None)
-        if not filter_opts is None and len(filter_opts) > 0:
-            LOG.debug("filtering options were passed to the plugin"
-                      "but the Fake plugin does not support them")
-        nets = []
-        for net in db.network_list(tenant_id):
-            net_item = {'net-id': str(net.uuid),
-                        'net-name': net.name,
-                        'net-op-status': net.op_status}
-            nets.append(net_item)
-        return nets
+    def create_subnet(self, auth_context, subnet_data, **kwargs):
+        s = subnet_data['subnet']
+        session = db.get_session()
+        with session.begin():
+            subnet = models_v2.Subnet("",
+                                      s['network_id'],
+                                      s['ip_version'],
+                                      s['prefix'],
+                                      s['gateway_ip'])
 
-    def get_network_details(self, tenant_id, net_id):
-        """
-        retrieved a list of all the remote vifs that
-        are attached to the network
-        """
-        LOG.debug("FakePlugin.get_network_details() called")
-        net = self._get_network(tenant_id, net_id)
-        # Retrieves ports for network
-        ports = self.get_all_ports(tenant_id, net_id)
-        return {'net-id': str(net.uuid),
-                'net-name': net.name,
-                'net-op-status': net.op_status,
-                'net-ports': ports}
+            session.add(subnet)
+            netrange = netaddr.IPNetwork(s['prefix'])
+            #TODO(danwent): apply policy to avoid additional ranges
+            avoid = [s['gateway_ip'], str(netrange[0]),
+                      str(netrange.broadcast)]
+            for ip in netrange:
+                ip_str = str(ip)
+                if ip_str in avoid:
+                    continue
+                session.add(models_v2.IP_Allocation(ip_str, subnet.uuid))
+            session.flush()
+            return self._make_subnet_dict(subnet)
 
-    def create_network(self, tenant_id, net_name, **kwargs):
-        """
-        Creates a new Virtual Network, and assigns it
-        a symbolic name.
-        """
-        LOG.debug("FakePlugin.create_network() called")
-        new_net = db.network_create(tenant_id, net_name)
-        # Put operational status UP
-        db.network_update(new_net.uuid, net_name,
-                          op_status=common.OperationalStatus.UP)
-        # Return uuid for newly created network as net-id.
-        return {'net-id': new_net.uuid}
+    def update_subnet(self, tenant_id, subnet_uuid, subnet_data):
+        pass
 
-    def delete_network(self, tenant_id, net_id):
-        """
-        Deletes the network with the specified network identifier
-        belonging to the specified tenant.
-        """
-        LOG.debug("FakePlugin.delete_network() called")
-        net = self._get_network(tenant_id, net_id)
-        # Verify that no attachments are plugged into the network
-        if net:
-            for port in db.port_list(net_id):
-                if port['interface_id']:
-                    raise exc.NetworkInUse(net_id=net_id)
-            db.network_destroy(net_id)
-            return net
-        # Network not found
-        raise exc.NetworkNotFound(net_id=net_id)
-
-    def update_network(self, tenant_id, net_id, **kwargs):
-        """
-        Updates the attributes of a particular Virtual Network.
-        """
-        LOG.debug("FakePlugin.update_network() called")
-        net = db.network_update(net_id, tenant_id, **kwargs)
-        return net
-
-    def get_all_ports(self, tenant_id, net_id, **kwargs):
-        """
-        Retrieves all port identifiers belonging to the
-        specified Virtual Network.
-        """
-        LOG.debug("FakePlugin.get_all_ports() called")
-        db.validate_network_ownership(tenant_id, net_id)
-        filter_opts = kwargs.get('filter_opts')
-        if filter_opts:
-            LOG.debug("filtering options were passed to the plugin"
-                      "but the Fake plugin does not support them")
-        port_ids = []
-        ports = db.port_list(net_id)
-        for x in ports:
-            d = {'port-id': str(x.uuid)}
-            port_ids.append(d)
-        return port_ids
-
-    def get_port_details(self, tenant_id, net_id, port_id):
-        """
-        This method allows the user to retrieve a remote interface
-        that is attached to this particular port.
-        """
-        LOG.debug("FakePlugin.get_port_details() called")
-        port = self._get_port(tenant_id, net_id, port_id)
-        return {'port-id': str(port.uuid),
-                'attachment': port.interface_id,
-                'port-state': port.state,
-                'port-op-status': port.op_status}
-
-    def create_port(self, tenant_id, net_id, port_state=None, **kwargs):
-        """
-        Creates a port on the specified Virtual Network.
-        """
-        LOG.debug("FakePlugin.create_port() called")
-        # verify net_id
-        self._get_network(tenant_id, net_id)
-        port = db.port_create(net_id, port_state)
-        # Put operational status UP
-        db.port_update(port.uuid, net_id,
-                       op_status=common.OperationalStatus.UP)
-        port_item = {'port-id': str(port.uuid)}
-        return port_item
-
-    def update_port(self, tenant_id, net_id, port_id, **kwargs):
-        """
-        Updates the attributes of a port on the specified Virtual Network.
-        """
-        LOG.debug("FakePlugin.update_port() called")
-        #validate port and network ids
-        self._get_network(tenant_id, net_id)
-        self._get_port(tenant_id, net_id, port_id)
-        port = db.port_update(port_id, net_id, **kwargs)
-        port_item = {'port-id': port_id, 'port-state': port['state']}
-        return port_item
-
-    def delete_port(self, tenant_id, net_id, port_id):
-        """
-        Deletes a port on a specified Virtual Network,
-        if the port contains a remote interface attachment,
-        the remote interface is first un-plugged and then the port
-        is deleted.
-        """
-        LOG.debug("FakePlugin.delete_port() called")
-        self._get_network(tenant_id, net_id)
-        port = self._get_port(tenant_id, net_id, port_id)
-        if port['interface_id']:
-            raise exc.PortInUse(net_id=net_id, port_id=port_id,
-                                att_id=port['interface_id'])
+    def delete_subnet(self, tenant_id, subnet_id):
+        session = db.get_session()
         try:
-            port = db.port_destroy(port_id, net_id)
-        except Exception, e:
-            raise Exception("Failed to delete port: %s" % str(e))
-        d = {}
-        d["port-id"] = str(port.uuid)
-        return d
+            subnet = (session.query(models_v2.Subnet).
+                   filter_by(uuid=subnet_id).
+                   one())
 
-    def plug_interface(self, tenant_id, net_id, port_id, remote_interface_id):
-        """
-        Attaches a remote interface to the specified port on the
-        specified Virtual Network.
-        """
-        LOG.debug("FakePlugin.plug_interface() called")
-        port = self._get_port(tenant_id, net_id, port_id)
-        # Validate attachment
-        self._validate_attachment(tenant_id, net_id, port_id,
-                                  remote_interface_id)
-        if port['interface_id']:
-            raise exc.PortInUse(net_id=net_id, port_id=port_id,
-                                att_id=port['interface_id'])
-        db.port_set_attachment(port_id, net_id, remote_interface_id)
+            session.query(models_v2.IP_Allocation).\
+                    filter_by(subnet_uuid=subnet_id).\
+                    delete()
 
-    def unplug_interface(self, tenant_id, net_id, port_id):
-        """
-        Detaches a remote interface from the specified port on the
-        specified Virtual Network.
-        """
-        LOG.debug("FakePlugin.unplug_interface() called")
-        self._get_port(tenant_id, net_id, port_id)
-        # TODO(salvatore-orlando):
-        # Should unplug on port without attachment raise an Error?
-        db.port_unset_attachment(port_id, net_id)
+            session.delete(subnet)
+            session.flush()
+        except exc.NoResultFound:
+            raise q_exc.SubnetNotFound(subnet_id=subnet_id)
+
+    def get_subnet(self, tenant_id, subnet_uuid, **kwargs):
+        session = db.get_session()
+        try:
+            #TODO(danwent): filter by tenant
+            subnet = (session.query(models_v2.Subnet).
+                      filter_by(uuid=subnet_uuid).
+                      one())
+            return self._make_subnet_dict(subnet)
+        except exc.NoResultFound:
+            raise q_exc.SubnetNotFound(subnet_uuid=subnet_uuid)
+
+    def get_subnets(self, tenant_id, **kwargs):
+        session = db.get_session()
+        #TODO(danwent): filter by tenant
+        all_subnets = (session.query(models_v2.Subnet).all())
+        return [self._make_subnet_dict(s) for s in all_subnets]
+
+    def _make_port_dict(self, port):
+        ips = [{"address": f.address,
+                "subnet_id": f.subnet_uuid}
+                    for f in port.fixed_ips]
+        return {"id": port.uuid,
+                "network_id": port.network_uuid,
+                "mac_address": port.mac_address,
+                "admin_state_up": port.admin_state_up,
+                "op_status": port.op_status,
+                "fixed_ips": ips,
+                "device_id": port.device_uuid}
+
+    def create_port(self, auth_context, port_data, **kwargs):
+        p = port_data['port']
+        session = db.get_session()
+        #FIXME(danwent): allocate MAC
+        mac_address = "ca:fe:de:ad:be:ef"
+        with session.begin():
+            port = models_v2.Port("",
+                                     p['network_id'],
+                                     mac_address,
+                                     p['admin_state_up'],
+                                     "ACTIVE",
+                                     p['device_id'])
+            network_uuid = p['network_id']
+            network = session.query(models_v2.Network).\
+                                    filter_by(uuid=network_uuid).\
+                                    first()
+
+            ip_found = {4: False, 6: False}
+            for subnet in network.subnets:
+                if not ip_found[subnet.ip_version]:
+                    ip_alloc = session.query(models_v2.IP_Allocation).\
+                                     filter_by(allocated=False).\
+                                     filter_by(subnet_uuid=subnet.uuid).\
+                                     with_lockmode('update').\
+                                     first()
+                    if not ip_alloc:
+                        continue
+
+                    ip_alloc['allocated'] = True
+                    ip_alloc['port_uuid'] = port.uuid
+                    session.add(ip_alloc)
+                    ip_found[subnet.ip_version] = True
+
+            if not ip_found[4] and not ip_found[6]:
+                raise q_exc.FixedIPNotAvailable(network_uuid=network_uuid)
+            session.add(port)
+            session.flush()
+            return self._make_port_dict(port)
+
+    def update_port(self, auth_context, port_data, **kwargs):
+        pass
+
+    def delete_port(self, auth_context, port_id):
+        session = db.get_session()
+        try:
+            port = (session.query(models_v2.Port).
+                   filter_by(uuid=port_id).
+                   one())
+
+            session.delete(port)
+            session.flush()
+        except exc.NoResultFound:
+            raise q_exc.PortNotFound(port_id=port_id)
+
+    def get_port(self, auth_context, port_id, **kwargs):
+        session = db.get_session()
+        try:
+            #TODO(danwent): filter by tenant
+            port = (session.query(models_v2.Port).
+                      filter_by(uuid=port_id).
+                      one())
+            return self._make_port_dict(port)
+        except exc.NoResultFound:
+            raise q_exc.PortNotFound(port_uuid=port_id)
+
+    def get_ports(self, auth_context, **kwargs):
+        session = db.get_session()
+        #TODO(danwent): filter by tenant
+        all_ports = (session.query(models_v2.Port).all())
+        return [self._make_port_dict(p) for p in all_ports]
+
+    def clear_state(self):
+        db.clear_db()
