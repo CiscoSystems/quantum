@@ -61,6 +61,7 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
                            'application/json': lambda x: json.dumps(x)}
     format_types = {'xml': 'application/xml',
                     'json': 'application/json'}
+    action_status = dict(create=201, update=202, delete=204)
     default_faults = {}
 
     default_deserializers.update(deserializers or {})
@@ -117,6 +118,7 @@ def Resource(controller, faults=None, deserializers=None, serializers=None):
             raise webob.exc.HTTPInternalServerError(body=body)
 
         return webob.Response(request=request,
+                              status=action_status.get(action, 200),
                               content_type=content_type,
                               body=serializer(result))
     return resource

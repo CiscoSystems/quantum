@@ -196,3 +196,7 @@ class QuantumPluginBaseV2(object):
     @abstractmethod
     def get_ports(self, context, filters=None, show=None, verbose=None):
         pass
+
+    # Not absract. We shouldn't have to define clearing the state just to pass
+    def clear_state(self):
+        pass
