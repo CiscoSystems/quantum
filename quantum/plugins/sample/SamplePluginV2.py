@@ -47,7 +47,8 @@ def init_config(cfile=None):
             cfile = find_config(os.path.abspath(os.path.dirname(__file__)))
 
     if cfile == None:
-        raise Exception("Configuration file \"%s\" doesn't exist" % (cfile))
+        return
+
     LOG.info("Using configuration file: %s" % cfile)
     config.read(cfile)
     LOG.debug("Config: %s" % config)
@@ -180,9 +181,10 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def __init__(self):
         config = init_config()
-        sql_connection = 'sqlite:///:memory:'
-        if config.has_section('db'):
+        if config and config.has_section('db'):
             sql_connection = config.get('db', 'sql_connection')
+        else:
+            sql_connection = 'sqlite:///:memory:'
         db.configure_db({'sql_connection': sql_connection})
 
     def _make_network_dict(self, network):
