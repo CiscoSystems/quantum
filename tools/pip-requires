@@ -6,3 +6,4 @@ lxml
 python-gflags==1.3
 sqlalchemy
 webob==1.0.8
+netaddr

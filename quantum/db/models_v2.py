@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Column, String, ForeignKey, Integer, Boolean
-from sqlalchemy.orm import relation, object_mapper
+from sqlalchemy.orm import relation
 
 from quantum.db import model_base
 

@@ -29,7 +29,6 @@ import os
 from quantum.common import utils
 from quantum.common.config import find_config_file
 from quantum.common.exceptions import ClassNotFound
-from quantum.quantum_plugin_base import QuantumPluginBase
 
 
 LOG = logging.getLogger(__name__)
@@ -66,15 +65,13 @@ class QuantumManager(object):
 
         # If the plugin can't be found let them know gracefully
         try:
-            LOG.error("plugin = '%s'" % options['plugin_provider'])
+            LOG.info("Loading Plugin: %s" % options['plugin_provider'])
             plugin_klass = utils.import_class(options['plugin_provider'])
         except ClassNotFound:
-            LOG.exception("error loading plugin")
+            LOG.exception("Error loading plugin")
             raise Exception("Plugin not found.  You can install a "
                             "plugin with: pip install <plugin-name>\n"
                             "Example: pip install quantum-sample-plugin")
-        except:
-            LOG.exception("other error loading plugin")
         self.plugin = plugin_klass()
 
     @classmethod
