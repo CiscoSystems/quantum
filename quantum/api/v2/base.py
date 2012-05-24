@@ -153,7 +153,7 @@ class Controller(object):
         """Returns detailed information about the requested entity"""
         return self._item(request, id)
 
-    def create(self, request, body):
+    def create(self, request, body=None):
         """Creates a new instance of the requested entity"""
         body = self._prepare_request_body(body)
         obj_creator = getattr(self._plugin,
@@ -168,7 +168,7 @@ class Controller(object):
                               "delete_%s" % self._resource)
         obj_deleter(request.context, id)
 
-    def update(self, request, id, body):
+    def update(self, request, id, body=None):
         """Updates the specified entity's attributes"""
         body = self._prepare_request_body(body)
         obj_updater = getattr(self._plugin,
@@ -184,6 +184,9 @@ class Controller(object):
 
             body argument must be the deserialized body
         """
+        if not body:
+            raise webob.exc.HTTPBadRequest(_("Resource body required"))
+
         body = body or {self._resource: {}}
         res_dict = body.get(self._resource)
         if res_dict is None:
