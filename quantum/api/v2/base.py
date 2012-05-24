@@ -174,7 +174,7 @@ class Controller(object):
         obj_updater = getattr(self._plugin,
                               "update_%s" % self._resource)
         kwargs = {self._resource: body}
-        obj = obj_updater(request.context, **kwargs)
+        obj = obj_updater(request.context, id, **kwargs)
         return {self._resource: self._view(obj)}
 
     def _prepare_request_body(self, body):
