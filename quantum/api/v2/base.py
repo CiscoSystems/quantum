@@ -188,6 +188,14 @@ class Controller(object):
             raise webob.exc.HTTPBadRequest(_("Resource body required"))
 
         body = body or {self._resource: {}}
+
+        if self._collection in body:
+            bulk_body = [self._prepare_request_body({self._resource: b})
+                         if self._resource not in b
+                         else self._prepare_request_body(b)
+                         for b in body[self._collection]]
+            return {self._collection: bulk_body}
+
         res_dict = body.get(self._resource)
         if res_dict is None:
             msg = _("Unable to find '%s' in request body") % self._resource
