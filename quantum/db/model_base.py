@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sqlalchemy.orm import relation, object_mapper
+from sqlalchemy.orm import object_mapper
 from sqlalchemy.ext.declarative import declarative_base
-
-
-BASE = declarative_base()
 
 
 class QuantumBase(object):
