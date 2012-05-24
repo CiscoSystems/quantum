@@ -85,11 +85,9 @@ def Resource(controller, deserializers=None, serializers=None):
                                         request.best_match_content_type())
         deserializer = deserializers.get(content_type)
 
-        body = {}
         if request.body:
-            body = deserializer(request.body)
+            args['body'] = deserializer(request.body)
 
-        args['body'] = body
         method = getattr(controller, action)
         result = method(request=request, **args)
 
