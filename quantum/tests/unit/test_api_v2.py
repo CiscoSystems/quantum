@@ -46,7 +46,7 @@ class TestNetworksV2(APIv2TestCase):
 class TestSubnetsV2(APIv2TestCase):
     def setUp(self):
         super(self, TestSubnetsV2).setUp()
-
+    # comment to test a theory
 
 #    def _network_create_request(self, tenant_id, name, admin_status_up,
 #                                format='xml'):
