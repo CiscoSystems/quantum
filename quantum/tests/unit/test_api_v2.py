@@ -42,6 +42,7 @@ class APIv2TestCase(unittest.TestCase):
         body = None
         if data:
             body = Serializer().serialize(data, content_type)
+        raise Exception(path, body, content_type, method)
         return create_request(path, body, content_type, method)
 
 
