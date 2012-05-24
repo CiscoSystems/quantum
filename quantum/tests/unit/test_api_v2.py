@@ -128,8 +128,7 @@ class TestPortsV2(APIv2TestCase):
                          'device_id': device_id}}
         port_req = self.new_create_request('ports', data, fmt)
         port_res = port_req.get_response(self.api)
-        return self._deserializers[content_type].\
-                            deserialize(response.body)['body']
+        return json.loads(response.body)["body"]
 
     def test_create_port_json(self):
         port = self._create_port("json", self.net_id, True, "dev_id_1")
@@ -144,17 +143,14 @@ class TestPortsV2(APIv2TestCase):
         port2 = self._create_port("json", self.net_id, True, "dev_id_2")
 
         res = self.new_list_request("ports", "json")
-        port_list = self._deserializers["application/json"].\
-                            deserialize(res.body)["body"]
+        port_list = json.loads(res.body)["body"]
         self.assertTrue(port1 in port_list["ports"])
         self.assertTrue(port2 in port_list["ports"])
 
     def test_show_port(self):
         port = self._create_port("json", self.net_id, True, "dev_id_1")
         res = self.new_show_request("port", "json", port["id"])
-        port = self._deserializers["application/json"].\
-                            deserialize(res.body)["body"]
-
+        port = json.loads(res.body)["body"]
         self.assertEquals(port["port"]["name"], "dev_id_1")
 
     def test_delete_port(self):
@@ -169,8 +165,7 @@ class TestPortsV2(APIv2TestCase):
         port = self._create_port("json", self.net_id, True, "dev_id_1")
         port_body = {"port": {"device_id": "Bob"}}
         res = self.new_update_request("port", port_body, port["id"])
-        port = self._deserializers["application/json"].\
-                            deserialize(res.body)["body"]
+        port = json.loads(res.body)["body"]
         self.assertEquals(port["device_id"], "Bob")
 
     def test_delete_non_existent_port_404(self):
