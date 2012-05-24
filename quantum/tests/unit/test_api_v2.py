@@ -15,7 +15,7 @@ LOG = logging.getLogger('quantum.tests.api_v2_test')
 
 class APIv2TestCase(unittest.TestCase):
     def setUp(self):
-        super(APIv2Test, self).setUp()
+        super(APIv2TestCase, self).setUp()
         self._tenant_id = "test-tenant"
 
         json_deserializer = JSONDeserializer()
@@ -30,103 +30,124 @@ class APIv2TestCase(unittest.TestCase):
         """Clear the test environment"""
         #TODO(danwent): this should be a generic call to the
         # plugin to clear state...
+        super(APIv2TestCase, self).tearDown()
         QuantumManager.get_plugin().clear_state()
 
+    def _req(self, method, resource, data, format='json', id=None):
+        if id:
+            path = "/%(resource)s.%(format)s" % locals()
+        else:
+            path = "/%s(resource)s/%(id)s.%(format)s" % locals()
+        content_type = "application/%s" % format
+        body = Serializer().serialize(data, content_type)
+        return create_request(path, body, content_type, method)
+
+
+    def _create_request(self, resource, data, format='json'):
+        return self._req('POST', resource, data, format)
+
+    def _list_request(self, resource, format='json'):
+        return self._req('GET', resource, data, format)
+
+    def _show_request(self, resource, id, format='json'):
+        return self._req('GET', resource, data, format, id=id)
+
+    def _delete_request(self, resource, id, format='json'):
+        return self._req('DELETE', resource, data, format, id=id)
+
+    def _update_request(self, resource, id, format='json'):
+        return self._req('UPDATE', resource, data, format, id=id)
+
+    def _deserialize_response(self, content_type, response):
+        ctype = "application/%s" % content_type
+        data = self._deserializers[ctype].\
+                            deserialize(response.body)['body']
+        # do not taint assertions with xml namespace
+        top_key = data.keys()[0]
+        data[top_key].pop('xmlns', None)
+        return data
+
+    def _create_network(self, fmt, name, admin_status_up,
+                        custom_req_body=None,
+                        expected_res_status=None):
+        LOG.debug("Creating network")
+        network_req = self._network_create_request(name,
+                                                   admin_status_up,
+                                                   fmt)
+        network_res = network_req.get_response(self.api)
+        return network_res
+
+
+    def _network_create_request(self, tenant_id, name, admin_status_up,
+                                format='json'):
+        data = {'network': {'name': name,
+                            'admin_state_up': admin_status_up,
+                           }
+               }
+        return self._create_request('networks', data, format)
+
+
+class TestV2HTTPResponse(APIv2TestCase):
+    def test_create_returns_201(self):
+        res = self._create_network('json', "net1", True)
+        self.assertEquals(res.status_int, 201)
+
+    def test_list_returns_200(self):
+        req = self._list_request('networks')
+        res = req.get_response()
+        self.assertEquals(res.status_int, 200)
+
+    def test_show_returns_200(self):
+        req = self._show_request('networks', 1)
+        res = req.get_response()
+        self.assertEquals(res.status_int, 200)
+
+    def test_delete_returns_204(self):
+        req = self._show_request('networks', 1)
+        res = req.get_response()
+        self.assertEquals(res.status_int, 204)
 
 class TestPortsV2(APIv2TestCase):
     def setUp(self):
-        super(self, TestPortsV2).setUp()
+        super(TestPortsV2, self).setUp()
+
+    def _port_create_request(self, tenant_id, net_id, admin_state_up,
+                             device_id, format='json'):
+        data = {'port': {'network_id': net_id,
+                         'admin_state_up': admin_state_up,
+                         'device_id': device_id
+                        }
+               }
+        return self._create_request(tenant_id, 'ports', data, format)
 
 
 class TestNetworksV2(APIv2TestCase):
     def setUp(self):
-        super(self, TestNetworksV2).setUp()
+        super(TestNetworksV2, self).setUp()
+
+    def test_create_network_json(self):
+        res = self._create_network('json', "net1", True)
+        network_data = self._deserialize_response("json", res)
+        self.assertEquals(network_data['network']['name'], 'net1')
+        return network_data['network']['id']
 
 
 class TestSubnetsV2(APIv2TestCase):
     def setUp(self):
-        super(self, TestSubnetsV2).setUp()
-    # comment to test a theory
+        super(TestSubnetsV2, self).setUp()
 
-#    def _network_create_request(self, tenant_id, name, admin_status_up,
-#                                format='xml'):
-#        data = {'network': {'name': name,
-#                            'admin_state_up': admin_status_up,
-#                           }
-#               }
-#        return self._create_request(tenant_id, 'networks', data, format)
+    def _subnet_create_request(self, tenant_id, net_id, ip_version, prefix,
+                               gateway_ip, format='json'):
+        data = {'subnet': {'network_id': net_id,
+                           'ip_version': ip_version,
+                           'prefix': prefix,
+                           'gateway_ip': gateway_ip
+                          }
+               }
+        return self._create_request(tenant_id, 'subnets', data, format)
+
 #
-#    def _subnet_create_request(self, tenant_id, net_id, ip_version, prefix,
-#                               gateway_ip, format='xml'):
-#        data = {'subnet': {'network_id': net_id,
-#                           'ip_version': ip_version,
-#                           'prefix': prefix,
-#                           'gateway_ip': gateway_ip
-#                          }
-#               }
-#        return self._create_request(tenant_id, 'subnets', data, format)
-#
-#    def _port_create_request(self, tenant_id, net_id, admin_state_up,
-#                             device_id, format='xml'):
-#        data = {'port': {'network_id': net_id,
-#                         'admin_state_up': admin_state_up,
-#                         'device_id': device_id
-#                        }
-#               }
-#        return self._create_request(tenant_id, 'ports', data, format)
-#
-#    def _create_request(self, tenant_id, resource, data, format='xml'):
-#        method = 'POST'
-#        path = ("/%(resource)s.%(format)s") % locals()
-#        content_type = "application/%s" % format
-#        body = Serializer().serialize(data, content_type)
-#        return create_request(path, body, content_type, method)
-#
-#    def _list_request(self, tenant_id, resource, format='xml'):
-#        method = 'GET'
-#        path = ("/%(resource)s.%(format)s") % locals()
-#        content_type = "application/%s" % format
-#        return create_request(path, None, content_type, method)
-#
-#    def _show_request(self, tenant_id, resource, id, format='xml'):
-#        method = 'GET'
-#        path = ("/%(resource)s/%(id)s.%(format)s") % locals()
-#        content_type = "application/%s" % format
-#        return create_request(path, None, content_type, method)
-#
-#    def _delete_request(self, tenant_id, resource, id, format='xml'):
-#        method = 'DELETE'
-#        path = ("/%(resource)s/%(id)s.%(format)s") % locals()
-#        content_type = "application/%s" % format
-#        return create_request(path, None, content_type, method)
-#
-#    def _deserialize_response(self, content_type, response):
-#        data = self._deserializers[content_type].\
-#                            deserialize(response.body)['body']
-#        # do not taint assertions with xml namespace
-#        top_key = data.keys()[0]
-#        if 'xmlns' in data[top_key]:
-#            del data[top_key]['xmlns']
-#        return data
-#
-#    def _create_network(self, fmt, name, admin_status_up,
-#                        custom_req_body=None,
-#                        expected_res_status=None):
-#        LOG.debug("Creating network")
-#        content_type = "application/" + fmt
-#        network_req = self._network_create_request(self._tenant_id,
-#                                                 name,
-#                                                 admin_status_up,
-#                                                 fmt)
-#        network_res = network_req.get_response(self.api)
-#        expected_res_status = expected_res_status or 202
-#        self.assertEqual(network_res.status_int, expected_res_status)
-#        network_data = self._deserialize_response(content_type,
-#                                                          network_res)
-#        return network_data['network']['id']
-#
-#    def _test_create_network(self, fmt):
-#        self._create_network(fmt, "net1", True)
+
 #
 #    def _test_create_and_show_network(self, fmt):
 #        content_type = "application/%s" % fmt
@@ -200,8 +221,6 @@ class TestSubnetsV2(APIv2TestCase):
 #        #show_res = show_req.get_response(self.api)
 #        #self.assertEqual(show_res.status_int, 404)
 #
-#    def test_create_network_json(self):
-#        self._test_create_network("json")
 #
 #    def test_create_and_show_network_json(self):
 #        self._test_create_and_show_network("json")
