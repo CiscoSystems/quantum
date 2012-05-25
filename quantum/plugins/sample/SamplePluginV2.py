@@ -212,6 +212,7 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                'op_status': network['op_status'],
                'subnets': [subnet['uuid']
                             for subnet in network['subnets']]}
+
         return self._show(res, show)
 
     def _make_subnet_dict(self, subnet, show=None):
