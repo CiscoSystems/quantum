@@ -25,6 +25,7 @@ import webob
 import webob.exc
 import webob.dec
 
+from quantum import context
 from quantum.common import exceptions
 from quantum import wsgi
 
@@ -42,12 +43,10 @@ class Request(webob.Request):
 
     @property
     def context(self):
-        #this is here due to some import loop issues.(mdragon)
-        from quantum.context import get_admin_context
         #Eventually the Auth[NZ] code will supply this. (mdragon)
         #when that happens this if block should raise instead.
         if 'quantum.context' not in self.environ:
-            self.environ['quantum.context'] = get_admin_context()
+            self.environ['quantum.context'] = context.get_admin_context()
         return self.environ['quantum.context']
 
 
