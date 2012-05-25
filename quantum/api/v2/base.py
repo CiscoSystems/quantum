@@ -82,9 +82,9 @@ def verbose(request):
 
     # NOTE(jkoelker) verbose=<bool> trumps all other verbose settings
     if True in verbose:
-        return [True]
+        return True
     elif False in verbose:
-        return []
+        return False
 
     return verbose
 
