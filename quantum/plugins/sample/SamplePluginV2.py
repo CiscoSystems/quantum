@@ -181,20 +181,27 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return network
 
     def _show(self, resource, show):
-        return dict(((key, item) for key, item in resource.iteritems()
-                     if key in show))
+        if show is not None:
+            return dict(((key, item) for key, item in resource.iteritems()
+                         if key in show))
+        return resource
 
     def _make_network_dict(self, network, show=None):
-
         res = {'id': network['uuid'],
                'name': network['name'],
                'admin_state_up': network['admin_state_up'],
                'op_status': network['op_status'],
                'subnets': [subnet['uuid']
                             for subnet in network['subnets']]}
-        if show is not None:
-            return self._show(res, show)
-        return res
+        return self._show(res, show)
+
+    def _make_subnet_dict(self, subnet, show=None):
+        res = {'id': subnet['uuid'],
+               'network_id': subnet['network_uuid'],
+               'ip_version': subnet['ip_version'],
+               'prefix': subnet['prefix'],
+               'gateway_ip': subnet['gateway_ip']}
+        return self._show(res, show)
 
     def create_network(self, context, network):
         n = network['network']
@@ -234,13 +241,6 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         networks = self._model_query(context, models_v2.Network).all()
         return [self._make_network_dict(network, show)
                 for network in networks]
-
-    def _make_subnet_dict(self, subnet):
-        return {"id": subnet.uuid,
-                "network_id": subnet.network_uuid,
-                "ip_version": subnet.ip_version,
-                "prefix": subnet.prefix,
-                "gateway_ip": subnet.gateway_ip}
 
     def create_subnet(self, context, subnet):
         s = subnet['subnet']
