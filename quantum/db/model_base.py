@@ -21,7 +21,7 @@ from sqlalchemy.ext import declarative
 
 
 def str_uuid():
-    return str(uuid.uuid4)
+    return str(uuid.uuid4())
 
 
 class QuantumBase(object):

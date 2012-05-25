@@ -54,13 +54,10 @@ class APIv2TestCase(unittest.TestCase):
     def new_update_request(self, resource, id, fmt='json'):
         return self._req('PUT', resource, data, fmt, id=id)
 
-    def deserialize_response(self, content_type, response):
+    def deserialize(self, content_type, response):
         ctype = "application/%s" % content_type
         data = self._deserializers[ctype].\
                             deserialize(response.body)['body']
-        # do not taint assertions with xml namespace
-        top_key = data.keys()[0]
-        data[top_key].pop('xmlns', None)
         return data
 
     def _create_network(self, fmt, name, admin_status_up,
@@ -75,32 +72,40 @@ class APIv2TestCase(unittest.TestCase):
 
 
 class TestV2HTTPResponse(APIv2TestCase):
+    def setUp(self):
+        super(TestV2HTTPResponse, self).setUp()
+        res = self._create_network("json", "net1", True)
+        self.net = self.deserialize("json", res)
+
+    def tearDown(self):
+        super(TestV2HTTPResponse, self).tearDown()
+
     def test_create_returns_201(self):
-        res = self._create_network('json', "net1", True)
+        res = self._create_network('json', "net2", True)
         self.assertEquals(res.status_int, 201)
 
     def test_list_returns_200(self):
-        req = self._list_request('networks')
+        req = self.new_list_request('networks')
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 200)
 
     def test_show_returns_200(self):
-        req = self._show_request('networks', 1)
+        req = self.new_show_request('networks', 1)
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 200)
 
     def test_delete_returns_204(self):
-        req = self._show_request('networks', 1)
+        req = self.new_delete_request('networks', self.net['id'])
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 204)
 
     def test_update_returns_204(self):
-        req = self._show_request('networks', 1)
+        req = self.new_show_request('networks', 1)
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 204)
 
     def test_bad_route_404(self):
-        req = self._list_request('doohickeys')
+        req = self.new_list_request('doohickeys')
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 404)
 
@@ -181,7 +186,7 @@ class TestPortsV2(APIv2TestCase):
 #
 #    def test_create_network_json(self):
 #        res = self._create_network('json', "net1", True)
-#        network_data = self._deserialize_response("json", res)
+#        network_data = self._deserialize("json", res)
 #        self.assertEquals(network_data['network']['name'], 'net1')
 #        return network_data['network']['id']
 #
@@ -298,7 +303,7 @@ class TestPortsV2(APIv2TestCase):
 #        subnet_res = subnet_req.get_response(self.api)
 #        expected_res_status = expected_res_status or 202
 #        self.assertEqual(subnet_res.status_int, expected_res_status)
-#        subnet_data = self._deserialize_response(content_type,
+#        subnet_data = self._deserialize(content_type,
 #                                                          subnet_res)
 #        return subnet_data['subnet']['id']
 #
