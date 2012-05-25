@@ -17,6 +17,7 @@ import logging
 import uuid
 
 import netaddr
+from sqlalchemy import orm
 from sqlalchemy.orm import exc
 
 from quantum import quantum_plugin_base_v2
@@ -152,9 +153,8 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             tenant_id = context.tenant_id
         return tenant_id
 
-    def _model_query(self, context, model, session=None):
-        session = session or db.get_session()
-        query = session.query(model)
+    def _model_query(self, context, model):
+        query = context.session.query(model)
 
         # NOTE(jkoelker) non-admin queries are scoped to their tenant_id
         if not context.is_admin and hasattr(model.tenant_id):
@@ -162,16 +162,18 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
         return query
 
-    def _get_by_id(self, context, model, id, session=None):
-        session = session or db.get_session()
-        query = self._model_query(context, models_v2.Network, session)
+    def _get_by_id(self, context, model, id, joins=()):
+        query = self._model_query(context, model)
+        options = [orm.joinedload(join) for join in joins]
+        if options:
+            query = query.options(*options)
         return query.filter_by(uuid=id).one()
 
-    def _get_network(self, context, id, session=None):
+    def _get_network(self, context, id, verbose=None):
         try:
             network = self._get_by_id(context, models_v2.Network, id,
-                                      session)
-        except exc.NoResultsRound:
+                                      joins=('subnets',))
+        except exc.NoResultFound:
             raise q_exc.NetworkNotFound(net_id=id)
         except exc.MultipleResultsFound:
             LOG.error('Multiple networks match for %s' % id)
@@ -179,9 +181,10 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return network
 
     def _show(self, resource, show):
-        return dict(((key, item) for key, item in resource if key in show))
+        return dict(((key, item) for key, item in resource.iteritems()
+                     if key in show))
 
-    def _make_network_dict(self, network, show=None, verbose=None):
+    def _make_network_dict(self, network, show=None):
 
         res = {'id': network['uuid'],
                'name': network['name'],
@@ -195,39 +198,36 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def create_network(self, context, network):
         n = network['network']
-        session = db.get_session()
 
         # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
         #                unneeded db action if the operation raises
         tenant_id = self._get_tenant_id_for_create(context, n)
-        with session.begin():
+        with context.session.begin():
             network = models_v2.Network(tenant_id=tenant_id,
                                         name=n['name'],
                                         admin_state_up=n['admin_state_up'],
                                         op_status="ACTIVE")
-            session.add(network)
+            context.session.add(network)
         return self._make_network_dict(network)
 
     def update_network(self, context, id, network):
         n = network['network']
-        session = db.get_session()
-        with session.begin():
-            network = self._get_network(context, id, session)
+        with context.session.begin():
+            network = self._get_network(context, id)
             network.update(n)
         return self._make_network_dict(network)
 
     def delete_network(self, context, id):
-        session = db.get_session()
-        with session.begin():
-            network = self._get_network(context, id, session)
+        with context.session.begin():
+            network = self._get_network(context, id)
 
             for port in network.ports:
-                session.delete(port)
+                context.session.delete(port)
 
-            session.delete(network)
+            context.session.delete(network)
 
     def get_network(self, context, id, show=None, verbose=None):
-        network = self._get_network(context, id)
+        network = self._get_network(context, id, verbose=verbose)
         return self._make_network_dict(network, show)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
