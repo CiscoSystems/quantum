@@ -47,6 +47,14 @@ class NotFound(QuantumException):
     pass
 
 
+class NotAuthorized(QuantumException):
+    message = _("Not authorized.")
+
+
+class AdminRequired(NotAuthorized):
+    message = _("User does not have admin privileges: %(reason)s")
+
+
 class ClassNotFound(NotFound):
     message = _("Class %(class_name)s could not be found")
 
@@ -113,7 +121,6 @@ class InvalidContentType(Invalid):
 class NotImplementedError(Error):
     pass
 
+
 class FixedIPNotAvailable(Error):
-    def __init__(self, network_uuid):
-       message = _("Fixed IP unavailable for network: %s" % network_uuid)
-       super(FixedIPNotAvailable, self).__init__(message)
+    message = _("Fixed IP unavailable for network: %(network_uuid)s")

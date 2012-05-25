@@ -141,22 +141,65 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         db.configure_db({'sql_connection': sql_connection,
                          'base': models_v2.model_base.BASEV2})
 
-    def _make_network_dict(self, network):
-        return {"id": network.uuid,
-                "name": network.name,
-                "admin_state_up": network.admin_state_up,
-                "op_status": network.op_status,
-                "subnets": [s['uuid'] for s in network.subnets]}
+    def _get_tenant_id_for_create(self, context, resource):
+        if context.is_admin and 'tenant_id' in resource:
+            tenant_id = resource['tenant_id']
+        elif ('tenant_id' in resource and
+              resource['tenant_id'] != context.tenant_id):
+            reason = _('Cannot create resource for another tenant')
+            raise q_exc.AdminRequired(reason=reason)
+        else:
+            tenant_id = context.tenant_id
+        return tenant_id
+
+    def _model_query(self, context, model, session=None):
+        session = session or db.get_session()
+        query = session.query(model)
+
+        # NOTE(jkoelker) non-admin queries are scoped to their tenant_id
+        if not context.is_admin and hasattr(model.tenant_id):
+            query.filter(tenant_id=context.tenant_id)
+
+        return query
+
+    def _get_by_id(self, context, model, id, session=None):
+        session = session or db.get_session()
+        query = self._model_query(context, models_v2.Network, session)
+        return query.filter_by(uuid=id).one()
+
+    def _get_network(self, context, id, session=None):
+        try:
+            network = self._get_by_id(context, models_v2.Network, id,
+                                      session)
+        except exc.NoResultsRound:
+            raise q_exc.NetworkNotFound(net_id=id)
+        except exc.MultipleResultsFound:
+            LOG.error('Multiple networks match for %s' % id)
+            raise q_exc.NetworkNotFound(net_id=id)
+        return network
+
+    def _show(self, resource, show):
+        return dict(((key, item) for key, item in resource if key in show))
+
+    def _make_network_dict(self, network, show=None, verbose=None):
+
+        res = {'id': network['uuid'],
+               'name': network['name'],
+               'admin_state_up': network['admin_state_up'],
+               'op_status': network['op_status'],
+               'subnets': [subnet['uuid']
+                            for subnet in network['subnets']]}
+        if show is not None:
+            return self._show(res, show)
+        return res
 
     def create_network(self, context, network):
         n = network['network']
         session = db.get_session()
 
-        if context.is_admin and 'tenant_id' in n:
-            tenant_id = n['tenant_id']
-        else:
-            tenant_id = context.tenant_id
-
+        # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
+        #                unneeded db action if the operation raises
+        tenant_id = self._get_tenant_id_for_create(context, n)
         with session.begin():
             network = models_v2.Network(tenant_id=tenant_id,
                                         name=n['name'],
@@ -169,43 +212,28 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         n = network['network']
         session = db.get_session()
         with session.begin():
-            network = (session.query(models_v2.Network).
-                      filter_by(uuid=id).
-                      one())
+            network = self._get_network(context, id, session)
             network.update(n)
         return self._make_network_dict(network)
 
     def delete_network(self, context, id):
         session = db.get_session()
-        try:
-            net = (session.query(models_v2.Network).
-                   filter_by(uuid=id).
-                   one())
+        with session.begin():
+            network = self._get_network(context, id, session)
 
-            for p in net.ports:
-                session.delete(p)
+            for port in network.ports:
+                session.delete(port)
 
-            session.delete(net)
-            session.flush()
-        except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(net_id=id)
+            session.delete(network)
 
     def get_network(self, context, id, show=None, verbose=None):
-        session = db.get_session()
-        try:
-            #TODO(danwent): filter by tenant
-            network = (session.query(models_v2.Network).
-                      filter_by(uuid=id).
-                      one())
-            return self._make_network_dict(network)
-        except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(network_uuid=id)
+        network = self._get_network(context, id)
+        return self._make_network_dict(network, show)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        session = db.get_session()
-        #TODO(danwent): filter by tenant
-        all_networks = (session.query(models_v2.Network).all())
-        return [self._make_network_dict(s) for s in all_networks]
+        networks = self._model_query(context, models_v2.Network).all()
+        return [self._make_network_dict(network, show)
+                for network in networks]
 
     def _make_subnet_dict(self, subnet):
         return {"id": subnet.uuid,
