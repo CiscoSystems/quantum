@@ -316,12 +316,12 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         #FIXME(danwent): allocate MAC
         mac_address = "ca:fe:de:ad:be:ef"
         with session.begin():
-            port = models_v2.Port("",
-                                     p['network_id'],
-                                     mac_address,
-                                     p['admin_state_up'],
-                                     "ACTIVE",
-                                     p['device_id'])
+            port = models_v2.Port(network_uuid=p['network_id'],
+                                  mac_address=mac_address,
+                                  admin_state_up=p['admin_state_up'],
+                                  op_status="ACTIVE",
+                                  device_uuid=p['device_id'])
+
             network_uuid = p['network_id']
             network = session.query(models_v2.Network).\
                                     filter_by(uuid=network_uuid).\
@@ -347,7 +347,7 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 raise q_exc.FixedIPNotAvailable(network_uuid=network_uuid)
             session.add(port)
             session.flush()
-            return self._make_port_dict(port)
+        return self._make_port_dict(port)
 
     def update_port(self, context, id, port):
         pass
