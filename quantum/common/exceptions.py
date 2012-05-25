@@ -121,7 +121,6 @@ class InvalidContentType(Invalid):
 class NotImplementedError(Error):
     pass
 
+
 class FixedIPNotAvailable(Error):
-    def __init__(self, network_uuid):
-       message = _("Fixed IP unavailable for network: %s" % network_uuid)
-       super(FixedIPNotAvailable, self).__init__(message)
+    message = _("Fixed IP unavailable for network: %(network_uuid)s")
