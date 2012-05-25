@@ -38,6 +38,7 @@ class APIv2TestCase(unittest.TestCase):
         return create_request(path, body, content_type, method)
 
     # Yeah, they're factories. And you better be ok with it.
+    # NOTE(BOOM) OMG, the explosion!!!
     def new_create_request(self, resource, data, fmt='json'):
         return self._req('POST', resource, data, fmt)
 
