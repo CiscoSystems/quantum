@@ -54,13 +54,13 @@ class TagAssociation(model_base.BASEV2):
 
 class Tag(model_base.BASEV2):
     association_id = sa.Column(sa.String(36),
-                               sa.ForeignKey("tagassociation.uuid"))
+                               sa.ForeignKey("tag_associations.uuid"))
     tag = sa.Column(sa.String(255), nullable=False)
 
 
-class HasTenant(object):
+class CanHasTenant(object):
     # NOTE(jkoelker) tenant_id is just a free form string ;(
-    tenant_id = sa.Column(sa.String(255), nullable=False)
+    tenant_id = sa.Column(sa.String(255))
 
 
 class IPAllocation(model_base.BASEV2):
@@ -74,7 +74,7 @@ class IPAllocation(model_base.BASEV2):
     allocated = sa.Column(sa.Boolean(), nullable=False)
 
 
-class Port(model_base.BASEV2, HasTags, HasTenant):
+class Port(model_base.BASEV2, HasTags, CanHasTenant):
     """Represents a port on a quantum v2 network"""
     network_uuid = sa.Column(sa.String(36), sa.ForeignKey("networks.uuid"),
                              nullable=False)
@@ -85,7 +85,7 @@ class Port(model_base.BASEV2, HasTags, HasTenant):
     device_uuid = sa.Column(sa.String(255), nullable=False)
 
 
-class Subnet(model_base.BASEV2, HasTags, HasTenant):
+class Subnet(model_base.BASEV2, HasTags, CanHasTenant):
     """Represents a quantum subnet"""
     network_uuid = sa.Column(sa.String(36), sa.ForeignKey('networks.uuid'))
     allocations = orm.relationship(IPAllocation,
@@ -101,7 +101,7 @@ class Subnet(model_base.BASEV2, HasTags, HasTenant):
     # - additional_routes
 
 
-class Network(model_base.BASEV2, HasTags, HasTenant):
+class Network(model_base.BASEV2, HasTags, CanHasTenant):
     """Represents a v2 quantum network"""
     name = sa.Column(sa.String(255))
     ports = orm.relationship(Port, backref='networks')

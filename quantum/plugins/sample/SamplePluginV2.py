@@ -25,7 +25,7 @@ from quantum.db import api as db
 from quantum.db import models_v2
 
 
-LOG = logging.getLogger("q_database_plugin_v2")
+LOG = logging.getLogger(__name__)
 
 
 class QuantumEchoPlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
@@ -138,7 +138,8 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def __init__(self):
         sql_connection = 'sqlite:///:memory:'
-        db.configure_db({'sql_connection': sql_connection})
+        db.configure_db({'sql_connection': sql_connection,
+                         'base': models_v2.model_base.BASEV2})
 
     def _make_network_dict(self, network):
         return {"id": network.uuid,
@@ -151,11 +152,11 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         n = network['network']
         session = db.get_session()
         with session.begin():
-            network = models_v2.Network(name=n['name'],
+            network = models_v2.Network(tenant_id=context.tenant_id,
+                                        name=n['name'],
                                         admin_state_up=n['admin_state_up'],
                                         op_status="ACTIVE")
             session.add(network)
-            session.flush()
             return self._make_network_dict(network)
 
     def update_network(self, context, id, network):
