@@ -16,7 +16,6 @@
 import logging
 import uuid
 
-import netaddr
 from sqlalchemy import orm
 from sqlalchemy.orm import exc
 
@@ -162,17 +161,21 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
         return query
 
-    def _get_by_id(self, context, model, id, joins=()):
+    def _get_by_id(self, context, model, id, joins=(), verbose=None):
         query = self._model_query(context, model)
-        options = [orm.joinedload(join) for join in joins]
-        if options:
+        if verbose:
+            if verbose and isinstance(verbose, list):
+                options = [orm.joinloaded(join) for join in joins
+                           if join in verbose]
+            else:
+                options = [orm.joinedload(join) for join in joins]
             query = query.options(*options)
         return query.filter_by(uuid=id).one()
 
     def _get_network(self, context, id, verbose=None):
         try:
             network = self._get_by_id(context, models_v2.Network, id,
-                                      joins=('subnets',))
+                                      joins=('subnets',), verbose=verbose)
         except exc.NoResultFound:
             raise q_exc.NetworkNotFound(net_id=id)
         except exc.MultipleResultsFound:
@@ -180,21 +183,40 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             raise q_exc.NetworkNotFound(net_id=id)
         return network
 
+    def _get_subnet(self, context, id, verbose=None):
+        try:
+            subnet = self._get_by_id(context, models_v2.Subnet, id,
+                                     joins=('subnets',), verbose=verbose)
+        except exc.NoResultFound:
+            raise q_exc.SubnetNotFound(subnet_id=id)
+        except exc.MultipleResultsFound:
+            LOG.error('Multiple subnets match for %s' % id)
+            raise q_exc.SubnetNotFound(subnet_id=id)
+        return subnet
+
     def _show(self, resource, show):
-        return dict(((key, item) for key, item in resource.iteritems()
-                     if key in show))
+        if show:
+            return dict(((key, item) for key, item in resource.iteritems()
+                         if key in show))
+        return resource
 
     def _make_network_dict(self, network, show=None):
-
         res = {'id': network['uuid'],
                'name': network['name'],
                'admin_state_up': network['admin_state_up'],
                'op_status': network['op_status'],
                'subnets': [subnet['uuid']
                             for subnet in network['subnets']]}
-        if show:
-            return self._show(res, show)
-        return res
+
+        return self._show(res, show)
+
+    def _make_subnet_dict(self, subnet, show=None):
+        res = {'id': subnet['uuid'],
+               'network_id': subnet['network_uuid'],
+               'ip_version': subnet['ip_version'],
+               'prefix': subnet['prefix'],
+               'gateway_ip': subnet['gateway_ip']}
+        return self._show(res, show)
 
     def create_network(self, context, network):
         n = network['network']
@@ -235,38 +257,27 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return [self._make_network_dict(network, show)
                 for network in networks]
 
-    def _make_subnet_dict(self, subnet):
-        return {"id": subnet.uuid,
-                "network_id": subnet.network_uuid,
-                "ip_version": subnet.ip_version,
-                "prefix": subnet.prefix,
-                "gateway_ip": subnet.gateway_ip}
-
     def create_subnet(self, context, subnet):
         s = subnet['subnet']
-        session = db.get_session()
-        with session.begin():
-            subnet = models_v2.Subnet("",
-                                      s['network_id'],
-                                      s['ip_version'],
-                                      s['prefix'],
-                                      s['gateway_ip'])
+        # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
+        #                unneeded db action if the operation raises
+        tenant_id = self._get_tenant_id_for_create(context, s)
+        with context.session.begin():
+            subnet = models_v2.Subnet(tenant_id=tenant_id,
+                                      network_uuid=s['network_id'],
+                                      ip_version=s['ip_version'],
+                                      prefix=s['prefix'],
+                                      gateway_ip=s['gateway_ip'])
 
-            session.add(subnet)
-            netrange = netaddr.IPNetwork(s['prefix'])
-            #TODO(danwent): apply policy to avoid additional ranges
-            avoid = [s['gateway_ip'], str(netrange[0]),
-                      str(netrange.broadcast)]
-            for ip in netrange:
-                ip_str = str(ip)
-                if ip_str in avoid:
-                    continue
-                session.add(models_v2.IP_Allocation(ip_str, subnet.uuid))
-            session.flush()
-            return self._make_subnet_dict(subnet)
+            context.session.add(subnet)
+        return self._make_subnet_dict(subnet)
 
     def update_subnet(self, context, id, subnet):
-        pass
+        s = subnet['subnet']
+        with context.session.begin():
+            subnet = self._get_subnet(context, id)
+            subnet.update(s)
+        return self._make_subnet_dict(subnet)
 
     def delete_subnet(self, context, id):
         session = db.get_session()
