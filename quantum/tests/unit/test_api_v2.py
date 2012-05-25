@@ -129,15 +129,16 @@ class TestPortsV2(APIv2TestCase):
                          'device_id': device_id}}
         port_req = self.new_create_request('ports', data, fmt)
         port_res = port_req.get_response(self.api)
-        return json.loads(response.body)["body"]
+        return json.loads(port_res.body)
 
     def test_create_port_json(self):
         port = self._create_port("json", self.net_id, True, "dev_id_1")
-        self.assertEqual(port_data['id'], "dev_id_1")
-        self.assertEqual(port_data['admin_state_up'], "DOWN")
-        self.assertEqual(port_data['device_id'], "dev_id_1")
-        self.assertTrue("mac_address" in port_data)
-        self.assertTrue('op_status' in port_data)
+        raise Exception(port)
+        self.assertEqual(port['id'], "dev_id_1")
+        self.assertEqual(port['admin_state_up'], "DOWN")
+        self.assertEqual(port['device_id'], "dev_id_1")
+        self.assertTrue("mac_address" in port)
+        self.assertTrue('op_status' in port)
 
     def test_list_ports(self):
         port1 = self._create_port("json", self.net_id, True, "dev_id_1")
