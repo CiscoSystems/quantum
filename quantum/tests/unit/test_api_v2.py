@@ -26,13 +26,6 @@ class APIv2TestCase(unittest.TestCase):
         plugin = "quantum.plugins.sample.SamplePluginV2.FakePlugin"
         self.api = APIRouter({"plugin_provider": plugin})
 
-    def tearDown(self):
-        """Clear the test environment"""
-        #TODO(danwent): this should be a generic call to the
-        # plugin to clear state...
-        super(APIv2TestCase, self).tearDown()
-        QuantumManager.get_plugin().clear_state()
-
     def _req(self, method, resource, data=None, fmt='json', id=None):
         if id:
             path = "/%(resource)s/%(id)s.%(fmt)s" % locals()
