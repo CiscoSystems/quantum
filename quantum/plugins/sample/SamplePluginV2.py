@@ -202,8 +202,13 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def _get_collection(self, context, model, dict_func, filters=None,
                         show=None, verbose=None):
-        collection = self._model_query(context, model).all()
-        return [dict_func(c, show) for c in collection]
+        collection = self._model_query(context, model)
+        if filters:
+            for key, value in filters.iteritems():
+                column = getattr(model, key, None)
+                if column:
+                    collection.filter(column.in_(value))
+        return [dict_func(c, show) for c in collection.all()]
 
     def _make_network_dict(self, network, show=None):
         res = {'id': network['uuid'],
