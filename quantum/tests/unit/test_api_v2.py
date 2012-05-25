@@ -133,7 +133,6 @@ class TestPortsV2(APIv2TestCase):
 
     def test_create_port_json(self):
         port = self._create_port("json", self.net_id, True, "dev_id_1")
-        raise Exception(port)
         self.assertEqual(port['id'], "dev_id_1")
         self.assertEqual(port['admin_state_up'], "DOWN")
         self.assertEqual(port['device_id'], "dev_id_1")
@@ -183,17 +182,40 @@ class TestPortsV2(APIv2TestCase):
         self.assertEquals(res.status_int, 404)
 
 
-#class TestNetworksV2(APIv2TestCase):
-#    def setUp(self):
-#        super(TestNetworksV2, self).setUp()
-#
-#    def test_create_network_json(self):
-#        res = self._create_network('json', "net1", True)
-#        network_data = self._deserialize("json", res)
-#        self.assertEquals(network_data['network']['name'], 'net1')
-#        return network_data['network']['id']
-#
-#
+class TestNetworksV2(APIv2TestCase):
+    # NOTE(cerberus): successful network update and delete are
+    #                 effectively tested above
+    def setUp(self):
+        super(TestNetworksV2, self).setUp()
+        res = self._create_network('json', "net1", True)
+        self.net = self.deserialize("json", res)
+
+    def test_create_network(self):
+        keys = [('subnets', []), ('name', 'net1'), ('admin_state_up', True),
+         ('op_status', 'ACTIVE'), ('tags', [])]
+        for k, v in keys:
+            self.assertEquals(self.net['network'][k], v)
+
+    def test_list_networks(self):
+        req = self.new_list_request('networks')
+        res = req.get_response(self.api)
+        net = self.deserialize("json", res)
+        self.assertEquals(res.status_int, 200)
+
+    def test_show_network(self):
+        req = self.new_show_request('networks', self.net['network']['id'])
+        res = req.get_response(self.api)
+        net = self.deserialize("json", res)
+        self.assertEquals(res.status_int, 200)
+
+    def test_update_network_bad_attributes_422(self):
+        req = self.new_update_request('networks',
+                                      {'network': {}},
+                                      self.net['network']['id'])
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 422)
+
+
 #class TestSubnetsV2(APIv2TestCase):
 #    def setUp(self):
 #        super(TestSubnetsV2, self).setUp()
@@ -201,6 +223,7 @@ class TestPortsV2(APIv2TestCase):
 #    def _subnet_create_request(self, tenant_id, net_id, ip_version, prefix,
 #                               gateway_ip, fmt='json'):
 #        data = {'subnet': {'network_id': net_id,
+
 #                           'ip_version': ip_version,
 #                           'prefix': prefix,
 #                           'gateway_ip': gateway_ip
