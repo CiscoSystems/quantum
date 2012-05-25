@@ -169,6 +169,22 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
         return query
 
+    def _get_by_id(self, context, model, id, session=None):
+        session = session or db.get_session()
+        query = self._model_query(context, models_v2.Network, session)
+        return query.filter_by(uuid=id).one()
+
+    def _get_network(self, context, id, session=None):
+        try:
+            network = self._get_by_id(context, models_v2.Network, id,
+                                      session)
+        except exc.NoResultsRound:
+            raise q_exc.NetworkNotFound(net_id=id)
+        except exc.MultipleResultsFound:
+            LOG.error('Multiple networks match for %s' % id)
+            raise q_exc.NetworkNotFound(net_id=id)
+        return network
+
     def create_network(self, context, network):
         n = network['network']
         session = db.get_session()
@@ -188,48 +204,26 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         n = network['network']
         session = db.get_session()
         with session.begin():
-            query = self._model_query(context, models_v2.Network, session)
-            try:
-                network = query.filter_by(uuid=id).one()
-            except exc.NoResultsRound:
-                raise q_exc.NetworkNotFound(net_id=id)
-            except exc.MultipleResultsFound:
-                LOG.error('Multiple networks match for %s' % id)
-                raise q_exc.NetworkNotFound(net_id=id)
-
+            network = self._get_network(context, id, session)
             network.update(n)
         return self._make_network_dict(network)
 
     def delete_network(self, context, id):
         session = db.get_session()
-        try:
-            net = (session.query(models_v2.Network).
-                   filter_by(uuid=id).
-                   one())
+        with session.begin():
+            network = self._get_network(context, id, session)
 
-            for p in net.ports:
-                session.delete(p)
+            for port in network.ports:
+                session.delete(port)
 
-            session.delete(net)
-            session.flush()
-        except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(net_id=id)
+            session.delete(network)
 
     def get_network(self, context, id, show=None, verbose=None):
-        session = db.get_session()
-        try:
-            #TODO(danwent): filter by tenant
-            network = (session.query(models_v2.Network).
-                      filter_by(uuid=id).
-                      one())
-            return self._make_network_dict(network)
-        except exc.NoResultFound:
-            raise q_exc.NetworkNotFound(network_uuid=id)
+        network = self._get_network(context, id)
+        return self._make_network_dict(network)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        session = db.get_session()
-        #TODO(danwent): filter by tenant
-        all_networks = (session.query(models_v2.Network).all())
+        all_networks = self._model_query(context, models_v2.Network).all()
         return [self._make_network_dict(s) for s in all_networks]
 
     def _make_subnet_dict(self, subnet):
