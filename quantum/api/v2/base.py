@@ -133,8 +133,8 @@ class Controller(object):
 
         obj_getter = getattr(self._plugin, "get_%s" % self._collection)
         obj_list = obj_getter(request.context, **kwargs)
-
-        return {self._collection: [self._view(obj) for obj in obj_list]}
+        return {self._collection: [{self._resource: self._view(obj)}
+                                            for obj in obj_list]}
 
     def _item(self, request, id):
         """Retrieves and formats a single element of the requested entity"""
