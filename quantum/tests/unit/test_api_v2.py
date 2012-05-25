@@ -1,13 +1,14 @@
-import json
+#import json
 import logging
 import unittest
-from webob import exc
-import netaddr
+#from webob import exc
+#import netaddr
 
 from quantum.api.v2.router import APIRouter
-from quantum.manager import QuantumManager
+#from quantum.manager import QuantumManager
 from quantum.tests.unit.testlib_api import create_request
-from quantum.wsgi import Serializer, XMLDeserializer, JSONDeserializer
+#from quantum.wsgi import Serializer, XMLDeserializer, JSONDeserializer
+from quantum.wsgi import Serializer, JSONDeserializer
 
 
 LOG = logging.getLogger("quantum.tests.api_v2_test")
@@ -192,7 +193,7 @@ class TestNetworksV2(APIv2TestCase):
     def tearDown(self):
         super(TestNetworksV2, self).setUp()
         req = self.new_delete_request("networks", self.net["network"]["id"])
-        res = req.get_response(self.api)
+        req.get_response(self.api)
 
     def test_create_network(self):
         keys = [("subnets", []), ("name", "net1"), ("admin_state_up", True),
@@ -237,10 +238,10 @@ class TestSubnetsV2(APIv2TestCase):
         req = self.new_delete_request("networks", self.net["network"]["id"])
         req.get_response(self.api)
         req = self.new_delete_request("subnets", self.subnet["subnet"]["id"])
-        res = req.get_response(self.api)
+        req.get_response(self.api)
 
     def _create_subnet(self, fmt, net_id, gateway_ip, prefix):
-        content_type = "application/" + fmt
+        #content_type = "application/" + fmt
         data = {"subnet": {"network_id": net_id,
                            "allocations": [],
                            "prefix": prefix,
