@@ -200,6 +200,11 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                          if key in show))
         return resource
 
+    def _get_collection(self, context, model, dict_func, filters=None,
+                        show=None, verbose=None):
+        collection = self._model_query(context, model).all()
+        return [dict_func(c, show) for c in collection]
+
     def _make_network_dict(self, network, show=None):
         res = {'id': network['uuid'],
                'name': network['name'],
@@ -242,8 +247,12 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         with context.session.begin():
             network = self._get_network(context, id)
 
-            for port in network.ports:
-                context.session.delete(port)
+            # TODO(anyone) Delegation?
+            ports_qry = context.session.query(models_v2.Port)
+            ports_qry.filter_by(network_uuid=id).delete()
+
+            subnets_qry = context.session.query(models_v2.Subnet)
+            subnets_qry.filter_by(network_uuid=id).delete()
 
             context.session.delete(network)
 
@@ -252,9 +261,10 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return self._make_network_dict(network, show)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        networks = self._model_query(context, models_v2.Network).all()
-        return [self._make_network_dict(network, show)
-                for network in networks]
+        return self._get_collection(context, models_v2.Network,
+                                    self._make_network_dict,
+                                    filters=filters, show=show,
+                                    verbose=verbose)
 
     def create_subnet(self, context, subnet):
         s = subnet['subnet']
@@ -279,37 +289,23 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return self._make_subnet_dict(subnet)
 
     def delete_subnet(self, context, id):
-        session = db.get_session()
-        try:
-            subnet = (session.query(models_v2.Subnet).
-                   filter_by(uuid=id).
-                   one())
+        with context.session.begin():
+            subnet = self._get_subnet(context, id)
 
-            session.query(models_v2.IP_Allocation).\
-                    filter_by(subnet_uuid=id).\
-                    delete()
+            allocations_qry = context.session.query(models_v2.IPAllocation)
+            allocations_qry.filter_by(subnet_uuid=id).delete()
 
-            session.delete(subnet)
-            session.flush()
-        except exc.NoResultFound:
-            raise q_exc.SubnetNotFound(subnet_id=id)
+            context.session.delete(subnet)
 
     def get_subnet(self, context, id, show=None, verbose=None):
-        session = db.get_session()
-        try:
-            #TODO(danwent): filter by tenant
-            subnet = (session.query(models_v2.Subnet).
-                      filter_by(uuid=id).
-                      one())
-            return self._make_subnet_dict(subnet)
-        except exc.NoResultFound:
-            raise q_exc.SubnetNotFound(subnet_uuid=id)
+        subnet = self._get_subnet(context, id, verbose=verbose)
+        return self._make_subnet_dict(subnet, show)
 
     def get_subnets(self, context, filters=None, show=None, verbose=None):
-        session = db.get_session()
-        #TODO(danwent): filter by tenant
-        all_subnets = (session.query(models_v2.Subnet).all())
-        return [self._make_subnet_dict(s) for s in all_subnets]
+        return self._get_collection(context, models_v2.Subnet,
+                                    self._make_subnet_dict,
+                                    filters=filters, show=show,
+                                    verbose=verbose)
 
     def _make_port_dict(self, port):
         ips = [{"address": f.address,
