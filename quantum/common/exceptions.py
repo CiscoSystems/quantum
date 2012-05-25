@@ -122,5 +122,5 @@ class NotImplementedError(Error):
     pass
 
 
-class FixedIPNotAvailable(Error):
+class FixedIPNotAvailable(QuantumException):
     message = _("Fixed IP unavailable for network: %(network_uuid)s")
