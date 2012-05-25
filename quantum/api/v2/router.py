@@ -36,16 +36,14 @@ MEMBER_ACTIONS = ['show', 'update', 'delete']
 REQUIREMENTS = {'id': UUID_PATTERN, 'format': 'xml|json'}
 
 
+# TODO(anyone): these basically have no purpose at the moment
 RESOURCE_PARAM_MAP = {
     "networks": [
-        {"attr": "name"}
     ],
     "ports": [
         {"attr": "state", "default": "DOWN"}
     ],
     "subnets": [
-        {"attr": "network_id"},
-        {"attr": "cidr"}
     ]
 }
 

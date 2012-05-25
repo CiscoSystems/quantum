@@ -286,7 +286,7 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                    filter_by(uuid=id).
                    one())
 
-            session.query(models_v2.IP_Allocation).\
+            session.query(models_v2.IPAllocation).\
                     filter_by(subnet_uuid=id).\
                     delete()
 
