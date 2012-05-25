@@ -141,13 +141,6 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         db.configure_db({'sql_connection': sql_connection,
                          'base': models_v2.model_base.BASEV2})
 
-    def _make_network_dict(self, network):
-        return {"id": network.uuid,
-                "name": network.name,
-                "admin_state_up": network.admin_state_up,
-                "op_status": network.op_status,
-                "subnets": [s['uuid'] for s in network.subnets]}
-
     def _get_tenant_id_for_create(self, context, resource):
         if context.is_admin and 'tenant_id' in resource:
             tenant_id = resource['tenant_id']
@@ -185,6 +178,21 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
             raise q_exc.NetworkNotFound(net_id=id)
         return network
 
+    def _show(self, resource, show):
+        return dict(((key, item) for key, item in resource if key in show))
+
+    def _make_network_dict(self, network, show=None, verbose=None):
+
+        res = {'id': network['uuid'],
+               'name': network['name'],
+               'admin_state_up': network['admin_state_up'],
+               'op_status': network['op_status'],
+               'subnets': [subnet['uuid']
+                            for subnet in network['subnets']]}
+        if show is not None:
+            return self._show(res, show)
+        return res
+
     def create_network(self, context, network):
         n = network['network']
         session = db.get_session()
@@ -220,11 +228,12 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def get_network(self, context, id, show=None, verbose=None):
         network = self._get_network(context, id)
-        return self._make_network_dict(network)
+        return self._make_network_dict(network, show)
 
     def get_networks(self, context, filters=None, show=None, verbose=None):
-        all_networks = self._model_query(context, models_v2.Network).all()
-        return [self._make_network_dict(s) for s in all_networks]
+        networks = self._model_query(context, models_v2.Network).all()
+        return [self._make_network_dict(network, show)
+                for network in networks]
 
     def _make_subnet_dict(self, subnet):
         return {"id": subnet.uuid,
