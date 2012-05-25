@@ -151,8 +151,14 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
     def create_network(self, context, network):
         n = network['network']
         session = db.get_session()
+
+        if context.is_admin and 'tenant_id' in n:
+            tenant_id = n['tenant_id']
+        else:
+            tenant_id = context.tenant_id
+
         with session.begin():
-            network = models_v2.Network(tenant_id=context.tenant_id,
+            network = models_v2.Network(tenant_id=tenant_id,
                                         name=n['name'],
                                         admin_state_up=n['admin_state_up'],
                                         op_status="ACTIVE")
