@@ -163,10 +163,17 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                         admin_state_up=n['admin_state_up'],
                                         op_status="ACTIVE")
             session.add(network)
-            return self._make_network_dict(network)
+        return self._make_network_dict(network)
 
     def update_network(self, context, id, network):
-        pass
+        n = network['network']
+        session = db.get_session()
+        with session.begin():
+            network = (session.query(models_v2.Network).
+                      filter_by(uuid=id).
+                      one())
+            network.update(n)
+        return self._make_network_dict(network)
 
     def delete_network(self, context, id):
         session = db.get_session()
