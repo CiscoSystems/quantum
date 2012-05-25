@@ -51,7 +51,7 @@ class APIv2TestCase(unittest.TestCase):
     def new_delete_request(self, resource, id, fmt='json'):
         return self._req('DELETE', resource, None, fmt, id=id)
 
-    def new_update_request(self, resource, id, fmt='json'):
+    def new_update_request(self, resource, data, id, fmt='json'):
         return self._req('PUT', resource, data, fmt, id=id)
 
     def deserialize(self, content_type, response):
@@ -90,19 +90,21 @@ class TestV2HTTPResponse(APIv2TestCase):
         self.assertEquals(res.status_int, 200)
 
     def test_show_returns_200(self):
-        req = self.new_show_request('networks', 1)
+        req = self.new_show_request('networks', self.net['network']['id'])
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 200)
 
     def test_delete_returns_204(self):
-        req = self.new_delete_request('networks', self.net['id'])
+        req = self.new_delete_request('networks', self.net['network']['id'])
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 204)
 
-    def test_update_returns_204(self):
-        req = self.new_show_request('networks', 1)
+    def test_update_returns_202(self):
+        req = self.new_update_request('networks',
+                                      {'network': {'name': 'steve'}},
+                                      self.net['network']['id'])
         res = req.get_response(self.api)
-        self.assertEquals(res.status_int, 204)
+        self.assertEquals(res.status_int, 202)
 
     def test_bad_route_404(self):
         req = self.new_list_request('doohickeys')
