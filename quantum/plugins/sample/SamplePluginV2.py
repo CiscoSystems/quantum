@@ -148,15 +148,34 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 "op_status": network.op_status,
                 "subnets": [s['uuid'] for s in network.subnets]}
 
+    def _get_tenant_id_for_create(self, context, resource):
+        if context.is_admin and 'tenant_id' in resource:
+            tenant_id = resource['tenant_id']
+        elif ('tenant_id' in resource and
+              resource['tenant_id'] != context.tenant_id):
+            reason = _('Cannot create resource for another tenant')
+            raise q_exc.AdminRequired(reason=reason)
+        else:
+            tenant_id = context.tenant_id
+        return tenant_id
+
+    def _model_query(self, context, model, session=None):
+        session = session or db.get_session()
+        query = session.query(model)
+
+        # NOTE(jkoelker) non-admin queries are scoped to their tenant_id
+        if not context.is_admin and hasattr(model.tenant_id):
+            query.filter(tenant_id=context.tenant_id)
+
+        return query
+
     def create_network(self, context, network):
         n = network['network']
         session = db.get_session()
 
-        if context.is_admin and 'tenant_id' in n:
-            tenant_id = n['tenant_id']
-        else:
-            tenant_id = context.tenant_id
-
+        # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
+        #                unneeded db action if the operation raises
+        tenant_id = self._get_tenant_id_for_create(context, n)
         with session.begin():
             network = models_v2.Network(tenant_id=tenant_id,
                                         name=n['name'],
@@ -169,9 +188,15 @@ class FakePlugin(quantum_plugin_base_v2.QuantumPluginBaseV2):
         n = network['network']
         session = db.get_session()
         with session.begin():
-            network = (session.query(models_v2.Network).
-                      filter_by(uuid=id).
-                      one())
+            query = self._model_query(context, models_v2.Network, session)
+            try:
+                network = query.filter_by(uuid=id).one()
+            except exc.NoResultsRound:
+                raise q_exc.NetworkNotFound(net_id=id)
+            except exc.MultipleResultsFound:
+                LOG.error('Multiple networks match for %s' % id)
+                raise q_exc.NetworkNotFound(net_id=id)
+
             network.update(n)
         return self._make_network_dict(network)
 

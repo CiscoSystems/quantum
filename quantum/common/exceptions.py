@@ -47,6 +47,14 @@ class NotFound(QuantumException):
     pass
 
 
+class NotAuthorized(QuantumException):
+    message = _("Not authorized.")
+
+
+class AdminRequired(NotAuthorized):
+    message = _("User does not have admin privileges: %(reason)s")
+
+
 class ClassNotFound(NotFound):
     message = _("Class %(class_name)s could not be found")
 
