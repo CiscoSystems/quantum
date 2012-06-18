@@ -29,8 +29,8 @@ from quantum.plugins.cisco.l2network_plugin import L2Network
 from quantum.plugins.cisco.ucs.cisco_ucs_inventory import UCSInventory
 
 
-logging.basicConfig(level=LOG.WARN)
 LOG = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING)
 
 
 # Set some data to use in tests
