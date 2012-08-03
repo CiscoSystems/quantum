@@ -117,7 +117,7 @@ UCS_PLUGIN = 'ucs_plugin'
 NEXUS_PLUGIN = 'nexus_plugin'
 UCS_INVENTORY = 'ucs_inventory'
 NEXUS_INVENTORY = 'nexus_inventory'
-OVS_PLUGIN = 'ovs_plugin'
+EDGE_PLUGIN = 'edge_plugin'
 
 PLUGIN_OBJ_REF = 'plugin-obj-ref'
 PARAM_LIST = 'param-list'

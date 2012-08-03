@@ -130,11 +130,11 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, network]
-            ovs_output = self._invoke_plugin_per_device(const.OVS_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
                                                         self._func_name(),
                                                         args)
             vlan_id = odb.get_vlan(ovs_output[0]['id'])
-            vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id) 
+            vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
             args = [ovs_output[0]['tenant_id'], ovs_output[0]['name'],
                     ovs_output[0]['id'], vlan_name, vlan_id]
             nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
@@ -145,14 +145,6 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             # TODO (Sumit): Check if we need to perform any rollback here
             raise
 
-    def get_network(self, context, id, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
-        pass
-
-    def get_networks(self, context, filters=None, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
-        pass
-
     def update_network(self, context, id, network):
         """
         Perform this operation in the context of the configured device
@@ -160,13 +152,13 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, id, network]
-            ovs_output = self._invoke_plugin_per_device(const.OVS_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
                                                         self._func_name(),
                                                         args)
             return ovs_output[0]
         except:
             raise
-       
+
     def delete_network(self, context, id, kwargs):
         """
         Perform this operation in the context of the configured device
@@ -178,7 +170,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             tenant_id = n['tenant_id']
             output = []
             args = [context, id]
-            ovs_output = self._invoke_plugin_per_device(const.OVS_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
                                                         self._func_name(),
                                                         args)
             args = [tenant_id, id, {const.CONTEXT:context},
@@ -190,26 +182,37 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         except:
             raise
 
-    def create_port(self, context, port):
+    def get_network(self, context, id, fields=None, verbose=None):
         """
         Perform this operation in the context of the configured device
         plugins.
         """
         try:
-            tenant_id = port['tenant_id']
-            net_id = port['network_id']
-            port_state = port['admin_state_up']
-            port_id_string = port['id']
-            args = [tenant_id, net_id, port_state, port_id_string]
-            ret_val = self._invoke_plugin_per_device(const.UCS_PLUGIN,
-                                                     self._func_name(), args)
-            new_args = [tenant_id, net_id, port['id'], port['id']]
-            self._invoke_plugin_per_device(const.UCS_PLUGIN,
-                                           "plug_interface", new_args)
-            return ret_val
+            args = [context, id, fields, verbose]
+            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+                                                        self._func_name(),
+                                                        args)
+            return ovs_output[0]
         except:
-            # TODO (Sumit): Check if we need to perform any rollback here
             raise
+
+    def get_networks(self, context, filters=None, fields=None, verbose=None):
+        """
+        Perform this operation in the context of the configured device
+        plugins.
+        """
+        try:
+            args = [context, filters, fields, verbose]
+            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+                                                        self._func_name(),
+                                                        args)
+            return ovs_output[0]
+        except:
+            raise
+
+    def create_port(self, context, port):
+        """Currently there is no processing required for the device plugins"""
+        pass
 
     def get_port(self, context, id, fields=None, verbose=None):
         """Currently there is no processing required for the device plugins"""
@@ -224,18 +227,8 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         pass
 
     def delete_port(self, context, id, kwargs):
-        """
-        Perform this operation in the context of the configured device
-        plugins.
-        """
-        try:
-            p = kwargs['port']
-            args = [p['tenant_id'], p['network_id'], p['id']]
-            return self._invoke_plugin_per_device(const.UCS_PLUGIN,
-                                                  self._func_name(), args)
-        except:
-            # TODO (Sumit): Check if we need to perform any rollback here
-            raise
+        """Currently there is no processing required for the device plugins"""
+        pass
 
     def create_subnet(self, context, subnet):
         """Currently there is no processing required for the device plugins"""

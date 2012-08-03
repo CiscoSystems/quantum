@@ -113,14 +113,12 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
                           const.BASE_PLUGIN_REF: self}
                 return self._invoke_device_plugins(self._func_name(),
                                                        [context, id, kwargs])
-                
             except:
                 raise
         else:
         #We first need to check if there are any ports on this network
             with context.session.begin():
                 network = self._get_network(context, id)
-    
                 filter = {'network_id': [id]}
                 ports = self.get_ports(context, filters=filter)
                 if ports:
@@ -136,6 +134,40 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
                 return super(PluginV2, self).delete_network(context, id)
             except:
                 raise
+
+    def get_network(self, context, id, fields=None, verbose=None):
+        """
+        Gets a particular network
+        """
+        LOG.debug("get_network() called\n")
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, id,
+                                                        fields, verbose])
+                return network
+            except:
+                raise
+        else:
+            return super(PluginV2, self).get_network(context, id,
+                                                     fields, verbose)
+
+    def get_networks(self, context, filters=None, fields=None, verbose=None):
+        """
+        Gets all networks
+        """
+        LOG.debug("get_networks() called\n")
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, filters,
+                                                        fields, verbose])
+                return network
+            except:
+                raise
+        else:
+            return super(PluginV2, self).get_networks(context, filters,
+                                                      fields, verbose)
 
     def create_port(self, context, port):
         """
