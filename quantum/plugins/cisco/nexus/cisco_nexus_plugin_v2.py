@@ -26,7 +26,7 @@ from quantum.common import exceptions as exc
 from quantum.db import api as db
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
-from quantum.plugins.cisco.common import cisco_credentials as cred
+from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.db import nexus_db_v2 as nxos_db
 from quantum.plugins.cisco.l2device_plugin_base import L2DevicePluginBase
