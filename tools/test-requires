@@ -9,3 +9,5 @@ pep8
 sphinx>=1.1.2
 unittest2
 webtest==1.3.3
+configobj
+mysql-python

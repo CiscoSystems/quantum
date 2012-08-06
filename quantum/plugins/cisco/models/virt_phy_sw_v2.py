@@ -31,7 +31,7 @@ from quantum import quantum_plugin_base_v2
 LOG = logging.getLogger(__name__)
 
 
-class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
+class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     This implementation works with OVS and Nexus plugin for the
     following topology:
@@ -130,7 +130,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, network]
-            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
             vlan_id = odb.get_vlan(ovs_output[0]['id'])
@@ -152,7 +152,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, id, network]
-            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
             return ovs_output[0]
@@ -170,7 +170,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             tenant_id = n['tenant_id']
             output = []
             args = [context, id]
-            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
             args = [tenant_id, id, {const.CONTEXT:context},
@@ -189,7 +189,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, id, fields, verbose]
-            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
             return ovs_output[0]
@@ -203,7 +203,7 @@ class NetworkMultiHostV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         try:
             args = [context, filters, fields, verbose]
-            ovs_output = self._invoke_plugin_per_device(const.EDGE_PLUGIN,
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
             return ovs_output[0]
