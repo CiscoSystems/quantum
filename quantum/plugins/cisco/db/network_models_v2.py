@@ -68,7 +68,7 @@ class L2NetworkBase(object):
 
 class VlanID(model_base.BASEV2, L2NetworkBase):
     """Represents a vlan_id usage"""
-    __tablename__ = 'vlan_ids'
+    __tablename__ = 'cisco_vlan_ids'
 
     vlan_id = Column(Integer, primary_key=True)
     vlan_used = Column(Boolean)
