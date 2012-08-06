@@ -62,7 +62,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         a symbolic name.
         """
         LOG.debug("create_network() called\n")
-        if "multi_host" in conf.MODEL_CLASS:
+        if "virt_phy_sw" in conf.MODEL_CLASS:
             try:
                 new_network = self._invoke_device_plugins(self._func_name(),
                                                        [context, network])
@@ -70,13 +70,15 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
             except:
                 raise
         else:
-            new_network = super(PluginV2, self).create_network(context, network)
+            new_network = super(PluginV2, self).create_network(context,
+                                                               network)
             try:
                 self._invoke_device_plugins(self._func_name(), [context,
                                                             new_network])
                 return new_network
             except:
-                super(PluginV2, self).delete_network(context, new_network['id'])
+                super(PluginV2, self).delete_network(context,
+                                            new_network['id'])
                 raise
 
     def update_network(self, context, id, network):
@@ -85,7 +87,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         Virtual Network.
         """
         LOG.debug("update_network() called\n")
-        if "multi_host" in conf.MODEL_CLASS:
+        if "virt_phy_sw" in conf.MODEL_CLASS:
             try:
                 new_network = self._invoke_device_plugins(self._func_name(),
                                                        [context, id, network])
@@ -96,7 +98,8 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
             try:
                 self._invoke_device_plugins(self._func_name(), [context, id,
                                                             network])
-                return super(PluginV2, self).update_network(context, id, network)
+                return super(PluginV2, self).update_network(context, id,
+                                                             network)
             except:
                 raise
 
@@ -106,7 +109,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         belonging to the specified tenant.
         """
         LOG.debug("delete_network() called\n")
-        if "multi_host" in conf.MODEL_CLASS:
+        if "virt_phy_sw" in conf.MODEL_CLASS:
             try:
                 network = self._get_network(context, id)
                 kwargs = {const.NETWORK: network,
@@ -140,7 +143,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         Gets a particular network
         """
         LOG.debug("get_network() called\n")
-        if "multi_host" in conf.MODEL_CLASS:
+        if "virt_phy_sw" in conf.MODEL_CLASS:
             try:
                 network = self._invoke_device_plugins(self._func_name(),
                                                        [context, id,
@@ -157,7 +160,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         Gets all networks
         """
         LOG.debug("get_networks() called\n")
-        if "multi_host" in conf.MODEL_CLASS:
+        if "virt_phy_sw" in conf.MODEL_CLASS:
             try:
                 network = self._invoke_device_plugins(self._func_name(),
                                                        [context, filters,
