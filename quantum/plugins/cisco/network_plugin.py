@@ -29,6 +29,7 @@ from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.common import cisco_utils as cutil
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco import l2network_plugin_configuration as conf
+from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum.quantum_plugin_base import QuantumPluginBase
 
 LOG = logging.getLogger(__name__)
@@ -61,14 +62,22 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         a symbolic name.
         """
         LOG.debug("create_network() called\n")
-        new_network = super(PluginV2, self).create_network(context, network)
-        try:
-            self._invoke_device_plugins(self._func_name(), [context,
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                new_network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, network])
+                return new_network
+            except:
+                raise
+        else:
+            new_network = super(PluginV2, self).create_network(context, network)
+            try:
+                self._invoke_device_plugins(self._func_name(), [context,
                                                             new_network])
-            return new_network
-        except:
-            super(PluginV2, self).delete_network(context, new_network['id'])
-            raise
+                return new_network
+            except:
+                super(PluginV2, self).delete_network(context, new_network['id'])
+                raise
 
     def update_network(self, context, id, network):
         """
@@ -76,12 +85,20 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         Virtual Network.
         """
         LOG.debug("update_network() called\n")
-        try:
-            self._invoke_device_plugins(self._func_name(), [context, id,
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                new_network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, id, network])
+                return new_network
+            except:
+                raise
+        else:
+            try:
+                self._invoke_device_plugins(self._func_name(), [context, id,
                                                             network])
-            return super(PluginV2, self).update_network(context, id, network)
-        except:
-            raise
+                return super(PluginV2, self).update_network(context, id, network)
+            except:
+                raise
 
     def delete_network(self, context, id):
         """
@@ -89,25 +106,68 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         belonging to the specified tenant.
         """
         LOG.debug("delete_network() called\n")
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                network = self._get_network(context, id)
+                kwargs = {const.NETWORK: network,
+                          const.BASE_PLUGIN_REF: self}
+                return self._invoke_device_plugins(self._func_name(),
+                                                       [context, id, kwargs])
+            except:
+                raise
+        else:
         #We first need to check if there are any ports on this network
-        with context.session.begin():
-            network = self._get_network(context, id)
+            with context.session.begin():
+                network = self._get_network(context, id)
+                filter = {'network_id': [id]}
+                ports = self.get_ports(context, filters=filter)
+                if ports:
+                    raise exc.NetworkInUse(net_id=id)
+            context.session.close()
+            #Network does not have any ports, we can proceed to delete
+            try:
+                network = self._get_network(context, id)
+                kwargs = {const.NETWORK: network,
+                          const.BASE_PLUGIN_REF: self}
+                self._invoke_device_plugins(self._func_name(), [context, id,
+                                                                kwargs])
+                return super(PluginV2, self).delete_network(context, id)
+            except:
+                raise
 
-            filter = {'network_id': [id]}
-            ports = self.get_ports(context, filters=filter)
-            if ports:
-                raise exc.NetworkInUse(net_id=id)
-        context.session.close()
-        #Network does not have any ports, we can proceed to delete
-        try:
-            network = self._get_network(context, id)
-            kwargs = {const.NETWORK: network,
-                      const.BASE_PLUGIN_REF: self}
-            self._invoke_device_plugins(self._func_name(), [context, id,
-                                                            kwargs])
-            return super(PluginV2, self).delete_network(context, id)
-        except:
-            raise
+    def get_network(self, context, id, fields=None, verbose=None):
+        """
+        Gets a particular network
+        """
+        LOG.debug("get_network() called\n")
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, id,
+                                                        fields, verbose])
+                return network
+            except:
+                raise
+        else:
+            return super(PluginV2, self).get_network(context, id,
+                                                     fields, verbose)
+
+    def get_networks(self, context, filters=None, fields=None, verbose=None):
+        """
+        Gets all networks
+        """
+        LOG.debug("get_networks() called\n")
+        if "multi_host" in conf.MODEL_CLASS:
+            try:
+                network = self._invoke_device_plugins(self._func_name(),
+                                                       [context, filters,
+                                                        fields, verbose])
+                return network
+            except:
+                raise
+        else:
+            return super(PluginV2, self).get_networks(context, filters,
+                                                      fields, verbose)
 
     def create_port(self, context, port):
         """
