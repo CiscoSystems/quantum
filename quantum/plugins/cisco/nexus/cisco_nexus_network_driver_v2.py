@@ -120,7 +120,7 @@ class CiscoNEXUSDriver():
         with self.nxos_connect(nexus_host, int(nexus_ssh_port), nexus_user,
                                nexus_password) as man:
             self.enable_vlan(man, vlan_id, vlan_name)
-            if vlan_ids is None:
+            if vlan_ids is '':
                 vlan_ids = self.build_vlans_cmd()
             LOG.debug("NexusDriver VLAN IDs: %s" % vlan_ids)
             self.enable_vlan_on_trunk_int(man, nexus_first_interface,
