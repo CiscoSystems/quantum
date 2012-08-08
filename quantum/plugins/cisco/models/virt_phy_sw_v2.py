@@ -135,8 +135,14 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                                         args)
             vlan_id = odb.get_vlan(ovs_output[0]['id'])
             vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
+            vlan_ids = odb.get_vlans()
+            vlanids = ''
+            for v_id in vlan_ids:
+                vlanids = str(v_id[0]) + ',' + vlanids
+            vlanids = vlanids.strip(',')
             args = [ovs_output[0]['tenant_id'], ovs_output[0]['name'],
-                    ovs_output[0]['id'], vlan_name, vlan_id]
+                    ovs_output[0]['id'], vlan_name, vlan_id,
+                    {'vlan_ids':vlanids}]
             nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
                                                           self._func_name(),
                                                           args)
@@ -168,16 +174,18 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             base_plugin_ref = kwargs[const.BASE_PLUGIN_REF]
             n = kwargs[const.NETWORK]
             tenant_id = n['tenant_id']
+            vlan_id = odb.get_vlan(id)
             output = []
-            args = [context, id]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            args = [tenant_id, id, {const.CONTEXT:context},
+            args = [tenant_id, id, {const.VLANID:vlan_id},
+                    {const.CONTEXT:context},
                     {const.BASE_PLUGIN_REF:base_plugin_ref}]
             nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
                                                           self._func_name(),
                                                           args)
+            args = [context, id]
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                        self._func_name(),
+                                                        args)
             return ovs_output[0]
         except:
             raise
