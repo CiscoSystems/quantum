@@ -111,7 +111,8 @@ class CiscoNEXUSDriver():
 
     def create_vlan(self, vlan_name, vlan_id, nexus_host, nexus_user,
                     nexus_password, nexus_first_interface,
-                    nexus_second_interface, nexus_ssh_port):
+                    nexus_second_interface, nexus_ssh_port,
+                    vlan_ids=None):
         """
         Creates a VLAN and Enable on trunk mode an interface on Nexus Switch
         given the VLAN ID and Name and Interface Number
@@ -119,7 +120,8 @@ class CiscoNEXUSDriver():
         with self.nxos_connect(nexus_host, int(nexus_ssh_port), nexus_user,
                                nexus_password) as man:
             self.enable_vlan(man, vlan_id, vlan_name)
-            vlan_ids = self.build_vlans_cmd()
+            if vlan_ids is '':
+                vlan_ids = self.build_vlans_cmd()
             LOG.debug("NexusDriver VLAN IDs: %s" % vlan_ids)
             self.enable_vlan_on_trunk_int(man, nexus_first_interface,
                                           vlan_ids)
