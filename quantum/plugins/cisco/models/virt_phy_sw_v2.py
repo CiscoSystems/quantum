@@ -21,8 +21,11 @@ from copy import deepcopy
 import inspect
 import logging
 
+from quantum.manager import QuantumManager
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
+from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
+from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum import quantum_plugin_base_v2
@@ -37,8 +40,15 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     following topology:
     One or more servers to a nexus switch.
     """
+    MANAGE_STATE = True
+    supported_extension_aliases = []
     _plugins = {}
     _inventory = {}
+    _methods_to_delegate = ['update_network', 'get_network', 'get_networks',
+                            'create_port', 'delete_port', 'update_port',
+                            'get_port', 'get_ports',
+                            'create_subnet', 'delete_subnet', 'update_subnet',
+                            'get_subnet', 'get_subnets']
 
     def __init__(self):
         """
@@ -46,7 +56,8 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         configured, and load the inventories those device plugins for which the
         inventory is configured
         """
-        self._vlan_mgr = importutils.import_object(conf.MANAGER_CLASS)
+        cdb.initialize()
+        cred.Store.initialize()
         for key in conf.PLUGINS[const.PLUGINS].keys():
             plugin_obj = conf.PLUGINS[const.PLUGINS][key]
             self._plugins[key] = importutils.import_object(plugin_obj)
@@ -59,6 +70,14 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                           conf.PLUGINS[const.INVENTORY][key])
 
         LOG.debug("%s.%s init done" % (__name__, self.__class__.__name__))
+
+    def __getattribute__(self, name):
+        methods = object.__getattribute__(self, "_methods_to_delegate")
+        if name in methods:
+            return getattr(object.__getattribute__(self, "_plugins")
+                           [const.VSWITCH_PLUGIN], name)
+        else:
+            return object.__getattribute__(self, name)
 
     def _func_name(self, offset=0):
         """Get the name of the calling function"""
@@ -128,6 +147,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         Perform this operation in the context of the configured device
         plugins.
         """
+        LOG.debug("create_network() called\n")
         try:
             args = [context, network]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
@@ -152,27 +172,17 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             raise
 
     def update_network(self, context, id, network):
-        """
-        Perform this operation in the context of the configured device
-        plugins.
-        """
-        try:
-            args = [context, id, network]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            return ovs_output[0]
-        except:
-            raise
+        """For this model this method will be delegated to vswitch plugin"""
+        pass
 
-    def delete_network(self, context, id, kwargs):
+    def delete_network(self, context, id):
         """
         Perform this operation in the context of the configured device
         plugins.
         """
         try:
-            base_plugin_ref = kwargs[const.BASE_PLUGIN_REF]
-            n = kwargs[const.NETWORK]
+            base_plugin_ref = QuantumManager.get_plugin()
+            n = base_plugin_ref.get_network(context, id)
             tenant_id = n['tenant_id']
             vlan_id = odb.get_vlan(id)
             output = []
@@ -191,69 +201,49 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             raise
 
     def get_network(self, context, id, fields=None, verbose=None):
-        """
-        Perform this operation in the context of the configured device
-        plugins.
-        """
-        try:
-            args = [context, id, fields, verbose]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            return ovs_output[0]
-        except:
-            raise
+        """For this model this method will be delegated to vswitch plugin"""
+        pass
 
     def get_networks(self, context, filters=None, fields=None, verbose=None):
-        """
-        Perform this operation in the context of the configured device
-        plugins.
-        """
-        try:
-            args = [context, filters, fields, verbose]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            return ovs_output[0]
-        except:
-            raise
+        """For this model this method will be delegated to vswitch plugin"""
+        pass
 
     def create_port(self, context, port):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def get_port(self, context, id, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def get_ports(self, context, filters=None, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def update_port(self, context, id, port):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def delete_port(self, context, id, kwargs):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def create_subnet(self, context, subnet):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def update_subnet(self, context, id, subnet):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def get_subnet(self, context, id, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def delete_subnet(self, context, id, kwargs):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
 
     def get_subnets(self, context, filters=None, fields=None, verbose=None):
-        """Currently there is no processing required for the device plugins"""
+        """For this model this method will be delegated to vswitch plugin"""
         pass
