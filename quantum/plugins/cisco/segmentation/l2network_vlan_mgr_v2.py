@@ -19,9 +19,9 @@
 
 import logging
 
+from quantum.openstack.common import cfg
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.cisco.l2network_segmentation_base import (
     L2NetworkSegmentationMgrBase,
 )
@@ -48,5 +48,5 @@ class L2NetworkVLANMgr(L2NetworkSegmentationMgrBase):
 
     def get_vlan_name(self, net_id, vlan):
         """Getting the vlan name from the tenant and vlan"""
-        vlan_name = conf.VLAN_NAME_PREFIX + vlan
+        vlan_name = cfg.CONF.VLANS.vlan_name_prefix + vlan
         return vlan_name

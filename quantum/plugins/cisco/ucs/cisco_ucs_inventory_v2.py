@@ -64,6 +64,7 @@ from copy import deepcopy
 import logging
 
 from quantum.common import exceptions as exc
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
@@ -71,9 +72,6 @@ from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.db import ucs_db_v2 as udb
 from quantum.plugins.cisco.l2device_inventory_base import (
     L2NetworkDeviceInventoryBase,
-)
-from quantum.plugins.cisco.ucs import (
-    cisco_ucs_inventory_configuration as conf,
 )
 
 
@@ -91,33 +89,41 @@ class UCSInventory(L2NetworkDeviceInventoryBase):
     _inventory_state = {}
 
     def __init__(self):
-        self._client = importutils.import_object(conf.UCSM_DRIVER)
+        self._client = importutils.import_object(cfg.CONF.UCSM_DRIVER.name)
         self._load_inventory()
 
     def _load_inventory(self):
         """Load the inventory from a config file"""
-        inventory = deepcopy(conf.INVENTORY)
+        inventory = deepcopy(cfg.CONF.UCS_INVENTORY.inventory)
         LOG.info("Loaded UCS inventory: %s\n" % inventory)
         LOG.info("Building UCS inventory state (this may take a while)...")
-
-        for ucsm in inventory.keys():
-            ucsm_ip = inventory[ucsm][const.IP_ADDRESS]
-            inventory[ucsm].pop(const.IP_ADDRESS)
+        for ucsm in inventory:
+            ucsm_list = ucsm.split(':')
+            ucsm_ip = ucsm_list[0]
             chassis_dict = {}
-            for chassis in inventory[ucsm].keys():
-                chassis_id = inventory[ucsm][chassis][const.CHASSIS_ID]
-                inventory[ucsm][chassis].pop(const.CHASSIS_ID)
-                blade_list = []
-                for blade in inventory[ucsm][chassis].keys():
-                    blade_id = (
-                        inventory[ucsm][chassis][blade][const.BLADE_ID])
-                    host_name = (
-                        inventory[ucsm][chassis][blade][const.HOST_NAME])
-                    host_key = ucsm_ip + "-" + chassis_id + "-" + blade_id
-                    self._host_names[host_key] = host_name
-                    blade_list.append(blade_id)
+            chassis_id = ucsm_list[1]
+            blade_pos = 2
+            blade_list = []
+            while blade_pos < ucsm_list.len():
+                blade_id = ucsm_list[blade_pos]
+                host_name = ucsm_list[blade_pos + 1]
+                blade_pos += 2
+                host_key = ucsm_ip + "-" + chassis_id + "-" + blade_id
+                self._host_names[host_key] = host_name
+                blade_list.append(blade_id)
+
+            if chassis_dict[chassis_id]:
+                existing_blade_list = chassis_dict[chassis_id]
+                existing_blade_list.append(blade_list)
+            else:
                 chassis_dict[chassis_id] = blade_list
-            self._inventory[ucsm_ip] = chassis_dict
+
+            if self._inventory[ucsm_ip]:
+                existing_chassis_dict = self._inventory[ucsm_ip]
+                existing_chassis_dict[chassis_id] = chassis_dict[chassis_id]
+                self._inventory[ucsm_ip] = existing_chassis_dict
+            else:
+                self._inventory[ucsm_ip] = chassis_dict
 
         self._build_inventory_state()
 

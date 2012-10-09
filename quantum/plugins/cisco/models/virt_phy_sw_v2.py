@@ -23,11 +23,11 @@ import logging
 
 from quantum.db import l3_db
 from quantum.manager import QuantumManager
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum import quantum_plugin_base_v2
 
@@ -61,16 +61,20 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         cdb.initialize()
         cred.Store.initialize()
-        for key in conf.PLUGINS[const.PLUGINS].keys():
-            plugin_obj = conf.PLUGINS[const.PLUGINS][key]
-            self._plugins[key] = importutils.import_object(plugin_obj)
-            LOG.debug("Loaded device plugin %s\n" %
-                      conf.PLUGINS[const.PLUGINS][key])
-            if key in conf.PLUGINS[const.INVENTORY].keys():
-                inventory_obj = conf.PLUGINS[const.INVENTORY][key]
+        self._vlan_mgr = importutils.import_object(
+            cfg.CONF.SEGMENTATION.manager_class)
+        for key in cfg.CONF.PLUGINS.keys():
+            if cfg.CONF.PLUGINS[key] is not None:
+                plugin_obj = cfg.CONF.PLUGINS[key]
+                self._plugins[key] = importutils.import_object(plugin_obj)
+                LOG.debug("Loaded device plugin %s\n" %
+                          cfg.CONF.PLUGINS[key])
+        for key in cfg.CONF.INVENTORY.keys():
+            if cfg.CONF.INVENTORY[key] is not None:
+                inventory_obj = cfg.CONF.PLUGINS.INVENTORY[key]
                 self._inventory[key] = importutils.import_object(inventory_obj)
                 LOG.debug("Loaded device inventory %s\n" %
-                          conf.PLUGINS[const.INVENTORY][key])
+                          cfg.CONF.INVENTORY[key])
 
         if hasattr(self._plugins[const.VSWITCH_PLUGIN],
                    "supported_extension_aliases"):
@@ -196,7 +200,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             vlan_id = self._get_segmentation_id(ovs_output[0]['id'])
             if not self._validate_vlan_id(vlan_id):
                 return ovs_output[0]
-            vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
+            vlan_name = cfg.CONF.VLANS.vlan_name_prefix + str(vlan_id)
             vlanids = self._get_all_segmentation_ids()
             args = [ovs_output[0]['tenant_id'], ovs_output[0]['name'],
                     ovs_output[0]['id'], vlan_name, vlan_id,
@@ -224,7 +228,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             ovs_networks = ovs_output
             for ovs_network in ovs_networks:
                 vlan_id = self._get_segmentation_id(ovs_network['id'])
-                vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
+                vlan_name = cfg.CONF.VLANS.vlan_name_prefix + str(vlan_id)
                 args = [ovs_network['tenant_id'], ovs_network['name'],
                         ovs_network['id'], vlan_name, vlan_id,
                         {'vlan_ids':vlanids}]

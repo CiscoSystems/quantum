@@ -22,21 +22,20 @@ from sqlalchemy.orm import exc
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
 from quantum.db import models_v2
+from quantum.openstack.common import cfg
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.db import network_models_v2
 from quantum.plugins.cisco.db import nexus_models_v2
 from quantum.plugins.cisco.db import ucs_models_v2
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_models_v2
 
 
 def initialize():
     'Establish database connection and load models'
-    sql_connection = "mysql://%s:%s@%s/%s" % (conf.DB_USER, conf.DB_PASS,
-                                              conf.DB_HOST, conf.DB_NAME)
-    db.configure_db({'sql_connection': sql_connection,
-                     'base': network_models_v2.model_base.BASEV2})
+    options = {"sql_connection": cfg.CONF.DATABASE.sql_connection}
+    options.update({'base': network_models_v2.model_base.BASEV2})
+    db.configure_db(options)
 
 
 def create_vlanids():
@@ -48,8 +47,8 @@ def create_vlanids():
     except exc.MultipleResultsFound:
         pass
     except exc.NoResultFound:
-        start = int(conf.VLAN_START)
-        end = int(conf.VLAN_END)
+        start = int(cfg.CONF.VLANS.vlan_start)
+        end = int(cfg.CONF.VLANS.vlan_end)
         while start <= end:
             vlanid = network_models_v2.VlanID(start)
             session.add(vlanid)

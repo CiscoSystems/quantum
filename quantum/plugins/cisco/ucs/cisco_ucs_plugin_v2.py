@@ -29,7 +29,6 @@ from quantum.plugins.cisco.common import cisco_utils as cutil
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.db import ucs_db_v2 as udb
 from quantum.plugins.cisco.l2device_plugin_base import L2DevicePluginBase
-from quantum.plugins.cisco.ucs import cisco_ucs_configuration as conf
 
 
 LOG = logging.getLogger(__name__)
@@ -39,8 +38,8 @@ class UCSVICPlugin(L2DevicePluginBase):
     """UCS Device Plugin"""
 
     def __init__(self):
-        self._driver = importutils.import_object(conf.UCSM_DRIVER)
-        LOG.debug("Loaded driver %s\n" % conf.UCSM_DRIVER)
+        self._driver = importutils.import_object(cfg.CONF.UCSM_DRIVER.name)
+        LOG.debug("Loaded driver %s\n" % cfg.CONF.UCSM_DRIVER.name)
         # TODO (Sumit) Make the counter per UCSM
         self._port_profile_counter = 0
 
@@ -161,8 +160,10 @@ class UCSVICPlugin(L2DevicePluginBase):
         blade_data_dict = least_rsvd_blade_dict[const.LEAST_RSVD_BLADE_DATA]
         new_port_profile = self._create_port_profile(tenant_id, net_id,
                                                      port_id,
-                                                     conf.DEFAULT_VLAN_NAME,
-                                                     conf.DEFAULT_VLAN_ID)
+                                                     cfg.CONF.UCSM.
+                                                     default_vlan_name,
+                                                     cfg.CONF.UCSM.
+                                                     default_vlan_id)
         profile_name = new_port_profile[const.PROFILE_NAME]
         rsvd_nic_dict = ucs_inventory.reserve_blade_interface(
             self._ucsm_ip, chassis_id,
@@ -171,8 +172,10 @@ class UCSVICPlugin(L2DevicePluginBase):
             profile_name)
         port_binding = udb.update_portbinding(port_id,
                                               portprofile_name=profile_name,
-                                              vlan_name=conf.DEFAULT_VLAN_NAME,
-                                              vlan_id=conf.DEFAULT_VLAN_ID,
+                                              vlan_name=
+                                              cfg.CONF.UCSM.default_vlan_name,
+                                              vlan_id=
+                                              cfg.CONF.UCSM.default_vlan_id,
                                               qos=qos)
         return port_binding
 
@@ -244,13 +247,13 @@ class UCSVICPlugin(L2DevicePluginBase):
         port_binding = udb.get_portbinding(port_id)
         profile_name = port_binding[const.PORTPROFILENAME]
         old_vlan_name = port_binding[const.VLANNAME]
-        new_vlan_name = conf.DEFAULT_VLAN_NAME
+        new_vlan_name = cfg.CONF.UCSM.default_vlan_name
         self._driver.change_vlan_in_profile(profile_name, old_vlan_name,
                                             new_vlan_name, self._ucsm_ip,
                                             self._ucsm_username,
                                             self._ucsm_password)
         return udb.update_portbinding(port_id, vlan_name=new_vlan_name,
-                                      vlan_id=conf.DEFAULT_VLAN_ID)
+                                      vlan_id=cfg.CONF.UCSM.default_vlan_id)
 
     def create_multiport(self, tenant_id, net_id_list, ports_num,
                          port_id_list, **kwargs):
@@ -269,8 +272,8 @@ class UCSVICPlugin(L2DevicePluginBase):
         for port_id, net_id in zip(port_id_list, net_id_list):
             new_port_profile = self._create_port_profile(
                 tenant_id, net_id, port_id,
-                conf.DEFAULT_VLAN_NAME,
-                conf.DEFAULT_VLAN_ID)
+                cfg.CONF.UCSM.default_vlan_name,
+                cfg.CONF.UCSM.default_vlan_id)
             profile_name = new_port_profile[const.PROFILE_NAME]
             rsvd_nic_dict = ucs_inventory.reserve_blade_interface(
                 self._ucsm_ip, chassis_id,
@@ -280,8 +283,8 @@ class UCSVICPlugin(L2DevicePluginBase):
             port_binding = udb.update_portbinding(
                 port_id,
                 portprofile_name=profile_name,
-                vlan_name=conf.DEFAULT_VLAN_NAME,
-                vlan_id=conf.DEFAULT_VLAN_ID,
+                vlan_name=cfg.CONF.UCSM.default_vlan_name,
+                vlan_id=cfg.CONF.UCSM.default_vlan_id,
                 qos=qos)
             port_binding_list.append(port_binding)
         return port_binding_list
@@ -297,7 +300,8 @@ class UCSVICPlugin(L2DevicePluginBase):
 
     def _get_profile_name(self, port_id):
         """Returns the port profile name based on the port UUID"""
-        profile_name = conf.PROFILE_NAME_PREFIX + cutil.get16ByteUUID(port_id)
+        profile_name = cfg.CONF.UCSM.profile_name_prefix +\
+            cutil.get16ByteUUID(port_id)
         return profile_name
 
     def _get_vlan_name_for_network(self, tenant_id, network_id):
@@ -313,7 +317,8 @@ class UCSVICPlugin(L2DevicePluginBase):
     def _create_port_profile(self, tenant_id, net_id, port_id, vlan_name,
                              vlan_id):
         """Create port profile in UCSM"""
-        if self._port_profile_counter >= int(conf.MAX_UCSM_PORT_PROFILES):
+        if self._port_profile_counter >=\
+                int(cfg.CONF.UCSM.max_ucsm_port_profiles):
             raise cexc.UCSMPortProfileLimit(net_id=net_id, port_id=port_id)
         profile_name = self._get_profile_name(port_id)
         self._driver.create_profile(profile_name, vlan_name, self._ucsm_ip,
@@ -333,5 +338,5 @@ class UCSVICPlugin(L2DevicePluginBase):
     def _set_ucsm(self, ucsm_ip):
         """Set the UCSM IP, username, and password"""
         self._ucsm_ip = ucsm_ip
-        self._ucsm_username = cred.Store.get_username(conf.UCSM_IP_ADDRESS)
-        self._ucsm_password = cred.Store.get_password(conf.UCSM_IP_ADDRESS)
+        self._ucsm_username = cred.Store.get_username(cfg.CONF.UCSM.ip_address)
+        self._ucsm_password = cred.Store.get_password(cfg.CONF.UCSM.ip_address)

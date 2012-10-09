@@ -20,11 +20,11 @@ from copy import deepcopy
 import inspect
 import logging
 
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum import quantum_plugin_base_v2
 
 
@@ -49,17 +49,21 @@ class NetworkMultiBladeV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         """
         cdb.initialize()
         cred.Store.initialize()
-        self._vlan_mgr = importutils.import_object(conf.MANAGER_CLASS)
-        for key in conf.PLUGINS[const.PLUGINS].keys():
-            plugin_obj = conf.PLUGINS[const.PLUGINS][key]
-            self._plugins[key] = importutils.import_object(plugin_obj)
-            LOG.debug("Loaded device plugin %s\n" %
-                      conf.PLUGINS[const.PLUGINS][key])
-            if key in conf.PLUGINS[const.INVENTORY].keys():
-                inventory_obj = conf.PLUGINS[const.INVENTORY][key]
-                self._inventory[key] = importutils.import_object(inventory_obj)
+        self._vlan_mgr = importutils.import_object(
+            cfg.CONF.SEGMENTATION.manager_class)
+        for key in cfg.CONF.PLUGINS.keys():
+            if cfg.CONF.PLUGINS[key] is not None:
+                plugin_obj = cfg.CONF.PLUGINS[key]
+                self._plugins[key] = importutils.import_object(plugin_obj)
+                LOG.debug("Loaded device plugin %s\n" %
+                          cfg.CONF.PLUGINS[key])
+        for key in cfg.CONF.INVENTORY.keys():
+            if cfg.CONF.INVENTORY[key] is not None:
+                inventory_obj = cfg.CONF.PLUGINS.INVENTORY[key]
+                self._inventory[key] =
+                importutils.import_object(inventory_obj)
                 LOG.debug("Loaded device inventory %s\n" %
-                          conf.PLUGINS[const.INVENTORY][key])
+                          cfg.CONF.INVENTORY[key])
 
         LOG.debug("%s.%s init done" % (__name__, self.__class__.__name__))
 

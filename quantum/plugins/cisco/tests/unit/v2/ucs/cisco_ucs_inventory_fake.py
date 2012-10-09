@@ -20,14 +20,10 @@
 import logging
 import os
 
-from quantum.common.utils import find_config_file
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
-from quantum.plugins.cisco.common import cisco_configparser as confp
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.ucs import (
-    cisco_ucs_inventory_configuration as conf,
-)
 from quantum.plugins.cisco.ucs import cisco_ucs_inventory_v2
 
 
@@ -47,13 +43,11 @@ class UCSInventory(cisco_ucs_inventory_v2.UCSInventory):
         fake_ucs_driver = "quantum.plugins.cisco.tests.unit.v2.ucs." + \
                           "fake_ucs_driver.CiscoUCSMFakeDriver"
         self._client = importutils.import_object(fake_ucs_driver)
-        conf_parser = confp.CiscoConfigParser(curdir("fake_ucs_inventory.ini"))
 
-        conf.INVENTORY = conf_parser.walk(conf_parser.dummy)
-        for ucsm in conf.INVENTORY.keys():
-            ucsm_ip = conf.INVENTORY[ucsm][const.IP_ADDRESS]
-            try:
-                cred.Store.put_credential(ucsm_ip, "username", "password")
-            except:
-                pass
+        ucsm = cfg.CONF.FAKE_UCS_INVENTORY.inventory
+        ucsm_ip = ucsm[0]
+        try:
+            cred.Store.put_credential(ucsm_ip, "username", "password")
+        except:
+            pass
         self._load_inventory()

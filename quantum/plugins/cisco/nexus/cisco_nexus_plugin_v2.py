@@ -24,6 +24,7 @@ import logging
 
 from quantum.common import exceptions as exc
 from quantum.db import api as db
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
@@ -31,7 +32,6 @@ from quantum.plugins.cisco.common import cisco_exceptions as excep
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.db import nexus_db_v2 as nxos_db
 from quantum.plugins.cisco.l2device_plugin_base import L2DevicePluginBase
-from quantum.plugins.cisco.nexus import cisco_nexus_configuration as conf
 
 
 LOG = logging.getLogger(__name__)
@@ -47,13 +47,15 @@ class NexusPlugin(L2DevicePluginBase):
         """
         Extracts the configuration parameters from the configuration file
         """
-        self._client = importutils.import_object(conf.NEXUS_DRIVER)
-        LOG.debug("Loaded driver %s\n" % conf.NEXUS_DRIVER)
-        self._nexus_ip = conf.NEXUS_IP_ADDRESS
-        self._nexus_username = cred.Store.get_username(conf.NEXUS_IP_ADDRESS)
-        self._nexus_password = cred.Store.get_password(conf.NEXUS_IP_ADDRESS)
-        self._nexus_ports = conf.NEXUS_PORTS
-        self._nexus_ssh_port = conf.NEXUS_SSH_PORT
+        self._client = importutils.import_object(cfg.CONF.NEXUS_DRIVER.name)
+        LOG.debug("Loaded driver %s\n" % cfg.CONF.NEXUS_DRIVER.name)
+        self._nexus_ip = cfg.CONF.SWITCH.nexus_ip_address
+        self._nexus_username = cred.Store.get_username(
+            cfg.CONF.SWITCH.nexus_ip_address)
+        self._nexus_password = cred.Store.get_password(
+            cfg.CONF.SWITCH.nexus_ip_address)
+        self._nexus_ports = cfg.CONF.SWITCH.ports
+        self._nexus_ssh_port = cfg.CONF.SWITCH.nexus_ssh_port
 
     def get_all_networks(self, tenant_id):
         """
