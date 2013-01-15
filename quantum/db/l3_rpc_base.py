@@ -17,6 +17,7 @@ from quantum import context as quantum_context
 from quantum import manager
 from quantum.openstack.common import jsonutils
 from quantum.openstack.common import log as logging
+from quantum.plugins.common import constants
 
 
 LOG = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ class L3RpcCallbackMixin(object):
         router_id = kwargs.get('router_id')
         # TODO(gongysh) we will use host in kwargs for multi host BP
         context = quantum_context.get_admin_context()
-        plugin = manager.QuantumManager.get_plugin()
+        plugin = manager.QuantumManager.get_service_plugins()[
+            constants.L3_ROUTER_NAT]
         routers = plugin.get_sync_data(context, router_id)
         LOG.debug(_("Routers returned to l3 agent:\n %s"),
                   jsonutils.dumps(routers, indent=5))
@@ -49,7 +51,8 @@ class L3RpcCallbackMixin(object):
         this query.
         """
         context = quantum_context.get_admin_context()
-        plugin = manager.QuantumManager.get_plugin()
+        plugin = manager.QuantumManager.get_service_plugins()[
+            constants.L3_ROUTER_NAT]
         net_id = plugin.get_external_network_id(context)
         LOG.debug(_("External network ID returned to l3 agent: %s"),
                   net_id)

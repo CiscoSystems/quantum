@@ -26,12 +26,11 @@ from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.v2 import attributes
 from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
+from quantum import manager
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
-from quantum.db import l3_db
-from quantum.db import l3_rpc_base
 # NOTE: quota_db cannot be removed, it is for db model
 from quantum.db import quota_db
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
@@ -42,6 +41,7 @@ from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
+from quantum.plugins.common import constants as service_constants
 from quantum.plugins.openvswitch.common import config
 from quantum.plugins.openvswitch.common import constants
 from quantum.plugins.openvswitch import ovs_db_v2
@@ -52,7 +52,6 @@ LOG = logging.getLogger(__name__)
 
 
 class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
-                      l3_rpc_base.L3RpcCallbackMixin,
                       sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
 
     # history
@@ -206,7 +205,6 @@ class AgentNotifierApi(proxy.RpcProxy,
 
 
 class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin,
                          sg_db_rpc.SecurityGroupServerRpcMixin):
     """Implement the Quantum abstractions using Open vSwitch.
 
@@ -229,8 +227,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "router",
-                                   "binding", "quotas", "security-group"]
+    supported_extension_aliases = ["provider", "binding", "quotas",
+                                   "security-group"]
 
     network_view = "extension:provider_network:view"
     network_set = "extension:provider_network:set"
@@ -471,10 +469,13 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                                  network)
             ovs_db_v2.add_network_binding(session, net['id'], network_type,
                                           physical_network, segmentation_id)
-
-            self._process_l3_create(context, network['network'], net['id'])
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
+            if plugin:
+                plugin._process_l3_create(context, network['network'],
+                                          net['id'])
+                plugin._extend_network_dict_l3(context, net)
             self._extend_network_dict_provider(context, net)
-            self._extend_network_dict_l3(context, net)
             # note - exception will rollback entire transaction
         LOG.debug(_("Created network: %s"), net['id'])
         return net
@@ -486,9 +487,13 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             net = super(OVSQuantumPluginV2, self).update_network(context, id,
                                                                  network)
-            self._process_l3_update(context, network['network'], id)
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
+            if plugin:
+                plugin._process_l3_update(context, network['network'], id)
+                plugin._extend_network_dict_l3(context, net)
             self._extend_network_dict_provider(context, net)
-            self._extend_network_dict_l3(context, net)
+
         return net
 
     def delete_network(self, context, id):
@@ -514,7 +519,10 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             net = super(OVSQuantumPluginV2, self).get_network(context,
                                                               id, None)
             self._extend_network_dict_provider(context, net)
-            self._extend_network_dict_l3(context, net)
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
+            if plugin:
+                plugin._extend_network_dict_l3(context, net)
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
@@ -523,12 +531,16 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             nets = super(OVSQuantumPluginV2, self).get_networks(context,
                                                                 filters,
                                                                 None)
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
             for net in nets:
                 self._extend_network_dict_provider(context, net)
-                self._extend_network_dict_l3(context, net)
+                if plugin:
+                    plugin._extend_network_dict_l3(context, net)
 
             # TODO(rkukura): Filter on extended provider attributes.
-            nets = self._filter_nets_l3(context, nets, filters)
+            if plugin:
+                nets = plugin._filter_nets_l3(context, nets, filters)
 
         return [self._fields(net, fields) for net in nets]
 
@@ -610,12 +622,22 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # if needed, check to see if this is a port owned by
         # and l3-router.  If so, we should prevent deletion.
-        if l3_port_check:
-            self.prevent_l3_port_deletion(context, id)
+        # TODO (bob-melander): This is preferably replaced with some
+        # generic mechanism to check if ports created and "owned"
+        # by service plugins can be deleted or not.
+        plugin = manager.QuantumManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        if plugin and l3_port_check:
+            plugin.prevent_l3_port_deletion(context, id)
 
         session = context.session
         with session.begin(subtransactions=True):
-            self.disassociate_floatingips(context, id)
+            # TODO (bob-melander): The following two lines are preferably be
+            # replaced with some generic mechanism allowing service plugins
+            # to be notified when a port is about to be removed so they can
+            # clean up state associated with that port.
+            if plugin:
+                plugin.disassociate_floatingips(context, id)
             port = self.get_port(context, id)
             self._delete_port_security_group_bindings(context, id)
             super(OVSQuantumPluginV2, self).delete_port(context, id)

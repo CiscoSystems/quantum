@@ -45,6 +45,7 @@ from quantum.openstack.common import log as logging
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common.notifier import test_notifier
 from quantum.openstack.common import uuidutils
+from quantum.plugins.common import constants as service_constants
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_db_plugin
 from quantum.tests.unit import test_extensions
@@ -240,16 +241,16 @@ class L3NatExtensionTestCaseXML(L3NatExtensionTestCase):
     fmt = 'xml'
 
 
-# This plugin class is just for testing
-class TestL3NatPlugin(db_base_plugin_v2.QuantumDbPluginV2,
-                      l3_db.L3_NAT_db_mixin):
+# This plugin class is for tests with plugin that integrates L3.
+class TestL3NatIntPlugin(db_base_plugin_v2.QuantumDbPluginV2,
+                         l3_db.L3_NAT_db_mixin):
     supported_extension_aliases = ["router"]
 
     def create_network(self, context, network):
         session = context.session
         with session.begin(subtransactions=True):
-            net = super(TestL3NatPlugin, self).create_network(context,
-                                                              network)
+            net = super(TestL3NatIntPlugin, self).create_network(context,
+                                                                 network)
             self._process_l3_create(context, network['network'], net['id'])
             self._extend_network_dict_l3(context, net)
         return net
@@ -258,8 +259,8 @@ class TestL3NatPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
         session = context.session
         with session.begin(subtransactions=True):
-            net = super(TestL3NatPlugin, self).update_network(context, id,
-                                                              network)
+            net = super(TestL3NatIntPlugin, self).update_network(context, id,
+                                                                 network)
             self._process_l3_update(context, network['network'], id)
             self._extend_network_dict_l3(context, net)
         return net
@@ -267,16 +268,16 @@ class TestL3NatPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_network(self, context, id):
         session = context.session
         with session.begin(subtransactions=True):
-            net = super(TestL3NatPlugin, self).delete_network(context, id)
+            net = super(TestL3NatIntPlugin, self).delete_network(context, id)
 
     def get_network(self, context, id, fields=None):
-        net = super(TestL3NatPlugin, self).get_network(context, id, None)
+        net = super(TestL3NatIntPlugin, self).get_network(context, id, None)
         self._extend_network_dict_l3(context, net)
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
-        nets = super(TestL3NatPlugin, self).get_networks(context, filters,
-                                                         None)
+        nets = super(TestL3NatIntPlugin, self).get_networks(context, filters,
+                                                            None)
         for net in nets:
             self._extend_network_dict_l3(context, net)
         nets = self._filter_nets_l3(context, nets, filters)
@@ -287,41 +288,72 @@ class TestL3NatPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         if l3_port_check:
             self.prevent_l3_port_deletion(context, id)
         self.disassociate_floatingips(context, id)
-        return super(TestL3NatPlugin, self).delete_port(context, id)
+        return super(TestL3NatIntPlugin, self).delete_port(context, id)
 
 
-class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
+# This plugin class is for tests with plugin not supporting L3.
+class TestNoL3Plugin(db_base_plugin_v2.QuantumDbPluginV2):
 
-    def _create_network(self, fmt, name, admin_status_up, **kwargs):
-        """ Override the routine for allowing the router:external attribute """
-        # attributes containing a colon should be passed with
-        # a double underscore
-        new_args = dict(itertools.izip(map(lambda x: x.replace('__', ':'),
-                                           kwargs),
-                                       kwargs.values()))
-        arg_list = (l3.EXTERNAL,)
-        return super(L3NatDBTestCase, self)._create_network(fmt,
-                                                            name,
-                                                            admin_status_up,
-                                                            arg_list=arg_list,
-                                                            **new_args)
+    def create_network(self, context, network):
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(TestNoL3Plugin, self).create_network(context, network)
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
+            if plugin:
+                plugin._process_l3_create(context, network['network'],
+                                          net['id'])
+                plugin._extend_network_dict_l3(context, net)
+        return net
 
-    def setUp(self):
-        test_config['plugin_name_v2'] = (
-            'quantum.tests.unit.test_l3_plugin.TestL3NatPlugin')
-        # for these tests we need to enable overlapping ips
-        cfg.CONF.set_default('allow_overlapping_ips', True)
-        ext_mgr = L3TestExtensionManager()
-        test_config['extension_manager'] = ext_mgr
-        super(L3NatDBTestCase, self).setUp()
+    def update_network(self, context, id, network):
 
-        # Set to None to reload the drivers
-        notifier_api._drivers = None
-        cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(TestNoL3Plugin, self).update_network(context, id,
+                                                             network)
+            plugin = manager.QuantumManager.get_service_plugins().get(
+                service_constants.L3_ROUTER_NAT)
+            if plugin:
+                plugin._process_l3_update(context, network['network'], id)
+                plugin._extend_network_dict_l3(context, net)
+        return net
 
-    def tearDown(self):
-        test_notifier.NOTIFICATIONS = []
-        super(L3NatDBTestCase, self).tearDown()
+    def delete_network(self, context, id):
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(TestNoL3Plugin, self).delete_network(context, id)
+
+    def get_network(self, context, id, fields=None):
+        net = super(TestNoL3Plugin, self).get_network(context, id, None)
+        plugin = manager.QuantumManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        if plugin:
+            plugin._extend_network_dict_l3(context, net)
+        return self._fields(net, fields)
+
+    def get_networks(self, context, filters=None, fields=None):
+        nets = super(TestNoL3Plugin, self).get_networks(context, filters, None)
+        plugin = manager.QuantumManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        if plugin:
+            for net in nets:
+                plugin._extend_network_dict_l3(context, net)
+            nets = plugin._filter_nets_l3(context, nets, filters)
+
+        return [self._fields(net, fields) for net in nets]
+
+    def delete_port(self, context, id, l3_port_check=True):
+        plugin = manager.QuantumManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        if plugin:
+            if l3_port_check:
+                plugin.prevent_l3_port_deletion(context, id)
+            plugin.disassociate_floatingips(context, id)
+        return super(TestNoL3Plugin, self).delete_port(context, id)
+
+
+class L3NatDBTestCaseBase(object):
 
     def _create_router(self, fmt, tenant_id, name=None,
                        admin_state_up=None, set_context=False,
@@ -340,7 +372,6 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
             # create a specific auth context for this request
             router_req.environ['quantum.context'] = context.Context(
                 '', tenant_id)
-
         return router_req.get_response(self.ext_api)
 
     def _make_router(self, fmt, tenant_id, name=None,
@@ -952,7 +983,7 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                     r['router']['id'],
                     s1['subnet']['network_id'])
                 self._update('networks', s1['subnet']['network_id'],
-                             {'network': {'router:external': False}},
+                             {'network': {l3.EXTERNAL: False}},
                              expected_code=exc.HTTPConflict.code)
                 self._remove_external_gateway_from_router(
                     r['router']['id'],
@@ -968,7 +999,7 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                         r['router']['id'],
                         s1['subnet']['network_id'])
                     self._update('networks', testnet['network']['id'],
-                                 {'network': {'router:external': False}})
+                                 {'network': {l3.EXTERNAL: False}})
                     self._remove_external_gateway_from_router(
                         r['router']['id'],
                         s1['subnet']['network_id'])
@@ -1277,75 +1308,6 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                     break
         self.assertTrue(found)
 
-    def test_list_nets_external(self):
-        with self.network() as n1:
-            self._set_net_external(n1['network']['id'])
-            with self.network() as n2:
-                body = self._list('networks')
-                self.assertEqual(len(body['networks']), 2)
-
-                body = self._list('networks',
-                                  query_params="%s=True" % l3.EXTERNAL)
-                self.assertEqual(len(body['networks']), 1)
-
-                body = self._list('networks',
-                                  query_params="%s=False" % l3.EXTERNAL)
-                self.assertEqual(len(body['networks']), 1)
-
-    def test_get_network_succeeds_without_filter(self):
-        plugin = manager.QuantumManager.get_plugin()
-        ctx = context.Context(None, None, is_admin=True)
-        result = plugin.get_networks(ctx, filters=None)
-        self.assertEqual(result, [])
-
-    def test_network_filter_hook_admin_context(self):
-        plugin = manager.QuantumManager.get_plugin()
-        ctx = context.Context(None, None, is_admin=True)
-        model = models_v2.Network
-        conditions = plugin._network_filter_hook(ctx, model, [])
-        self.assertEqual(conditions, [])
-
-    def test_network_filter_hook_nonadmin_context(self):
-        plugin = manager.QuantumManager.get_plugin()
-        ctx = context.Context('edinson', 'cavani')
-        model = models_v2.Network
-        txt = "externalnetworks.network_id IS NOT NULL"
-        conditions = plugin._network_filter_hook(ctx, model, [])
-        self.assertEqual(conditions.__str__(), txt)
-        # Try to concatenate confitions
-        conditions = plugin._network_filter_hook(ctx, model, conditions)
-        self.assertEqual(conditions.__str__(), "%s OR %s" % (txt, txt))
-
-    def test_create_port_external_network_non_admin_fails(self):
-        with self.network(router__external=True) as ext_net:
-            with self.subnet(network=ext_net) as ext_subnet:
-                with self.assertRaises(exc.HTTPClientError) as ctx_manager:
-                    with self.port(subnet=ext_subnet,
-                                   set_context='True',
-                                   tenant_id='noadmin'):
-                        pass
-                    self.assertEqual(ctx_manager.exception.code, 403)
-
-    def test_create_port_external_network_admin_suceeds(self):
-        with self.network(router__external=True) as ext_net:
-            with self.subnet(network=ext_net) as ext_subnet:
-                    with self.port(subnet=ext_subnet) as port:
-                        self.assertEqual(port['port']['network_id'],
-                                         ext_net['network']['id'])
-
-    def test_create_external_network_non_admin_fails(self):
-        with self.assertRaises(exc.HTTPClientError) as ctx_manager:
-            with self.network(router__external=True,
-                              set_context='True',
-                              tenant_id='noadmin'):
-                pass
-            self.assertEqual(ctx_manager.exception.code, 403)
-
-    def test_create_external_network_admin_suceeds(self):
-        with self.network(router__external=True) as ext_net:
-            self.assertEqual(ext_net['network'][l3.EXTERNAL],
-                             True)
-
     def _test_notify_op_agent(self, target_func, *args):
         l3_rpc_agent_api_str = (
             'quantum.db.l3_rpc_agent_api.L3AgentNotifyAPI')
@@ -1406,6 +1368,12 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
     def test_floatingips_op_agent(self):
         self._test_notify_op_agent(self._test_floatingips_op_agent)
 
+    def _get_core_plugin(self):
+        return manager.QuantumManager.get_plugin()
+
+    def _get_test_plugin(self):
+        return manager.QuantumManager.get_plugin()
+
     def test_l3_agent_routers_query_interfaces(self):
         with self.router() as r:
             with self.port(no_delete=True) as p:
@@ -1414,7 +1382,7 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                               None,
                                               p['port']['id'])
 
-                plugin = TestL3NatPlugin()
+                plugin = self._get_test_plugin()
                 routers = plugin.get_sync_data(context.get_admin_context(),
                                                None)
                 self.assertEqual(1, len(routers))
@@ -1444,10 +1412,11 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                        'subnet_id': subnet['subnet']['id']},
                                       {'ip_address': '9.0.1.5',
                                        'subnet_id': subnet['subnet']['id']}]}}
-                    plugin = TestL3NatPlugin()
+                    core_plugin = self._get_core_plugin()
+                    service_plugin = self._get_test_plugin()
                     ctx = context.get_admin_context()
-                    plugin.update_port(ctx, p['port']['id'], port)
-                    routers = plugin.get_sync_data(ctx, None)
+                    core_plugin.update_port(ctx, p['port']['id'], port)
+                    routers = service_plugin.get_sync_data(ctx, None)
                     self.assertEqual(1, len(routers))
                     interfaces = routers[0].get(l3_constants.INTERFACE_KEY, [])
                     self.assertEqual(1, len(interfaces))
@@ -1464,7 +1433,7 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                 self._add_external_gateway_to_router(
                     r['router']['id'],
                     s['subnet']['network_id'])
-                plugin = TestL3NatPlugin()
+                plugin = self._get_test_plugin()
                 routers = plugin.get_sync_data(context.get_admin_context(),
                                                [r['router']['id']])
                 self.assertEqual(1, len(routers))
@@ -1476,7 +1445,7 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
 
     def test_l3_agent_routers_query_floatingips(self):
         with self.floatingip_with_assoc() as fip:
-            plugin = TestL3NatPlugin()
+            plugin = self._get_test_plugin()
             routers = plugin.get_sync_data(context.get_admin_context(),
                                            [fip['floatingip']['router_id']])
             self.assertEqual(1, len(routers))
@@ -1490,5 +1459,95 @@ class L3NatDBTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
             self.assertTrue(floatingips[0]['router_id'] is not None)
 
 
-class L3NatDBTestCaseXML(L3NatDBTestCase):
+# Test L3 for a plugin with L3 integrated.
+class L3NatDBIntTestCase(L3NatDBTestCaseBase,
+                         test_db_plugin.QuantumDbPluginV2TestCase):
+
+    def _create_network(self, fmt, name, admin_status_up, **kwargs):
+        """ Override the routine for allowing the router:external attribute """
+        # attributes containing a colon should be passed with
+        # a double underscore
+        new_args = dict(itertools.izip(map(lambda x: x.replace('__', ':'),
+                                           kwargs),
+                                       kwargs.values()))
+        arg_list = (l3.EXTERNAL,)
+        return super(L3NatDBIntTestCase, self)._create_network(
+            fmt,
+            name,
+            admin_status_up,
+            arg_list=arg_list,
+            **new_args)
+
+    def setUp(self):
+        test_config['plugin_name_v2'] = (
+            'quantum.tests.unit.test_l3_plugin.TestL3NatIntPlugin')
+        # for these tests we need to enable overlapping ips
+        cfg.CONF.set_default('allow_overlapping_ips', True)
+        ext_mgr = L3TestExtensionManager()
+        test_config['extension_manager'] = ext_mgr
+        super(L3NatDBIntTestCase, self).setUp()
+
+        # Set to None to reload the drivers
+        notifier_api._drivers = None
+        cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
+
+    def tearDown(self):
+        test_notifier.NOTIFICATIONS = []
+        del test_config['extension_manager']
+        super(L3NatDBIntTestCase, self).tearDown()
+
+
+# Test L3 for a separate L3 service plugin.
+class L3NatDBSepTestCase(L3NatDBTestCaseBase,
+                         test_db_plugin.QuantumDbPluginV2TestCase):
+
+    def _create_network(self, fmt, name, admin_status_up, **kwargs):
+        """ Override the routine for allowing the router:external attribute """
+        # attributes containing a colon should be passed with
+        # a double underscore
+        new_args = dict(itertools.izip(map(lambda x: x.replace('__', ':'),
+                                           kwargs),
+                                       kwargs.values()))
+        arg_list = (l3.EXTERNAL,)
+        return super(L3NatDBSepTestCase, self)._create_network(
+            fmt,
+            name,
+            admin_status_up,
+            arg_list=arg_list,
+            **new_args)
+
+    def setUp(self):
+        # the plugin without L3 support
+        test_config['plugin_name_v2'] = (
+            'quantum.tests.unit.test_l3_plugin.TestNoL3Plugin')
+        # the L3 service plugin
+        l3_plugin = ('quantum.tests.unit.fake_l3_service_plugin.'
+                     'FakeL3ServicePlugin')
+        cfg.CONF.set_override('service_plugins', [l3_plugin])
+
+        # for these tests we need to enable overlapping ips
+        cfg.CONF.set_default('allow_overlapping_ips', True)
+        ext_mgr = L3TestExtensionManager()
+        test_config['extension_manager'] = ext_mgr
+        super(L3NatDBSepTestCase, self).setUp()
+
+        # Set to None to reload the drivers
+        notifier_api._drivers = None
+        cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
+
+    def tearDown(self):
+        test_notifier.NOTIFICATIONS = []
+        del test_config['extension_manager']
+        super(L3NatDBSepTestCase, self).tearDown()
+
+    def _get_test_plugin(self):
+        return manager.QuantumManager.get_service_plugins()[
+            service_constants.L3_ROUTER_NAT]
+
+
+class L3NatDBIntTestCaseXML(L3NatDBIntTestCase):
+    fmt = 'xml'
+
+
+class L3NatDBSepTestCaseXML(L3NatDBSepTestCase):
     fmt = 'xml'

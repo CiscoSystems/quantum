@@ -141,6 +141,8 @@ class L3NATAgent(manager.Manager):
         cfg.StrOpt('l3_agent_manager',
                    default='quantum.agent.l3_agent.L3NATAgent',
                    help=_("The Quantum L3 Agent manager.")),
+        cfg.BoolOpt('separate_l3_plugin', default=False,
+                    help=_("L3 routing is handled by separate L3 plugin")),
     ]
 
     def __init__(self, host, conf=None):
@@ -161,7 +163,14 @@ class L3NATAgent(manager.Manager):
             LOG.exception(_("Error importing interface driver '%s'"),
                           self.conf.interface_driver)
             sys.exit(1)
-        self.plugin_rpc = L3PluginApi(topics.PLUGIN, host)
+        # An alternative to this setting could be that the L3 agent
+        # "probes" the two topics (by making a RPC) to determine which
+        # topic to use.
+        if self.conf.separate_l3_plugin:
+            topic = topics.L3PLUGIN
+        else:
+            topic = topics.PLUGIN
+        self.plugin_rpc = L3PluginApi(topic, host)
         self.fullsync = True
         self.sync_sem = semaphore.Semaphore(1)
         if self.conf.use_namespaces:

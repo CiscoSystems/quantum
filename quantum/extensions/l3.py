@@ -26,6 +26,7 @@ from quantum.api.v2 import base
 from quantum.common import exceptions as qexception
 from quantum import manager
 from quantum.openstack.common import cfg
+from quantum.plugins.common import constants
 from quantum import quota
 
 
@@ -188,7 +189,8 @@ class L3(extensions.ExtensionDescriptor):
         my_plurals = [(key, key[:-1]) for key in RESOURCE_ATTRIBUTE_MAP.keys()]
         attr.PLURALS.update(dict(my_plurals))
         exts = []
-        plugin = manager.QuantumManager.get_plugin()
+        plugin = manager.QuantumManager.get_service_plugins()[
+            constants.L3_ROUTER_NAT]
         for resource_name in ['router', 'floatingip']:
             collection_name = resource_name + "s"
             params = RESOURCE_ATTRIBUTE_MAP.get(collection_name, dict())

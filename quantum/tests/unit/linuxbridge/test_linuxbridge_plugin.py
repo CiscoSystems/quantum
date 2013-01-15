@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from quantum.extensions import portbindings
+from quantum.openstack.common import cfg
 from quantum.tests.unit import _test_extension_portbindings as test_bindings
 from quantum.tests.unit import test_db_plugin as test_plugin
 
