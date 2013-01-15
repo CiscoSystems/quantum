@@ -18,6 +18,7 @@
 from quantum.common import exceptions as exc
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
+from quantum.db import ext_net_db
 from quantum.db import l3_db
 from quantum.db import models_v2
 from quantum.extensions.flavor import (FLAVOR_NETWORK, FLAVOR_ROUTER)
@@ -44,13 +45,14 @@ class FaildToAddFlavorBinding(exc.QuantumException):
 
 
 class MetaPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                   l3_db.L3_NAT_db_mixin):
+                   ext_net_db.Ext_net_db_mixin, l3_db.L3_NAT_db_mixin):
 
     def __init__(self, configfile=None):
         LOG.debug(_("Start initializing metaplugin"))
         self.supported_extension_aliases = \
             cfg.CONF.META.supported_extension_aliases.split(',')
-        self.supported_extension_aliases += ['flavor', 'router']
+        self.supported_extension_aliases += ['flavor', 'router',
+                                             "externalnet"]
 
         # Ignore config option overapping
         def _is_opt_registered(opts, opt):

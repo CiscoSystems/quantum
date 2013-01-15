@@ -20,6 +20,7 @@ import os
 import mock
 import webob.exc
 
+from quantum.common import constants as l3_constants
 import quantum.common.test_lib as test_lib
 from quantum import context
 from quantum.extensions import providernet as pnet
@@ -251,10 +252,37 @@ class TestNiciraSecurityGroup(ext_sg.TestSecurityGroups,
     pass
 
 
-class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
+class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBIntTestCase,
                               NiciraPluginV2TestCase):
 
         def test_floatingip_with_assoc_fails(self):
             self._test_floatingip_with_assoc_fails(
                 'quantum.plugins.nicira.nicira_nvp_plugin.'
                 'QuantumPlugin.NvpPluginV2')
+
+        # Oddly, this test (as done in test_l3_plugin.L3NatDBTestCaseBase)
+        # fails unless the plugin is created as below and with the mock.
+        # Therefore it was put here, with that slight modification.
+        def test_l3_agent_routers_query_interfaces(self):
+            with self.router() as r:
+                with self.port(no_delete=True) as p:
+                    self._router_interface_action('add',
+                                                  r['router']['id'],
+                                                  None,
+                                                  p['port']['id'])
+
+                    plugin = test_l3_plugin.TestL3NatIntPlugin()
+                    plugin._core_plugin = mock.MagicMock(return_value=plugin)
+                    routers = plugin.get_sync_data(context.get_admin_context(),
+                                                   None)
+                    self.assertEqual(1, len(routers))
+                    interfaces = routers[0][l3_constants.INTERFACE_KEY]
+                    self.assertEqual(1, len(interfaces))
+                    subnet_id = interfaces[0]['subnet']['id']
+                    wanted_subnetid = p['port']['fixed_ips'][0]['subnet_id']
+                    self.assertEqual(wanted_subnetid, subnet_id)
+                    # clean-up
+                    self._router_interface_action('remove',
+                                                  r['router']['id'],
+                                                  None,
+                                                  p['port']['id'])

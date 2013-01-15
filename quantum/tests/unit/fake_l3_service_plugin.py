@@ -15,26 +15,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# service type constants:
-CORE = "CORE"
-DUMMY = "DUMMY"
-LOADBALANCER = "LOADBALANCER"
-L3_ROUTER_NAT = "L3_ROUTER_NAT"
+from quantum.db import api as qdbapi
+from quantum.db import l3_db
+from quantum.db import model_base
+from quantum.plugins.common import constants as service_constants
 
-# TODO(salvatore-orlando): Move these (or derive them) from conf file
-ALLOWED_SERVICES = [CORE, DUMMY, LOADBALANCER, L3_ROUTER_NAT]
 
-COMMON_PREFIXES = {
-    CORE: "",
-    DUMMY: "/dummy_svc",
-    LOADBALANCER: "/lb",
-    L3_ROUTER_NAT: "",
-}
+# A fake l3 service plugin class for plugins that delegate
+# away L3 routing functionality
+class FakeL3ServicePlugin(l3_db.L3_NAT_db_mixin):
+    def __init__(self):
+        qdbapi.register_models(base=model_base.BASEV2)
 
-# Service operation status constants
-ACTIVE = "ACTIVE"
-PENDING_CREATE = "PENDING_CREATE"
-PENDING_UPDATE = "PENDING_UPDATE"
-PENDING_DELETE = "PENDING_DELETE"
-INACTIVE = "INACTIVE"
-ERROR = "ERROR"
+    def get_plugin_type(self):
+        return service_constants.L3_ROUTER_NAT
+
+    def get_plugin_description(self):
+        return "Fake L3 Router Service Plugin for testing"

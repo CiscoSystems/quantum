@@ -1,0 +1,28 @@
+This service plugin implements the L3 routing functionality
+(resources router and floatingip) that in Folsom release was
+provided by core plugins (openvswitch, linuxbridge, ... etc).
+
+Core plugins can now choose not to implement L3 routing
+functionality and instead delegate that to the L3 routing
+service plugin.
+
+The required changes to a core plugin are in that case:
+- Do not inherit 'l3_db.L3_NAT_db_mixin' anymore.
+- Remove "router" from 'supported_extension_aliases'.
+- Modify any 'self' references to members in L3_NAT_db_mixin
+  to instead use
+  'manager.QuantumManager.get_service_plugins().get(constants.L3_ROUTER_NAT)'
+  For example,
+     self.prevent_l3_port_deletion(...)
+  becomes something like
+     plugin = manager.QuantumManager.get_service_plugins().get(
+         constants.L3_ROUTER_NAT)
+     if plugin:
+         plugin.prevent_l3_port_deletion(...)
+- Do not inherit 'l3_rpc_base.L3RpcCallbackMixin' in
+  any '*RpcCallbacks' class.
+
+To use the L3 routing service plugin, please add
+'quantum.plugins.services.l3_router.l3_router_plugin.L3RouterPlugin'
+to 'service_plugins' in '/etc/quantum/quantum.conf'. I.e.,
+service_plugins = quantum.plugins.services.l3_router.l3_router_plugin.L3RouterPlugin

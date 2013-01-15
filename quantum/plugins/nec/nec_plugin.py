@@ -22,6 +22,7 @@ from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum import context
 from quantum.db import dhcp_rpc_base
+from quantum.db import ext_net_db
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 #NOTE(amotoki): quota_db cannot be removed, it is for db model
@@ -58,6 +59,7 @@ class OperationalStatus:
 
 
 class NECPluginV2(nec_plugin_base.NECPluginV2Base,
+                  ext_net_db.Ext_net_db_mixin,
                   l3_db.L3_NAT_db_mixin,
                   sg_db_rpc.SecurityGroupServerRpcMixin):
     """NECPluginV2 controls an OpenFlow Controller.
@@ -73,8 +75,8 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
     information to and from the plugin.
     """
 
-    supported_extension_aliases = ["router", "quotas", "binding",
-                                   "security-group"]
+    supported_extension_aliases = ["router", "externalnet", "quotas",
+                                   "binding", "security-group"]
 
     binding_view = "extension:port_binding:view"
     binding_set = "extension:port_binding:set"

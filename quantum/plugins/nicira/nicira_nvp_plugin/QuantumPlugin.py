@@ -35,12 +35,14 @@ from quantum.common import topics
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
+from quantum.db import ext_net_db
 from quantum.db import l3_db
 from quantum.db import models_v2
 from quantum.db import portsecurity_db
 # NOTE: quota_db cannot be removed, it is for db model
 from quantum.db import quota_db
 from quantum.db import securitygroups_db
+from quantum.extensions import ext_net
 from quantum.extensions import l3
 from quantum.extensions import portsecurity as psec
 from quantum.extensions import providernet as pnet
@@ -118,6 +120,7 @@ class NVPRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
+                  ext_net_db.Ext_net_db_mixin,
                   l3_db.L3_NAT_db_mixin,
                   portsecurity_db.PortSecurityDbMixin,
                   securitygroups_db.SecurityGroupDbMixin,
@@ -128,7 +131,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     """
 
     supported_extension_aliases = ["provider", "quotas", "port-security",
-                                   "router", "security-group"]
+                                   "externalnet", "router", "security-group"]
     __native_bulk_support = True
 
     # Default controller cluster
@@ -719,7 +722,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                           "supported by this plugin. Ignoring setting for "
                           "network %s"), net_data.get('name', '<unknown>'))
         target_cluster = self._find_target_cluster(net_data)
-        external = net_data.get(l3.EXTERNAL)
+        external = net_data.get(ext_net.EXTERNAL)
         if (not attr.is_attr_set(external) or
             attr.is_attr_set(external) and not external):
             nvp_binding_type = net_data.get(pnet.NETWORK_TYPE)
@@ -934,7 +937,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         for quantum_lswitch in quantum_lswitches:
             # Skip external networks as they do not exist in NVP
-            if quantum_lswitch[l3.EXTERNAL]:
+            if quantum_lswitch[ext_net.EXTERNAL]:
                 continue
             elif quantum_lswitch['id'] not in nvp_lswitches:
                 raise nvp_exc.NvpOutOfSyncException()

@@ -24,6 +24,7 @@ UPDATE = 'update'
 
 AGENT = 'q-agent-notifier'
 PLUGIN = 'q-plugin'
+L3PLUGIN = 'q-l3-plugin'
 DHCP = 'q-dhcp-notifer'
 
 L3_AGENT = 'l3_agent'

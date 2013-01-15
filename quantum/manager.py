@@ -98,6 +98,16 @@ class QuantumManager(object):
         # TODO (enikanorov): make core plugin the same as
         # the rest of service plugins
         self.service_plugins = {constants.CORE: self.plugin}
+        # TODO (bob-melander): if core plugins could report the service types
+        # they support (with a get_service_types() function) then the
+        # following:
+        #      for t in self.plugin.get_service_types():
+        #          self.service_plugins[t] = self.plugin
+        # could replace the line above it and this not so pretty check:
+        if hasattr(self.plugin, 'create_router'):
+            # The core plugin implements L3 router/NAT functionality.
+            self.service_plugins[constants.L3_ROUTER_NAT] = self.plugin
+            LOG.info(_("Loaded plugin provides L3 router functionality"))
         self._load_service_plugins()
 
     def _load_service_plugins(self):
@@ -119,7 +129,7 @@ class QuantumManager(object):
             # for the same type is a fatal exception
             if plugin_inst.get_plugin_type() in self.service_plugins:
                 raise Exception(_("Multiple plugins for service "
-                                "%s were configured"),
+                                "%s were configured") %
                                 plugin_inst.get_plugin_type())
 
             self.service_plugins[plugin_inst.get_plugin_type()] = plugin_inst

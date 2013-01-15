@@ -40,7 +40,6 @@ class TestDebugCommands(unittest.TestCase):
         cfg.CONF.set_override('use_namespaces', True)
         config.register_root_helper(cfg.CONF)
 
-        self.addCleanup(mock.patch.stopall)
         device_exists_p = mock.patch(
             'quantum.agent.linux.ip_lib.device_exists', return_value=False)
         device_exists_p.start()
@@ -101,6 +100,10 @@ class TestDebugCommands(unittest.TestCase):
         self.app.debug_agent = QuantumDebugAgent(cfg.CONF,
                                                  client_inst,
                                                  mock_driver)
+
+    def tearDown(self):
+        cfg.CONF.reset()
+        mock.patch.stopall()
 
     def test_create_probe(self):
         cmd = commands.CreateProbe(self.app, None)

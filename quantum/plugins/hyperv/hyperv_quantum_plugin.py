@@ -20,6 +20,7 @@ from quantum.api.v2 import attributes
 from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum.db import db_base_plugin_v2
+from quantum.db import ext_net_db
 from quantum.db import l3_db
 # NOTE: quota_db cannot be removed, it is for db model
 from quantum.db import quota_db
@@ -141,13 +142,14 @@ class VlanNetworkProvider(BaseNetworkProvider):
 
 
 class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
-                          l3_db.L3_NAT_db_mixin):
+                          ext_net_db.Ext_net_db_mixin, l3_db.L3_NAT_db_mixin):
 
     # This attribute specifies whether the plugin supports or not
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "router", "binding", "quotas"]
+    supported_extension_aliases = ["provider", "router", "externalnet",
+                                   "binding", "quotas"]
 
     network_view = "extension:provider_network:view"
     network_set = "extension:provider_network:set"

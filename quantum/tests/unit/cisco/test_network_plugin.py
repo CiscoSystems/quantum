@@ -22,6 +22,7 @@ from quantum.manager import QuantumManager
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.db import network_models_v2
+from quantum.openstack.common import cfg
 from quantum.tests.unit import test_db_plugin
 
 LOG = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ class CiscoNetworkPluginV2TestCase(test_db_plugin.QuantumDbPluginV2TestCase):
     def setUp(self):
         def new_init():
             db.configure_db()
+
+        # we need a fake L3 service plugin
+        l3_plugin = ('quantum.tests.unit.fake_l3_service_plugin.'
+                     'FakeL3ServicePlugin')
+        cfg.CONF.set_override('service_plugins', [l3_plugin])
 
         with mock.patch.object(network_db_v2,
                                'initialize', new=new_init):

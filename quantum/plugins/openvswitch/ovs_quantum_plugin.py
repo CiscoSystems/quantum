@@ -26,12 +26,12 @@ from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.v2 import attributes
 from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
+from quantum import manager
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
-from quantum.db import l3_db
-from quantum.db import l3_rpc_base
+from quantum.db import ext_net_db
 # NOTE: quota_db cannot be removed, it is for db model
 from quantum.db import quota_db
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
@@ -42,6 +42,7 @@ from quantum.openstack.common import cfg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
+from quantum.plugins.common import constants as service_constants
 from quantum.plugins.openvswitch.common import config
 from quantum.plugins.openvswitch.common import constants
 from quantum.plugins.openvswitch import ovs_db_v2
@@ -52,7 +53,6 @@ LOG = logging.getLogger(__name__)
 
 
 class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
-                      l3_rpc_base.L3RpcCallbackMixin,
                       sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
 
     # history
@@ -206,7 +206,7 @@ class AgentNotifierApi(proxy.RpcProxy,
 
 
 class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin,
+                         ext_net_db.Ext_net_db_mixin,
                          sg_db_rpc.SecurityGroupServerRpcMixin):
     """Implement the Quantum abstractions using Open vSwitch.
 
@@ -229,7 +229,7 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "router",
+    supported_extension_aliases = ["provider", "externalnet",
                                    "binding", "quotas", "security-group"]
 
     network_view = "extension:provider_network:view"
@@ -610,12 +610,22 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # if needed, check to see if this is a port owned by
         # and l3-router.  If so, we should prevent deletion.
-        if l3_port_check:
-            self.prevent_l3_port_deletion(context, id)
+        # TODO (bob-melander): This is preferably replaced with some
+        # generic mechanism to check if ports created and "owned"
+        # by service plugins can be deleted or not.
+        plugin = manager.QuantumManager.get_service_plugins().get(
+            service_constants.L3_ROUTER_NAT)
+        if plugin and l3_port_check:
+            plugin.prevent_l3_port_deletion(context, id)
 
         session = context.session
         with session.begin(subtransactions=True):
-            self.disassociate_floatingips(context, id)
+            # TODO (bob-melander): The following two lines are preferably be
+            # replaced with some generic mechanism allowing service plugins
+            # to be notified when a port is about to be removed so they can
+            # clean up state associated with that port.
+            if plugin:
+                plugin.disassociate_floatingips(context, id)
             port = self.get_port(context, id)
             self._delete_port_security_group_bindings(context, id)
             super(OVSQuantumPluginV2, self).delete_port(context, id)

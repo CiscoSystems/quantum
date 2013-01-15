@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from quantum.extensions import portbindings
+from quantum.openstack.common import cfg
 from quantum.tests.unit import _test_extension_portbindings as test_bindings
 from quantum.tests.unit import test_db_plugin as test_plugin
 
@@ -24,6 +25,10 @@ class OpenvswitchPluginV2TestCase(test_plugin.QuantumDbPluginV2TestCase):
                     'ovs_quantum_plugin.OVSQuantumPluginV2')
 
     def setUp(self):
+        # we need a fake L3 service plugin
+        l3_plugin = ('quantum.tests.unit.fake_l3_service_plugin.'
+                     'FakeL3ServicePlugin')
+        cfg.CONF.set_override('service_plugins', [l3_plugin])
         super(OpenvswitchPluginV2TestCase, self).setUp(self._plugin_name)
         self.port_create_status = 'DOWN'
 

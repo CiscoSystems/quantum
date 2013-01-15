@@ -26,6 +26,7 @@ from quantum.common import topics
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
+from quantum.db import ext_net_db
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 from quantum.db import models_v2
@@ -56,9 +57,9 @@ class RyuRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
 
 class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         ext_net_db.Ext_net_db_mixin, l3_db.L3_NAT_db_mixin):
 
-    supported_extension_aliases = ["router"]
+    supported_extension_aliases = ["router", "externalnet"]
 
     def __init__(self, configfile=None):
         db.configure_db()
