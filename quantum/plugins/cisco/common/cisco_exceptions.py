@@ -150,3 +150,56 @@ class InvalidDetach(exceptions.QuantumException):
     message = _("Unable to unplug the attachment %(att_id)s from port "
                 "%(port_id)s for network %(net_id)s. The attachment "
                 "%(att_id)s does not exist.")
+
+
+class ProfileAlreadyExists(exceptions.QuantumException):
+    """Profile cannot be created since it already exists"""
+    message = _("Profile %(profile_id)s "
+                "already exists.")
+
+
+class ProfileIdNotFound(exceptions.QuantumException):
+    """Profile cannot be found"""
+    message = _("Profile %(profile_id)s could not be found ")
+
+
+class PolicyProfileAlreadyExists(exceptions.QuantumException):
+    """Policy Profile cannot be created since it already exists"""
+    message = _("Policy Profile %(profile_id)s "
+                "already exists.")
+
+
+class PolicyProfileIdNotFound(exceptions.QuantumException):
+    """Policy Profile cannot be found"""
+    message = _("Policy Profile %(profile_id)s could not be found ")
+
+class NetworkProfileAlreadyExists(exceptions.QuantumException):
+    """Network Profile cannot be created since it already exists"""
+    message = _("Network Profile %(profile_id)s "
+                "already exists.")
+
+
+class NetworkProfileIdNotFound(exceptions.QuantumException):
+    """Network Profile cannot be found"""
+    message = _("Network Profile %(profile_id)s could not be found ")
+
+
+class VMNetworkNotFound(exceptions.QuantumException):
+    """VM Network cannot be found"""
+    message = _("VM Network %(name)s could not be found ")
+
+class VxlanIdInUse(exceptions.QuantumException):
+    """
+    VXLAN Id is in use
+    """
+    message = _("Unable to create the network. "
+                "The VXLAN ID %(vxlan_id)s is in use.")
+
+class VSMConnectionFailed(exceptions.QuantumException):
+    """Connection to VSM failed"""
+    message = _("Connection to VSM failed: %(reason)s")
+
+class VSMError(exceptions.QuantumException):
+    """Internal VSM error"""
+    message = _("Internal VSM Error: %(reason)s")
+

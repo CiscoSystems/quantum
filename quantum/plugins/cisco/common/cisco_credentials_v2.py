@@ -18,12 +18,11 @@
 
 import logging as LOG
 
-from quantum.common.utils import find_config_file
+from quantum.plugins.cisco.common.cisco_utils import find_config_file
 from quantum.plugins.cisco.common import cisco_configparser as confp
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-
 
 LOG.basicConfig(level=LOG.WARN)
 LOG.getLogger(const.LOGGER_COMPONENT_NAME)
@@ -41,16 +40,20 @@ class Store(object):
 
     @staticmethod
     def initialize():
-        for id in _creds_dictionary.keys():
-            try:
-                cdb.add_credential(TENANT, id,
-                                   _creds_dictionary[id][const.USERNAME],
-                                   _creds_dictionary[id][const.PASSWORD])
-            except cexc.CredentialAlreadyExists:
-                # We are quietly ignoring this, since it only happens
-                # if this class module is loaded more than once, in which
-                # case, the credentials are already populated
-                pass
+        for id_type in _creds_dictionary.keys():
+            for id in _creds_dictionary[id_type].keys():
+                try:
+                    cdb.add_credential(
+                        TENANT,
+                        id,
+                        _creds_dictionary[id_type][id][const.USERNAME],
+                        _creds_dictionary[id_type][id][const.PASSWORD],
+                        id_type)
+                except cexc.CredentialAlreadyExists:
+                    # We are quietly ignoring this, since it only happens
+                    # if this class module is loaded more than once, in
+                    # which case, the credentials are already populated
+                    pass
 
     @staticmethod
     def put_credential(cred_name, username, password):

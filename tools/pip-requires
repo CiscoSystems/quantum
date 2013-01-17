@@ -19,5 +19,6 @@ alembic>=0.4.1
 http://tarballs.openstack.org/oslo-config/oslo-config-2013.1b4.tar.gz#egg=oslo-config
 
 # Cisco plugin dependencies
+configobj
 python-novaclient
 # End Cisco dependencies
