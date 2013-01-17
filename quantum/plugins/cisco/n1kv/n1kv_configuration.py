@@ -14,13 +14,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
-# @author: Sumit Naiksatam, Cisco Systems, Inc.
-# @author: Edgar Magana, Cisco Systems, Inc.
+# @author: Arvind Somya, Cisco Systems, Inc.(asomya@cisco.com)
 #
 """
-Configuration consolidation for the Nexus Driver
 This module will export the configuration parameters
-from the nexus.ini file
+from the n1kv.ini file
 """
 
 from quantum.plugins.cisco.common.cisco_utils import find_config_file
@@ -28,9 +26,5 @@ from quantum.plugins.cisco.common import cisco_configparser as confp
 
 
 CP = confp.CiscoConfigParser(find_config_file({'plugin': 'cisco'},
-                             "nexus.ini"))
-
-NEXUS_DETAILS = CP['SWITCH']
-
-SECTION = CP['DRIVER']
-NEXUS_DRIVER = SECTION['name']
+                             "n1kv.ini"))
+N1KV = CP['N1KV']

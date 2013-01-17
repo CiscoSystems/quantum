@@ -49,7 +49,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     MANAGE_STATE = True
     __native_bulk_support = True
-    supported_extension_aliases = []
+    supported_extension_aliases = ["provider", "profile", "n1kv_profile", "router"]
     _plugins = {}
     _inventory = {}
     _methods_to_delegate = ['create_network_bulk',
@@ -183,9 +183,12 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             else:
                 return func(*args)
 
-    def _get_segmentation_id(self, network_id):
-        binding_seg_id = odb.get_network_binding(None, network_id)
-        return binding_seg_id.segmentation_id
+    def _get_segmentation_id(self, *args, **kwargs):
+        #binding_seg_id = odb.get_network_binding(None, network_id)
+        #return binding_seg_id.segmentation_id
+        return self._invoke_plugin(const.VSWITCH_PLUGIN,
+                                   '_get_segmentation_id',
+                                   args, kwargs)
 
     def _get_all_segmentation_ids(self):
         vlan_ids = cdb.get_ovs_vlans()
@@ -203,17 +206,18 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def _get_instance_host(self, tenant_id, instance_id):
         keystone = cred._creds_dictionary['keystone']
-        kc = keystone_client.Client(username=keystone['username'],
-                                    password=keystone['password'],
+        url = keystone.keys()[0]
+        kc = keystone_client.Client(username=keystone[url]['username'],
+                                    password=keystone[url]['password'],
                                     tenant_id=tenant_id,
-                                    auth_url=keystone['auth_url'])
+                                    auth_url=url)
         tenant = kc.tenants.get(tenant_id)
         tenant_name = tenant.name
 
-        nc = nova_client.Client(keystone['username'],
-                                keystone['password'],
+        nc = nova_client.Client(keystone[url]['username'],
+                                keystone[url]['password'],
                                 tenant_name,
-                                keystone['auth_url'],
+                                url,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         host = serv.__getattr__('OS-EXT-SRV-ATTR:host')
@@ -231,7 +235,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
-            vlan_id = self._get_segmentation_id(ovs_output[0]['id'])
+            vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
             if not self._validate_vlan_id(vlan_id):
                 return ovs_output[0]
             vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
@@ -254,7 +258,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                     self._func_name(),
                                                     args)
-        vlan_id = self._get_segmentation_id(ovs_output[0]['id'])
+        vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
         if not self._validate_vlan_id(vlan_id):
             return ovs_output[0]
         vlanids = self._get_all_segmentation_ids()
@@ -275,7 +279,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             base_plugin_ref = QuantumManager.get_plugin()
             n = base_plugin_ref.get_network(context, id)
             tenant_id = n['tenant_id']
-            vlan_id = self._get_segmentation_id(id)
+            vlan_id = self._get_segmentation_id(context, id)
             args = [context, id]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
@@ -395,7 +399,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         try:
             args = [context, id]
             port = self.get_port(context, id)
-            vlan_id = self._get_segmentation_id(port['network_id'])
+            vlan_id = self._get_segmentation_id(context, port['network_id'])
             n_args = [port['device_id'], vlan_id]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),

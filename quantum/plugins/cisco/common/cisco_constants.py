@@ -64,6 +64,7 @@ CREDENTIAL_ID = 'credential_id'
 CREDENTIAL_NAME = 'credential_name'
 CREDENTIAL_USERNAME = 'user_name'
 CREDENTIAL_PASSWORD = 'password'
+CREDENTIAL_TYPE = 'type'
 MASKED_PASSWORD = '********'
 
 USERNAME = 'username'
@@ -122,3 +123,25 @@ PORT = 'port'
 BASE_PLUGIN_REF = 'base_plugin_ref'
 CONTEXT = 'context'
 SUBNET = 'subnet'
+
+#### N1Kv CONSTANTS
+# Special vlan_id value in ovs_vlan_allocations table indicating flat network
+FLAT_VLAN_ID = -1
+
+# Topic for tunnel notifications between the plugin and agent
+TUNNEL = 'tunnel'
+
+# Values for network_type
+TYPE_FLAT = 'flat'
+TYPE_VLAN = 'vlan'
+TYPE_VXLAN = 'vxlan'
+TYPE_LOCAL = 'local'
+TYPE_NONE = 'none'
+
+SET = 'set'
+INSTANCE = 'instance'
+PROPERTIES = 'properties'
+NAME = 'name'
+ID = 'id'
+POLICY = 'policy'
+DEFAULT_TENANT_ID = '000'
