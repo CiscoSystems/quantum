@@ -150,3 +150,14 @@ class InvalidDetach(exceptions.QuantumException):
     message = _("Unable to unplug the attachment %(att_id)s from port "
                 "%(port_id)s for network %(net_id)s. The attachment "
                 "%(att_id)s does not exist.")
+
+
+class ProfileAlreadyExists(exceptions.QuantumException):
+    """Profile cannot be created since it already exists"""
+    message = _("Profile %(profile_id)s "
+                "already exists.")
+
+
+class ProfileIdNotFound(exceptions.QuantumException):
+    """Profile cannot be found"""
+    message = _("Profile %(profile_id)s caould not be found ")
