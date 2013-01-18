@@ -27,4 +27,4 @@ from quantum.plugins.cisco.common import cisco_configparser as confp
 
 CP = confp.CiscoConfigParser(find_config_file({'plugin': 'cisco'},
                              "n1kv.ini"))
-N1K = SECTION['N1K']
+N1K = CP['N1K']
