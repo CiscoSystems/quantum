@@ -24,11 +24,10 @@ import quantum.db.api as db
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import exc
 from quantum.db import model_base
-from quantum.db import models_v2 
+from quantum.db import models_v2
 from quantum.db.models_v2 import model_base
-from quantum.plugins.cisco.n1kv.common import n1k_exceptions as n1kv_exc
+from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.extensions import profile
-from quantum.plugins.cisco.n1kv.common import constants as n1kvconst
 from quantum.common import exceptions as q_exc
 from quantum.common import utils
 from quantum.api.v2.attributes import _validate_ip_address
@@ -62,10 +61,10 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                 min_addr = int(min_ip.split('.')[3])
                 max_addr = int(max_ip.split('.')[3])
                 addr_list = list(xrange(min_addr, max_addr+1))
-                
+
                 mul_ip = min_ip.split('.')
                 mul_ip[3] = str(addr_list[self.multicast_ip_index])
-                
+
                 self.multicast_ip_index += 1
                 if self.multicast_ip_index == len(addr_list):
                     self.multicast_ip_index = 0
@@ -73,7 +72,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                 return mul_ip_str
 
             except exc.NoResultFound:
-	            raise n1kv_exc.ProfileNotFound(profile_id=id)
+	            raise cisco_exceptions.ProfileNotFound(profile_id=id)
 
     def _get_multicast_ip_range(self):
         # Assumption: ip range belongs to the same subnet
@@ -84,7 +83,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class Profile_db_mixin(profile.ProfileBase):
     """Mixin class to add N1K Profile methods to db_plugin_base_v2"""
-   
+
     def create_profile(self, context, profile):
         p = profile['profile']
         self._validate_arguments(context, p)
@@ -96,7 +95,7 @@ class Profile_db_mixin(profile.ProfileBase):
                         id=p['profile_id'],
                         tenant_id=tenant_id,
                         name=p['name'],
-                        profile_type=p['profile_type'], 
+                        profile_type=p['profile_type'],
                         profile_id=p['profile_id'],
                         segment_type=p['segment_type'].lower(),
                         segment_range=p['segment_range'],
@@ -107,11 +106,11 @@ class Profile_db_mixin(profile.ProfileBase):
             LOG.exception("Unable to create profile due to a"
                     "malformed request")
         return self._make_profile_dict(profile_db)
-    
+
     def delete_profile(self, context, id):
 	profile = self._get_profile(context, id)
 	with context.session.begin(subtransactions=True):
-	    context.session.delete(profile)     
+	    context.session.delete(profile)
 
     def update_profile(self, context, id, profile):
         p = profile['profile']
@@ -131,7 +130,7 @@ class Profile_db_mixin(profile.ProfileBase):
             return profile
         except exc.NoResultFound:
             raise n1k_exc.ProfileTypeNotFound(profile_type=profile_type)
-    
+
     '''
 
     def add_profile(self, tenant_id, profile_id, name, profile_type):
@@ -159,8 +158,8 @@ class Profile_db_mixin(profile.ProfileBase):
                        filter_by(profile_id=profile_id).one())
             return profile
         except exc.NoResultFound:
-            raise n1kv_exc.ProfileId    
-    
+            raise cisco_exceptions.ProfileId
+
     def get_profiles(self, context, filters=None, fields=None):
         return self._get_collection(context, Profile,
                                     self._make_profile_dict,
@@ -169,12 +168,12 @@ class Profile_db_mixin(profile.ProfileBase):
     def get_profile(self, context, id, fields=None):
         profile = self._get_profile(context, id)
         return self._make_profile_dict(profile, fields)
-    
+
     def _make_profile_dict(self, profile, fields=None):
         res  = {'profile_id': profile['profile_id'],
                 'name': profile['name'],
                 'profile_type': profile['profile_type'],
-                'tenant_id': profile['tenant_id'], 
+                'tenant_id': profile['tenant_id'],
                 'segment_type' : profile['segment_type'],
                 'segment_range' : profile['segment_range'],
                 'multicast_ip_range' : profile['multicast_ip_range']
@@ -186,10 +185,10 @@ class Profile_db_mixin(profile.ProfileBase):
 	try:
 	    profile = self._get_by_id(context, Profile, id)
 	except exc.NoResultFound:
-	    raise n1kv_exc.ProfileIdNotFound(profile_id=id)
+	    raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
 	except exc.MultipleResultsFound:
 	    LOG.error("Muliple profile match for %s" % id)
-	    raise n1kv_exc.ProfileIdNotFound(profile_id=id)
+	    raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
 	return profile
 
     def network_profile_exist(self, context, id):
@@ -200,12 +199,12 @@ class Profile_db_mixin(profile.ProfileBase):
             else:
                 return True
         except exc.NoResultFound:
-	        raise n1kv_exc.ProfileIdNotFound(profile_id=id)
+	        raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
 
     def _get_segment_range(self, data):
         seg_min, seg_max = sorted(map(int, data.split('-')))
         return (seg_min, seg_max)
-    
+
     def _validate_vlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         for entry in cfg.CONF.N1K.network_vlan_ranges:
@@ -235,7 +234,7 @@ class Profile_db_mixin(profile.ProfileBase):
             if _validate_ip_address(ip) != None:
                 msg = _("invalid ip address %s" % ip)
                 raise q_exc.InvalidInput(error_message=msg)
-    
+
     def _validate_segment_range(self, p):
         mo = re.match(r"(\d+)\-(\d+)", p['segment_range'])
         if mo == None:
@@ -257,7 +256,7 @@ class Profile_db_mixin(profile.ProfileBase):
             p['multicast_ip_range'] = '0.0.0.0'
         else:
             self._validate_vxlan(p)
-    
+
     def _validate_uniqueness(self, context, p):
         profiles = self.get_profiles(context)
         for prfl in profiles:
@@ -266,15 +265,15 @@ class Profile_db_mixin(profile.ProfileBase):
                 LOG.exception(msg)
                 raise q_exc.InvalidInput(error_message=msg)
             if (p['profile_type']=='network') and (prfl['profile_type']=='network'):
-                seg_min, seg_max = self._get_segment_range(p['segment_range']) 
+                seg_min, seg_max = self._get_segment_range(p['segment_range'])
                 prfl_seg_min, prfl_seg_max = self._get_segment_range(prfl['segment_range'])
-                if (((seg_min>=prfl_seg_min) and (seg_min<=prfl_seg_max)) or 
-                    ((seg_max>=prfl_seg_min) and (seg_max<=prfl_seg_max)) or 
+                if (((seg_min>=prfl_seg_min) and (seg_min<=prfl_seg_max)) or
+                    ((seg_max>=prfl_seg_min) and (seg_max<=prfl_seg_max)) or
                     ((seg_min<=prfl_seg_min) and (seg_max>=prfl_seg_max))):
                     msg = _("segment range overlaps with another profile")
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
-         
+
     def _validate_arguments(self, context, p):
         if p['profile_type'] == 'network':
             self._validate_network_profile(p)

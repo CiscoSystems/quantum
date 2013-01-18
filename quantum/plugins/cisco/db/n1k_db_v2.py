@@ -26,8 +26,8 @@ from quantum.db import models_v2
 import quantum.db.api as db
 from quantum.openstack.common import cfg
 from quantum.plugins.cisco.common import cisco_constants as const
-from quantum.plugins.cisco.n1kv import n1k_models_v2
-from quantum.plugins.cisco.n1kv import n1k_profile_db
+from quantum.plugins.cisco.db import n1k_models_v2
+from quantum.plugins.cisco.db import n1k_profile_db
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 
 LOG = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ def get_vlan_allocation(physical_network, vlan_id):
 def reserve_vlan(session, profile):
     seg_min, seg_max = profile.get_segment_range(session)
     segment_type = 'vlan'
-    
+
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1k_models_v2.VlanAllocation).
@@ -157,7 +157,7 @@ def reserve_tunnel(session, profile):
         try:
             alloc = (session.query(n1k_models_v2.TunnelAllocation).
                     filter(and_(n1k_models_v2.TunnelAllocation.tunnel_id>=seg_min,
-                        n1k_models_v2.TunnelAllocation.tunnel_id<=seg_max, 
+                        n1k_models_v2.TunnelAllocation.tunnel_id<=seg_max,
                         n1k_models_v2.TunnelAllocation.allocated==False)).first())
             segment_id = alloc.tunnel_id
             alloc.allocated = True
@@ -179,7 +179,7 @@ def alloc_network(session, profile_id):
         except q_exc.NotFound:
             LOG.debug("Profile not found")
 
-       
+
 def reserve_specific_vlan(session, physical_network, vlan_id):
     with session.begin(subtransactions=True):
         try:
