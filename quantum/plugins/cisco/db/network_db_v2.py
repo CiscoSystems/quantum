@@ -26,14 +26,11 @@ from quantum.plugins.cisco.db import network_models_v2
 from quantum.plugins.cisco.db import ucs_models_v2
 from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_models_v2
+from quantum.plugins.cisco.db import n1k_models_v2
 
 
 def initialize():
-    'Establish database connection and load models'
-    sql_connection = "mysql://%s:%s@%s/%s" % (conf.DB_USER, conf.DB_PASS,
-                                              conf.DB_HOST, conf.DB_NAME)
-    db.configure_db({'sql_connection': sql_connection,
-                     'base': network_models_v2.model_base.BASEV2})
+    db.configure_db()
 
 
 def create_vlanids():
