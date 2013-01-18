@@ -34,12 +34,7 @@ LOG = logging.getLogger(__name__)
 
 
 def initialize():
-    options = {"sql_connection": "%s" % cfg.CONF.DATABASE.sql_connection}
-    options.update({"sql_max_retries": cfg.CONF.DATABASE.sql_max_retries})
-    options.update({"reconnect_interval":
-                        cfg.CONF.DATABASE.reconnect_interval})
-    options.update({"base": models_v2.model_base.BASEV2})
-    db.configure_db(options)
+    db.configure_db()
 
 
 def get_network_binding(session, network_id):
