@@ -25,8 +25,7 @@ from quantum.common import exceptions as q_exc
 from quantum.db import models_v2
 import quantum.db.api as db
 from quantum.openstack.common import cfg
-from quantum.plugins.cisco.n1kv.common import config
-from quantum.plugins.cisco.n1kv.common import constants
+from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.n1kv import n1k_models_v2
 from quantum.plugins.cisco.n1kv import n1k_profile_db
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
@@ -189,7 +188,7 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
                 vlan_id=vlan_id).
                      one())
             if alloc.allocated:
-                if vlan_id == constants.FLAT_VLAN_ID:
+                if vlan_id == const.FLAT_VLAN_ID:
                     raise q_exc.FlatNetworkInUse(physical_network=
                     physical_network)
                 else:
