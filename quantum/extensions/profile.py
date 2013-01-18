@@ -24,7 +24,7 @@ from abc import abstractmethod
 from quantum.api.v2 import attributes as attr
 from quantum.api.v2 import base
 from quantum.common import exceptions as qexception
-from quantum.extensions import extensions
+from quantum.api import extensions
 from quantum import manager
 from quantum.openstack.common import cfg
 from quantum import quota
@@ -95,13 +95,13 @@ class Profile(object):
                                           member_actions=member_actions)
         return [extensions.ResourceExtension(collection_name,
                                              controller,
-                                             member_actions=member_actions)]    
+                                             member_actions=member_actions)]
 class ProfileBase(object):
-    
+
     @abstractmethod
     def create_profile(self, context, profile):
         pass
-  
+
     @abstractmethod
     def get_profile(self, context, id, fields=None):
         pass
@@ -112,4 +112,4 @@ class ProfileBase(object):
 
     @abstractmethod
     def delete_profile(self, context, id):
-        pass 
+        pass
