@@ -40,7 +40,7 @@ def initialize():
 def get_network_binding(session, network_id):
     session = session or db.get_session()
     try:
-        binding = (session.query(n1k_models_v2.NetworkBinding).
+        binding = (session.query(n1k_models_v2.N1kNetworkBinding).
                    filter_by(network_id=network_id).
                    one())
         return binding
@@ -51,7 +51,7 @@ def get_network_binding(session, network_id):
 def add_network_binding(session, network_id, network_type,
                  physical_network, segmentation_id, multicast_ip, profile_id):
     with session.begin(subtransactions=True):
-        binding = n1k_models_v2.NetworkBinding(network_id, network_type,
+        binding = n1k_models_v2.N1kNetworkBinding(network_id, network_type,
             physical_network,
             segmentation_id, multicast_ip, profile_id)
         session.add(binding)
@@ -59,7 +59,7 @@ def add_network_binding(session, network_id, network_type,
 def get_port_binding(session, port_id):
     session = session or db.get_session()
     try:
-        binding = (session.query(n1k_models_v2.PortBinding).
+        binding = (session.query(n1k_models_v2.N1kPortBinding).
                    filter_by(port_id=port_id).
                    one())
         return binding
@@ -69,7 +69,7 @@ def get_port_binding(session, port_id):
 
 def add_port_binding(session, port_id, profile_id):
     with session.begin(subtransactions=True):
-        binding = n1k_models_v2.PortBinding(port_id, profile_id)
+        binding = n1k_models_v2.N1kPortBinding(port_id, profile_id)
         session.add(binding)
 
 
@@ -90,7 +90,7 @@ def sync_vlan_allocations(network_vlan_ranges):
 
             # remove from table unallocated vlans not currently allocatable
             try:
-                allocs = (session.query(n1k_models_v2.VlanAllocation).
+                allocs = (session.query(n1k_models_v2.N1kVlanAllocation).
                           filter_by(physical_network=physical_network).
                           all())
                 for alloc in allocs:
@@ -110,14 +110,14 @@ def sync_vlan_allocations(network_vlan_ranges):
 
             # add missing allocatable vlans to table
             for vlan_id in sorted(vlan_ids):
-                alloc = n1k_models_v2.VlanAllocation(physical_network, vlan_id)
+                alloc = n1k_models_v2.N1kVlanAllocation(physical_network, vlan_id)
                 session.add(alloc)
 
 
 def get_vlan_allocation(physical_network, vlan_id):
     session = db.get_session()
     try:
-        alloc = (session.query(n1k_models_v2.VlanAllocation).
+        alloc = (session.query(n1k_models_v2.N1kVlanAllocation).
                  filter_by(physical_network=physical_network,
             vlan_id=vlan_id).
                  one())
@@ -131,10 +131,10 @@ def reserve_vlan(session, profile):
 
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.VlanAllocation).
-                    filter(and_(n1k_models_v2.VlanAllocation.vlan_id>=seg_min,
-                        n1k_models_v2.VlanAllocation.vlan_id<=seg_max,
-                        n1k_models_v2.VlanAllocation.allocated==False))).first()
+            alloc = (session.query(n1k_models_v2.N1kVlanAllocation).
+                    filter(and_(n1k_models_v2.N1kVlanAllocation.vlan_id>=seg_min,
+                        n1k_models_v2.N1kVlanAllocation.vlan_id<=seg_max,
+                        n1k_models_v2.N1kVlanAllocation.allocated==False))).first()
             segment_id = alloc.vlan_id
             physical_network = alloc.physical_network
             alloc.allocated = True
@@ -150,10 +150,10 @@ def reserve_tunnel(session, profile):
 
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.TunnelAllocation).
-                    filter(and_(n1k_models_v2.TunnelAllocation.tunnel_id>=seg_min,
-                        n1k_models_v2.TunnelAllocation.tunnel_id<=seg_max,
-                        n1k_models_v2.TunnelAllocation.allocated==False)).first())
+            alloc = (session.query(n1k_models_v2.N1kTunnelAllocation).
+                    filter(and_(n1k_models_v2.N1kTunnelAllocation.tunnel_id>=seg_min,
+                        n1k_models_v2.N1kTunnelAllocation.tunnel_id<=seg_max,
+                        n1k_models_v2.N1kTunnelAllocation.allocated==False)).first())
             segment_id = alloc.tunnel_id
             alloc.allocated = True
             return (physical_network, segment_type, segment_id, profile.get_multicast_ip(session))
@@ -178,7 +178,7 @@ def alloc_network(session, profile_id):
 def reserve_specific_vlan(session, physical_network, vlan_id):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.VlanAllocation).
+            alloc = (session.query(n1k_models_v2.N1kVlanAllocation).
                      filter_by(physical_network=physical_network,
                 vlan_id=vlan_id).
                      one())
@@ -195,7 +195,7 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
         except exc.NoResultFound:
             LOG.debug("reserving specific vlan %s on physical network %s "
                       "outside pool" % (vlan_id, physical_network))
-            alloc = n1k_models_v2.VlanAllocation(physical_network, vlan_id)
+            alloc = n1k_models_v2.N1kVlanAllocation(physical_network, vlan_id)
             alloc.allocated = True
             session.add(alloc)
 
@@ -203,7 +203,7 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
 def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.VlanAllocation).
+            alloc = (session.query(n1k_models_v2.N1kVlanAllocation).
                      filter_by(physical_network=physical_network,
                 vlan_id=vlan_id).
                      one())
@@ -240,7 +240,7 @@ def sync_tunnel_allocations(tunnel_id_ranges):
     with session.begin():
         # remove from table unallocated tunnels not currently allocatable
         try:
-            allocs = (session.query(n1k_models_v2.TunnelAllocation).
+            allocs = (session.query(n1k_models_v2.N1kTunnelAllocation).
                       all())
             for alloc in allocs:
                 try:
@@ -258,14 +258,14 @@ def sync_tunnel_allocations(tunnel_id_ranges):
 
         # add missing allocatable tunnels to table
         for tunnel_id in sorted(tunnel_ids):
-            alloc = n1k_models_v2.TunnelAllocation(tunnel_id)
+            alloc = n1k_models_v2.N1kTunnelAllocation(tunnel_id)
             session.add(alloc)
 
 
 def get_tunnel_allocation(tunnel_id):
     session = db.get_session()
     try:
-        alloc = (session.query(n1k_models_v2.TunnelAllocation).
+        alloc = (session.query(n1k_models_v2.N1kTunnelAllocation).
                  filter_by(tunnel_id=tunnel_id).
                  one())
         return alloc
@@ -276,7 +276,7 @@ def get_tunnel_allocation(tunnel_id):
 def reserve_specific_tunnel(session, tunnel_id):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.TunnelAllocation).
+            alloc = (session.query(n1k_models_v2.N1kTunnelAllocation).
                      filter_by(tunnel_id=tunnel_id).
                      one())
             if alloc.allocated:
@@ -285,7 +285,7 @@ def reserve_specific_tunnel(session, tunnel_id):
             alloc.allocated = True
         except exc.NoResultFound:
             LOG.debug("reserving specific tunnel %s outside pool" % tunnel_id)
-            alloc = n1k_models_v2.TunnelAllocation(tunnel_id)
+            alloc = n1k_models_v2.N1kTunnelAllocation(tunnel_id)
             alloc.allocated = True
             session.add(alloc)
 
@@ -293,7 +293,7 @@ def reserve_specific_tunnel(session, tunnel_id):
 def release_tunnel(session, tunnel_id, tunnel_id_ranges):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1k_models_v2.TunnelAllocation).
+            alloc = (session.query(n1k_models_v2.N1kTunnelAllocation).
                      filter_by(tunnel_id=tunnel_id).
                      one())
             alloc.allocated = False
@@ -334,7 +334,7 @@ def set_port_status(port_id, status):
 def get_tunnel_endpoints():
     session = db.get_session()
     try:
-        tunnels = session.query(n1k_models_v2.TunnelEndpoint).all()
+        tunnels = session.query(n1k_models_v2.N1kTunnelEndpoint).all()
     except exc.NoResultFound:
         return []
     return [{'id': tunnel.id,
@@ -343,7 +343,7 @@ def get_tunnel_endpoints():
 
 def _generate_tunnel_id(session):
     try:
-        tunnels = session.query(n1k_models_v2.TunnelEndpoint).all()
+        tunnels = session.query(n1k_models_v2.N1kTunnelEndpoint).all()
     except exc.NoResultFound:
         return 0
     tunnel_ids = ([tunnel['id'] for tunnel in tunnels])
@@ -357,11 +357,11 @@ def _generate_tunnel_id(session):
 def add_tunnel_endpoint(ip):
     session = db.get_session()
     try:
-        tunnel = (session.query(n1k_models_v2.TunnelEndpoint).
+        tunnel = (session.query(n1k_models_v2.N1kTunnelEndpoint).
                   filter_by(ip_address=ip).one())
     except exc.NoResultFound:
         id = _generate_tunnel_id(session)
-        tunnel = n1k_models_v2.TunnelEndpoint(ip, id)
+        tunnel = n1k_models_v2.N1kTunnelEndpoint(ip, id)
         session.add(tunnel)
         session.flush()
     return tunnel
@@ -371,13 +371,13 @@ def add_credential(tenant_id, credential_name, user_name, password):
     """Adds a credential to tenant association"""
     session = db.get_session()
     try:
-        cred = (session.query(n1k_models_v2.Credential).
+        cred = (session.query(n1k_models_v2.N1kCredential).
                 filter_by(tenant_id=tenant_id).
                 filter_by(credential_name=credential_name).one())
         raise c_exc.CredentialAlreadyExists(credential_name=credential_name,
                                             tenant_id=tenant_id)
     except exc.NoResultFound:
-        cred = n1k_models_v2.Credential(tenant_id, credential_name,
+        cred = n1k_models_v2.N1kCredential(tenant_id, credential_name,
                                             user_name, password)
         session.add(cred)
         session.flush()
@@ -386,7 +386,7 @@ def get_credential_name(tenant_id, credential_name):
     """Lists the creds for given a cred_name and tenant_id"""
     session = db.get_session()
     try:
-        cred = (session.query(n1k_models_v2.Credential).
+        cred = (session.query(n1k_models_v2.N1kCredential).
                 filter_by(tenant_id=tenant_id).
                 filter_by(credential_name=credential_name).one())
         return cred
@@ -398,7 +398,7 @@ def remove_credential(tenant_id, credential_id):
     """Removes a credential from a  tenant"""
     session = db.get_session()
     try:
-        cred = (session.query(n1k_models_v2.Credential).
+        cred = (session.query(n1k_models_v2.N1kCredential).
                 filter_by(tenant_id=tenant_id).
                 filter_by(credential_id=credential_id).one())
         session.delete(cred)
@@ -411,7 +411,7 @@ def get_all_credentials(tenant_id):
     """Lists all the creds for a tenant"""
     session = db.get_session()
     try:
-        creds = (session.query(n1k_models_v2.Credential).
+        creds = (session.query(n1k_models_v2.N1kCredential).
                  filter_by(tenant_id=tenant_id).all())
         return creds
     except exc.NoResultFound:
@@ -421,7 +421,7 @@ def get_vm_network(profile_id, network_id):
     """Retrieve a vm_network based on profile and network id"""
     session = db.get_session()
     try:
-        vm_network = (session.query(n1k_models_v2.VmNetwork).
+        vm_network = (session.query(n1k_models_v2.N1kVmNetwork).
                       filter_by(profile_id=profile_id).
                       filter_by(network_id=network_id).one())
         return vm_network
@@ -431,5 +431,5 @@ def get_vm_network(profile_id, network_id):
 def add_vm_network(name, profile_id, network_id):
     session = db.get_session()
     with session.begin(subtransactions=True):
-        vm_network = n1k_models_v2.VmNetwork(name, profile_id, network_id)
+        vm_network = n1k_models_v2.N1kVmNetwork(name, profile_id, network_id)
         session.add(vm_network)
