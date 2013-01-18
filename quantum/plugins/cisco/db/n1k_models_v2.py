@@ -13,7 +13,7 @@ from quantum.db.models_v2 import model_base
 
 class VlanAllocation(model_base.BASEV2):
     """Represents allocation state of vlan_id on physical network"""
-    __tablename__ = 'ovs_vlan_allocations'
+    __tablename__ = 'n1kv_vlan_allocations'
 
     physical_network = Column(String(64), nullable=False, primary_key=True)
     vlan_id = Column(Integer, nullable=False, primary_key=True,
@@ -32,7 +32,7 @@ class VlanAllocation(model_base.BASEV2):
 
 class TunnelAllocation(model_base.BASEV2):
     """Represents allocation state of tunnel_id"""
-    __tablename__ = 'ovs_tunnel_allocations'
+    __tablename__ = 'n1kv_tunnel_allocations'
 
     tunnel_id = Column(Integer, nullable=False, primary_key=True,
         autoincrement=False)
@@ -95,7 +95,7 @@ class NetworkBinding(model_base.BASEV2):
 
 class TunnelIP(model_base.BASEV2):
     """Represents tunnel endpoint in DB mode"""
-    __tablename__ = 'ovs_tunnel_ips'
+    __tablename__ = 'n1kv_tunnel_ips'
 
     ip_address = Column(String(255), primary_key=True)
 
@@ -108,7 +108,7 @@ class TunnelIP(model_base.BASEV2):
 
 class TunnelEndpoint(model_base.BASEV2):
     """Represents tunnel endpoint in RPC mode"""
-    __tablename__ = 'ovs_tunnel_endpoints'
+    __tablename__ = 'n1kv_tunnel_endpoints'
 
     ip_address = Column(String(64), primary_key=True)
     id = Column(Integer, nullable=False)
@@ -119,6 +119,7 @@ class TunnelEndpoint(model_base.BASEV2):
 
     def __repr__(self):
         return "<TunnelEndpoint(%s,%s)>" % (self.ip_address, self.id)
+
 
 class L2NetworkBase(object):
     """Base class for L2Network Models."""
@@ -160,9 +161,10 @@ class L2NetworkBase(object):
         local.update(joined)
         return local.iteritems()
 
+
 class Credential(model_base.BASEV2, L2NetworkBase):
     """Represents credentials for a tenant"""
-    __tablename__ = 'credentials'
+    __tablename__ = 'n1k_credentials'
 
     credential_id = Column(String(255))
     tenant_id = Column(String(255), primary_key=True)
@@ -183,6 +185,7 @@ class Credential(model_base.BASEV2, L2NetworkBase):
                                                   self.credential_name,
                                                   self.user_name,
                                                   self.password)
+
 
 class VmNetwork(model_base.BASEV2):
     """Represents VM Network information"""

@@ -23,11 +23,10 @@ import base64
 import time
 
 from quantum.plugins.cisco.n1kv.common.serializer import Serializer
-from quantum.plugins.cisco.n1kv import n1k_db_v2 as n1kvdb
+from quantum.plugins.cisco.db import n1k_db_v2 as n1kvdb
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.n1kv import n1k_profile_db
-from quantum.plugins.cisco.n1kv.common import constants
+from quantum.plugins.cisco.db import n1k_profile_db
 from quantum.extensions import providernet as provider
 from quantum.extensions import n1kv_profile as n1kv_profile
 
@@ -94,9 +93,9 @@ class Client(n1k_profile_db.Profile_db_mixin):
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': profile['name'],}
-        if network[provider.NETWORK_TYPE] == constants.TYPE_VLAN:
+        if network[provider.NETWORK_TYPE] == const.TYPE_VLAN:
             body.update({'vlan': network[provider.SEGMENTATION_ID]})
-        if network[provider.NETWORK_TYPE] == constants.TYPE_VXLAN:
+        if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             body.update({'bridgeDomain': network['name'] + '_bd'})
         return self.post(self.vmnds_path, body=body, params=_params)
 
