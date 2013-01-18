@@ -65,7 +65,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def __init__(self, configfile=None):
         n1k_db_v2.initialize()
-        cred.Store.initialize()
+        #cred.Store.initialize()
         self._parse_network_vlan_ranges()
         n1k_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         self.enable_tunneling = conf.N1K.enable_tunneling
