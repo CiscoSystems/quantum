@@ -17,7 +17,7 @@ import unittest2
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
-from quantum.plugins.cisco.n1kv import n1k_db_v2
+from quantum.plugins.cisco.db import n1k_db_v2
 
 PHYS_NET = 'physnet1'
 PHYS_NET_2 = 'physnet2'
