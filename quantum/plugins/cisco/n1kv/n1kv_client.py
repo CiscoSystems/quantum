@@ -51,8 +51,8 @@ class Client(n1k_profile_db.Profile_db_mixin):
             "plurals": {
                 "networks": "network",
                 "ports": "port",
-		"set": "instance", 
-                "subnets": "subnet", }, }, }   
+		"set": "instance",
+                "subnets": "subnet", }, }, }
 
     # Define paths here
     profiles_path = "/virtual-port-profile"
@@ -87,7 +87,7 @@ class Client(n1k_profile_db.Profile_db_mixin):
     def create_vmnd(self, network, **_params):
         """
         Creates a VMND on the VSM
-        """ 
+        """
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
         LOG.debug("Abs seg id %s\n", profile['name'])
         body = {'name': network['name'],
@@ -184,40 +184,39 @@ class Client(n1k_profile_db.Profile_db_mixin):
         """
         return self.delete(self.port_path % (port))
 
-    
+
     def __init__(self, **kwargs):
-	""" Initialize a new client for the Plugin v2.0. """
-	self.format = 'json'
-	self.retries = 0
-	self.retry_interval = 1
-	self.action_prefix = '/api/hyper-v'
-	self.hosts = self.get_vsm_hosts(TENANT)
+        """ Initialize a new client for the Plugin v2.0. """
+        self.format = 'json'
+        self.retries = 0
+        self.retry_interval = 1
+        self.action_prefix = '/api/hyper-v'
+        self.hosts = self.get_vsm_hosts(TENANT)
+
 
     def _handle_fault_response(self, status_code, response_body):
-	# Create exception with HTTP status code and message
-	pass
+        # Create exception with HTTP status code and message
+        pass
 
     def do_request(self, method, action, body=None, headers=None, params=None):
-	"""
-	Perform the HTTP request
-	"""
-	action = self.action_prefix + action
-	if headers is None:
-	    headers = self.get_header(self.hosts[0])
-	if body:
+        """
+        Perform the HTTP request
+        """
+        action = self.action_prefix + action
+        if headers is None  and  self.hosts:
+            headers = self.get_header(self.hosts[0])
+        if body:
             body = self.serialize(body)
-#        body = json.dumps(body)
+            # body = json.dumps(body)
             body = body + '  '
             LOG.debug("abs req: %s", body)
         conn = httplib.HTTPConnection(self.hosts[0])
-	conn.request(method, action, body, headers)
-	resp = conn.getresponse()
-	replybody = resp.read()
-	status_code = self.get_status_code(resp)
+        conn.request(method, action, body, headers)
+        resp = conn.getresponse()
+        replybody = resp.read()
+        status_code = self.get_status_code(resp)
         LOG.debug("abs status_code %s\n", status_code)
-	if status_code in (httplib.OK,
-                           httplib.ACCEPTED,
-                           httplib.NO_CONTENT):
+        if status_code in (httplib.OK, httplib.ACCEPTED, httplib.NO_CONTENT):
             return self.deserialize(replybody, status_code)
         elif status_code == httplib.CREATED:
             LOG.debug("Created VMND/FND: %s\n", replybody)
@@ -263,8 +262,8 @@ class Client(n1k_profile_db.Profile_db_mixin):
 
 
     def content_type(self, format=None):
-	"""
-	Returns the mime-type for either 'xml' or 'json'.  Defaults to the
+        """
+        Returns the mime-type for either 'xml' or 'json'.  Defaults to the
         currently set format
         """
         if not format:
@@ -273,25 +272,25 @@ class Client(n1k_profile_db.Profile_db_mixin):
 
     def retry_request(self, method, action, body=None,
 		      headers=None, params=None):
-	"""
-	Call do_request with the default retry configuration. Only
-        idempotent requests should retry failed connection attempts.
+        """
+        Call do_request with the default retry configuration. Only
+            idempotent requests should retry failed connection attempts.
 
-        :raises: ConnectionFailed if the maximum # of retries is exceeded
-       
-	
-	max_attempts = self.retries + 1
-	for i in xrange(max_attempts):
-	    try:
-	        return self.do_request(method, action, body=body,
-				       headers=headers, params=params)
-	    except:	    
-		if i < self.retries:
-		_logger.debug(_('Retrying connection to quantum service'))
-		time.sleep(self.retry_interval)
-	"""
-	pass
-	
+            :raises: ConnectionFailed if the maximum # of retries is exceeded
+
+
+        max_attempts = self.retries + 1
+        for i in xrange(max_attempts):
+            try:
+                return self.do_request(method, action, body=body,
+                           headers=headers, params=params)
+            except:
+            if i < self.retries:
+            _logger.debug(_('Retrying connection to quantum service'))
+            time.sleep(self.retry_interval)
+        """
+        pass
+
     def delete(self, action, body=None, headers=None, params=None):
         return self.do_request("DELETE", action, body=body,
 				  headers=headers, params=params)
@@ -310,22 +309,22 @@ class Client(n1k_profile_db.Profile_db_mixin):
                                   headers=headers, params=params)
 
     def get_vsm_hosts(self, tenant_id):
-	"""
-	Returns a list of VSM ip addresses.
-	"""
-	host_list = []
-	credentials = n1kvdb.get_all_credentials(tenant_id)
-	for cred in credentials:
-	    host_list.append(cred[const.CREDENTIAL_NAME])
-	return host_list
+        """
+        Returns a list of VSM ip addresses.
+        """
+        host_list = []
+        credentials = n1kvdb.get_all_credentials(tenant_id)
+        for cr in credentials:
+            host_list.append(cr[const.CREDENTIAL_NAME])
+        return host_list
 
     def get_header(self, host_ip):
-	"""
-	Returns a header with auth info for the VSM
-	"""
-	username = cred.Store.get_username(host_ip)
-	password = cred.Store.get_password(host_ip)
-	auth = base64.encodestring("%s:%s" % (username, password))
+        """
+        Returns a header with auth info for the VSM
+        """
+        username = cred.Store.get_username(host_ip)
+        password = cred.Store.get_password(host_ip)
+        auth = base64.encodestring("%s:%s" % (username, password))
         headers = {"Authorization" : "Basic %s" % auth,
                    "Content-Type" : "application/json"}
-	return headers
+        return headers
