@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
+
 from quantum.tests.unit import test_db_plugin as test_plugin
 
 
@@ -23,6 +25,14 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     def setUp(self):
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
+
+
+class TestN1kvRefactor(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test_foo(self):
+        self.assertTrue(1 == 1)
 
 
 class TestN1kvBasicGet(test_plugin.TestBasicGet,
