@@ -162,31 +162,6 @@ class L2NetworkBase(object):
         return local.iteritems()
 
 
-class N1kCredential(model_base.BASEV2, L2NetworkBase):
-    """Represents credentials for a tenant"""
-    __tablename__ = 'n1k_credentials'
-
-    credential_id = Column(String(255))
-    tenant_id = Column(String(255), primary_key=True)
-    credential_name = Column(String(255), primary_key=True)
-    user_name = Column(String(255))
-    password = Column(String(255))
-
-    def __init__(self, tenant_id, credential_name, user_name, password):
-        self.credential_id = str(uuid.uuid4())
-        self.tenant_id = tenant_id
-        self.credential_name = credential_name
-        self.user_name = user_name
-        self.password = password
-
-    def __repr__(self):
-        return "<Credentials(%s,%s,%s,%s,%s)>" % (self.credential_id,
-                                                  self.tenant_id,
-                                                  self.credential_name,
-                                                  self.user_name,
-                                                  self.password)
-
-
 class N1kVmNetwork(model_base.BASEV2):
     """Represents VM Network information"""
     __tablename__ = 'vmnetwork'

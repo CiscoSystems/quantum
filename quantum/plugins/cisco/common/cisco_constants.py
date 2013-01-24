@@ -76,6 +76,7 @@ CREDENTIAL_ID = 'credential_id'
 CREDENTIAL_NAME = 'credential_name'
 CREDENTIAL_USERNAME = 'user_name'
 CREDENTIAL_PASSWORD = 'password'
+CREDENTIAL_TYPE = 'type'
 MASKED_PASSWORD = '********'
 
 USERNAME = 'username'

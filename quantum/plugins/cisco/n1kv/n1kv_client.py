@@ -23,7 +23,7 @@ import base64
 import time
 
 from quantum.plugins.cisco.n1kv.common.serializer import Serializer
-from quantum.plugins.cisco.db import n1k_db_v2 as n1kvdb
+from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import n1k_profile_db
@@ -313,7 +313,7 @@ class Client(n1k_profile_db.Profile_db_mixin):
         Returns a list of VSM ip addresses.
         """
         host_list = []
-        credentials = n1kvdb.get_all_credentials(tenant_id)
+        credentials = cdb.get_all_n1kv_credentials(tenant_id)
         for cr in credentials:
             host_list.append(cr[const.CREDENTIAL_NAME])
         return host_list
