@@ -1,6 +1,9 @@
-The Open vSwitch (OVS) Quantum plugin is a simple plugin to manage OVS
-features using a local agent running on each hypervisor.
+Cisco N1KV Quantum Plugin
+=========================
 
-For details on how to configure and use the plugin, see:
+The Cisco N1KV Quantum Plugin is a simple plugin which helps
+the qunatum enviorment to deal with the Cisco N1KV Switch.
 
-http://openvswitch.org/openstack/documentation/
+More Details at can be found at:
+https://blueprints.launchpad.net/quantum/+spec/cisco-plugin-n1k-support
+
