@@ -322,7 +322,7 @@ def get_credential_name(tenant_id, credential_name):
                                            tenant_id=tenant_id)
 
 
-def add_credential(tenant_id, credential_name, user_name, password):
+def add_credential(tenant_id, credential_name, user_name, password, type):
     """Adds a qos to tenant association"""
     session = db.get_session()
     try:
@@ -333,7 +333,7 @@ def add_credential(tenant_id, credential_name, user_name, password):
                                             tenant_id=tenant_id)
     except exc.NoResultFound:
         cred = network_models_v2.Credential(tenant_id, credential_name,
-                                            user_name, password)
+                                            user_name, password, type)
         session.add(cred)
         session.flush()
         return cred
@@ -371,6 +371,18 @@ def update_credential(tenant_id, credential_id,
     except exc.NoResultFound:
         raise c_exc.CredentialNotFound(credential_id=credential_id,
                                        tenant_id=tenant_id)
+
+
+def get_all_n1kv_credentials(tenant_id):
+    session = db.get_session()
+    try:
+        creds = (session.query(network_models_v2.Credential).
+                filter_by(tenant_id=tenant_id).
+                filter_by(type='n1kv').all())
+        return creds
+    except exc.NoResultFound:
+        raise c_exc.CredentialNameNotFound(credential_name=credential_name,
+                                           tenant_id=tenant_id)
 
 
 def get_ovs_vlans():

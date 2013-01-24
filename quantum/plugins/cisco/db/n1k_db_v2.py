@@ -366,57 +366,6 @@ def add_tunnel_endpoint(ip):
         session.flush()
     return tunnel
 
-#Code for N1KV credentials
-def add_credential(tenant_id, credential_name, user_name, password):
-    """Adds a credential to tenant association"""
-    session = db.get_session()
-    try:
-        cred = (session.query(n1k_models_v2.N1kCredential).
-                filter_by(tenant_id=tenant_id).
-                filter_by(credential_name=credential_name).one())
-        raise c_exc.CredentialAlreadyExists(credential_name=credential_name,
-                                            tenant_id=tenant_id)
-    except exc.NoResultFound:
-        cred = n1k_models_v2.N1kCredential(tenant_id, credential_name,
-                                            user_name, password)
-        session.add(cred)
-        session.flush()
-        return cred
-def get_credential_name(tenant_id, credential_name):
-    """Lists the creds for given a cred_name and tenant_id"""
-    session = db.get_session()
-    try:
-        cred = (session.query(n1k_models_v2.N1kCredential).
-                filter_by(tenant_id=tenant_id).
-                filter_by(credential_name=credential_name).one())
-        return cred
-    except exc.NoResultFound:
-        raise c_exc.CredentialNameNotFound(credential_name=credential_name,
-                                           tenant_id=tenant_id)
-
-def remove_credential(tenant_id, credential_id):
-    """Removes a credential from a  tenant"""
-    session = db.get_session()
-    try:
-        cred = (session.query(n1k_models_v2.N1kCredential).
-                filter_by(tenant_id=tenant_id).
-                filter_by(credential_id=credential_id).one())
-        session.delete(cred)
-        session.flush()
-        return cred
-    except exc.NoResultFound:
-        pass
-
-def get_all_credentials(tenant_id):
-    """Lists all the creds for a tenant"""
-    session = db.get_session()
-    try:
-        creds = (session.query(n1k_models_v2.N1kCredential).
-                 filter_by(tenant_id=tenant_id).all())
-        return creds
-    except exc.NoResultFound:
-        return []
-
 def get_vm_network(profile_id, network_id):
     """Retrieve a vm_network based on profile and network id"""
     session = db.get_session()
