@@ -56,6 +56,7 @@ def add_network_binding(session, network_id, network_type,
             segmentation_id, multicast_ip, profile_id)
         session.add(binding)
 
+
 def get_port_binding(session, port_id):
     session = session or db.get_session()
     try:
@@ -71,7 +72,6 @@ def add_port_binding(session, port_id, profile_id):
     with session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kPortBinding(port_id, profile_id)
         session.add(binding)
-
 
 
 def sync_vlan_allocations(network_vlan_ranges):
@@ -110,7 +110,8 @@ def sync_vlan_allocations(network_vlan_ranges):
 
             # add missing allocatable vlans to table
             for vlan_id in sorted(vlan_ids):
-                alloc = n1kv_models_v2.N1kVlanAllocation(physical_network, vlan_id)
+                alloc = n1kv_models_v2.N1kVlanAllocation(physical_network,
+                                                         vlan_id)
                 session.add(alloc)
 
 
@@ -125,6 +126,7 @@ def get_vlan_allocation(physical_network, vlan_id):
     except exc.NoResultFound:
         return
 
+
 def reserve_vlan(session, profile):
     seg_min, seg_max = profile.get_segment_range(session)
     segment_type = 'vlan'
@@ -132,9 +134,11 @@ def reserve_vlan(session, profile):
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kVlanAllocation).
-                    filter(and_(n1kv_models_v2.N1kVlanAllocation.vlan_id>=seg_min,
-                        n1kv_models_v2.N1kVlanAllocation.vlan_id<=seg_max,
-                        n1kv_models_v2.N1kVlanAllocation.allocated==False))).first()
+                    filter(and_(
+                        n1kv_models_v2.N1kVlanAllocation.vlan_id >= seg_min,
+                        n1kv_models_v2.N1kVlanAllocation.vlan_id <= seg_max,
+                        n1kv_models_v2.N1kVlanAllocation.allocated == False)
+                        )).first()
             segment_id = alloc.vlan_id
             physical_network = alloc.physical_network
             alloc.allocated = True
@@ -142,6 +146,7 @@ def reserve_vlan(session, profile):
         except exc.NoResultFound:
             raise q_exc.VlanIdInUse(vlan_id=segment_id,
                     physical_network=segment_type)
+
 
 def reserve_tunnel(session, profile):
     seg_min, seg_max = profile.get_segment_range(session)
@@ -151,12 +156,15 @@ def reserve_tunnel(session, profile):
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kTunnelAllocation).
-                    filter(and_(n1kv_models_v2.N1kTunnelAllocation.tunnel_id>=seg_min,
-                        n1kv_models_v2.N1kTunnelAllocation.tunnel_id<=seg_max,
-                        n1kv_models_v2.N1kTunnelAllocation.allocated==False)).first())
+                    filter(and_(
+                       n1kv_models_v2.N1kTunnelAllocation.tunnel_id >= seg_min,
+                       n1kv_models_v2.N1kTunnelAllocation.tunnel_id <= seg_max,
+                       n1kv_models_v2.N1kTunnelAllocation.allocated == False)
+                       ).first())
             segment_id = alloc.tunnel_id
             alloc.allocated = True
-            return (physical_network, segment_type, segment_id, profile.get_multicast_ip(session))
+            return (physical_network, segment_type,
+                    segment_id, profile.get_multicast_ip(session))
         except exc.NoResultFound:
             raise q_exc.TunnelIdInUse(tunnel_id=segment_id)
 
@@ -184,8 +192,8 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
                      one())
             if alloc.allocated:
                 if vlan_id == const.FLAT_VLAN_ID:
-                    raise q_exc.FlatNetworkInUse(physical_network=
-                    physical_network)
+                    raise q_exc.FlatNetworkInUse(
+                        physical_network=physical_network)
                 else:
                     raise q_exc.VlanIdInUse(vlan_id=vlan_id,
                         physical_network=physical_network)
@@ -366,6 +374,7 @@ def add_tunnel_endpoint(ip):
         session.flush()
     return tunnel
 
+
 def get_vm_network(profile_id, network_id):
     """Retrieve a vm_network based on profile and network id"""
     session = db.get_session()
@@ -376,6 +385,7 @@ def get_vm_network(profile_id, network_id):
         return vm_network
     except exc.NoResultFound:
         return None
+
 
 def add_vm_network(name, profile_id, network_id):
     session = db.get_session()
