@@ -34,9 +34,11 @@ LOG = logging.getLogger(__name__)
 
 TENANT = const.NETWORK_ADMIN
 
+
 def exception_handler(status_code, error_content):
     """ Exception handler for N1KV plugin """
     pass
+
 
 class Client(n1kv_profile_db.Profile_db_mixin):
     """ Client for the N1KV Quantum Plugin v2.0."""
@@ -48,10 +50,10 @@ class Client(n1kv_profile_db.Profile_db_mixin):
                 "network": ["id", "name"],
                 "port": ["id", "mac_address"],
                 "subnet": ["id", "prefix"]},
-            "plurals": {
+                "plurals": {
                 "networks": "network",
                 "ports": "port",
-		"set": "instance",
+                "set": "instance",
                 "subnets": "subnet", }, }, }
 
     # Define paths here
@@ -69,10 +71,10 @@ class Client(n1kv_profile_db.Profile_db_mixin):
     bridge_domain_path = "/bridge-domain/%s"
 
     def list_profiles(self, **_params):
-	    """
-	    Fetches a list of all profiles
- 	    """
-	    return self.get(self.profiles_path, params=_params)
+        """
+        Fetches a list of all profiles
+        """
+        return self.get(self.profiles_path, params=_params)
 
     def create_bridge_domain(self, network, **_params):
         """
@@ -80,9 +82,8 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         """
         body = {'name': network['name'] + '_bd',
                 'segmentId': network[provider.SEGMENTATION_ID],
-                'groupIp': network[n1kv_profile.MULTICAST_IP],}
+                'groupIp': network[n1kv_profile.MULTICAST_IP], }
         return self.post(self.bridge_domains_path, body=body, params=_params)
-
 
     def create_vmnd(self, network, **_params):
         """
@@ -92,7 +93,7 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         LOG.debug("Abs seg id %s\n", profile['name'])
         body = {'name': network['name'],
                 'id': network['id'],
-                'networkDefinition': profile['name'],}
+                'networkDefinition': profile['name'], }
         if network[provider.NETWORK_TYPE] == const.TYPE_VLAN:
             body.update({'vlan': network[provider.SEGMENTATION_ID]})
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
@@ -104,7 +105,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         Updates a VMND on the VSM
         """
         return self.post(self.vmnd_path % (vmnd), body=body)
-
 
     def delete_vmnd(self, vmnd, **_params):
         """
@@ -154,7 +154,7 @@ class Client(n1kv_profile_db.Profile_db_mixin):
                 'addressRangeEnd': subnet['allocation_pools'][0]['end'],
                 'ipAddressSubnet': netmask,
                 'name': subnet['name'],
-                'gateway': subnet['gateway_ip'],}
+                'gateway': subnet['gateway_ip'], }
         return self.post(self.ip_pools_path, body=body, params=_params)
 
     def create_port(self, port, name, **_params):
@@ -184,7 +184,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         """
         return self.delete(self.port_path % (port))
 
-
     def __init__(self, **kwargs):
         """ Initialize a new client for the Plugin v2.0. """
         self.format = 'json'
@@ -192,7 +191,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         self.retry_interval = 1
         self.action_prefix = '/api/hyper-v'
         self.hosts = self.get_vsm_hosts(TENANT)
-
 
     def _handle_fault_response(self, status_code, response_body):
         # Create exception with HTTP status code and message
@@ -246,7 +244,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
             raise Exception("unable to serialize object of type = '%s'" %
                             type(data))
 
-
     def deserialize(self, data, status_code):
         """
         Deserializes an xml or json string into a dictionary
@@ -260,7 +257,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
             if status_code == 200:
                 LOG.debug("Created VMND/FND\n")
 
-
     def content_type(self, format=None):
         """
         Returns the mime-type for either 'xml' or 'json'.  Defaults to the
@@ -271,7 +267,7 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         return "application/%s" % (format)
 
     def retry_request(self, method, action, body=None,
-		      headers=None, params=None):
+                      headers=None, params=None):
         """
         Call do_request with the default retry configuration. Only
             idempotent requests should retry failed connection attempts.
@@ -293,7 +289,7 @@ class Client(n1kv_profile_db.Profile_db_mixin):
 
     def delete(self, action, body=None, headers=None, params=None):
         return self.do_request("DELETE", action, body=body,
-				  headers=headers, params=params)
+                               headers=headers, params=params)
 
     def get(self, action, body=None, headers=None, params=None):
         return self.do_request("GET", action, body=body,
@@ -302,7 +298,7 @@ class Client(n1kv_profile_db.Profile_db_mixin):
     def post(self, action, body=None, headers=None, params=None):
         # Do not retry POST requests to avoid the orphan objects problem.
         return self.do_request("POST", action, body=body,
-     			       headers=headers, params=params)
+                               headers=headers, params=params)
 
     def put(self, action, body=None, headers=None, params=None):
         return self.retry_request("PUT", action, body=body,
@@ -325,6 +321,6 @@ class Client(n1kv_profile_db.Profile_db_mixin):
         username = cred.Store.get_username(host_ip)
         password = cred.Store.get_password(host_ip)
         auth = base64.encodestring("%s:%s" % (username, password))
-        headers = {"Authorization" : "Basic %s" % auth,
-                   "Content-Type" : "application/json"}
+        headers = {"Authorization": "Basic %s" % auth,
+                   "Content-Type": "application/json"}
         return headers
