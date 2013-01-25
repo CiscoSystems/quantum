@@ -23,12 +23,12 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 
-from quantum.plugins.cisco.n1kv import cisco_n1kv_configuration as conf
+from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 from quantum.plugins.cisco.db import n1kv_db_v2
 
 from quantum import policy
 
-from quantum.plugins.cisco.db import n1k_profile_db 
+from quantum.plugins.cisco.db import n1kv_profile_db 
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.n1kv import n1kv_client 
 from quantum.plugins.cisco.common import cisco_constants as const
@@ -42,7 +42,7 @@ TENANT_ID = const.NETWORK_ADMIN
 
 class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         n1k_profile_db.Profile_db_mixin):
+                         n1kv_profile_db.Profile_db_mixin):
     """Implement the Quantum abstractions using Open vSwitch.
 
     Depending on whether tunneling is enabled, either a GRE tunnel or
