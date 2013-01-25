@@ -24,7 +24,7 @@ from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 
 from quantum.plugins.cisco.n1kv import cisco_n1kv_configuration as conf
-from quantum.plugins.cisco.db import n1k_db_v2
+from quantum.plugins.cisco.db import n1kv_db_v2
 
 from quantum import policy
 
@@ -64,15 +64,15 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     supported_extension_aliases = ["provider", "profile", "n1kv_profile", "router"]
 
     def __init__(self, configfile=None):
-        n1k_db_v2.initialize()
+        n1kv_db_v2.initialize()
         #cred.Store.initialize()
         self._parse_network_vlan_ranges()
-        n1k_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
+        n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         self.enable_tunneling = conf.N1K['enable_tunneling']
         self.tunnel_id_ranges = []
         if self.enable_tunneling:
             self._parse_tunnel_id_ranges()
-            n1k_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
+            n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
         self._setup_vsm()
         self._poll_policies()
          
@@ -153,7 +153,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_network_dict_provider(self, context, network):
 #        if self._check_provider_view_auth(context, network):
-        binding = n1k_db_v2.get_network_binding(context.session,
+        binding = n1kv_db_v2.get_network_binding(context.session,
             network['id'])
         network[provider.NETWORK_TYPE] = binding.network_type
         if binding.network_type == const.TYPE_VXLAN:
@@ -241,13 +241,13 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
 
     def _extend_network_dict_profile(self, context, network):
-         binding = n1k_db_v2.get_network_binding(context.session,
+         binding = n1kv_db_v2.get_network_binding(context.session,
                 network['id'])
          network[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _extend_port_dict_profile(self, context, port):
         #if self._check_provider_view_auth(context, network):
-        binding = n1k_db_v2.get_port_binding(context.session,
+        binding = n1kv_db_v2.get_port_binding(context.session,
                 port['id'])
         port[n1kv_profile.PROFILE_ID] = binding.profile_id
 
@@ -310,7 +310,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_send_delete_subnet_request: %s', id)
    
     def _send_create_port_request(self, port):
-        vm_network = n1k_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID], port['network_id'])
+        vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID], port['network_id'])
         if vm_network:
             vm_network_name = vm_network['name']
             self._send_update_port_request(port, vm_network_name)
@@ -318,7 +318,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             global VM_NETWORK_NUM
             VM_NETWORK_NUM = VM_NETWORK_NUM + 1
             vm_network_name = 'vm_network_' + str(VM_NETWORK_NUM)
-            n1k_db_v2.add_vm_network(vm_network_name,
+            n1kv_db_v2.add_vm_network(vm_network_name,
                                      port[n1kv_profile.PROFILE_ID],
                                      port['network_id'])
             n1kclient = n1kv_client.Client()
@@ -354,7 +354,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             if not network_type:
                 # tenant network
-                (physical_network, network_type, segmentation_id, multicast_ip) = n1k_db_v2.alloc_network(session, profile_id)
+                (physical_network, network_type, segmentation_id, multicast_ip) = n1kv_db_v2.alloc_network(session, profile_id)
                 LOG.debug('Physical_network %s, seg_type %s, seg_id %s, multicast_ip %s', 
                         physical_network, network_type, segmentation_id, multicast_ip)
                 if not (segmentation_id):
@@ -362,11 +362,11 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             else:
                 # provider network
                 if network_type == const.TYPE_VLAN:
-                    n1k_db_v2.reserve_specific_vlan(session, physical_network,
+                    n1kv_db_v2.reserve_specific_vlan(session, physical_network,
                         segmentation_id)
             net = super(N1KQuantumPluginV2, self).create_network(context,
                 network)
-            n1k_db_v2.add_network_binding(session, net['id'], network_type,
+            n1kv_db_v2.add_network_binding(session, net['id'], network_type,
                 physical_network, segmentation_id, multicast_ip, profile_id)
 
             self._extend_network_dict_provider(context, net)
@@ -394,14 +394,14 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_network(self, context, id):
         session = context.session
         with session.begin(subtransactions=True):
-            binding = n1k_db_v2.get_network_binding(session, id)
+            binding = n1kv_db_v2.get_network_binding(session, id)
             network = self.get_network(context, id)
             super(N1KQuantumPluginV2, self).delete_network(context, id)
             if binding.network_type == const.TYPE_VXLAN:
-                n1k_db_v2.release_tunnel(session, binding.segmentation_id,
+                n1kv_db_v2.release_tunnel(session, binding.segmentation_id,
                     self.tunnel_id_ranges)
             elif binding.network_type == const.TYPE_VLAN:
-                n1k_db_v2.release_vlan(session, binding.physical_network,
+                n1kv_db_v2.release_vlan(session, binding.physical_network,
                     binding.segmentation_id,
                     self.network_vlan_ranges)
                 # the network_binding record is deleted via cascade from
@@ -438,7 +438,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             with session.begin(subtransactions=True):
                 pt = super(N1KQuantumPluginV2, self).create_port(context,
                     port)
-                n1k_db_v2.add_port_binding(session, pt['id'], profile_id)
+                n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
 
             self._send_create_port_request(pt)

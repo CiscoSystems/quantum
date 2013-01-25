@@ -26,7 +26,7 @@ from quantum.plugins.cisco.n1kv.common.serializer import Serializer
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.db import n1k_profile_db
+from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.extensions import providernet as provider
 from quantum.extensions import n1kv_profile as n1kv_profile
 
@@ -38,7 +38,7 @@ def exception_handler(status_code, error_content):
     """ Exception handler for N1KV plugin """
     pass
 
-class Client(n1k_profile_db.Profile_db_mixin):
+class Client(n1kv_profile_db.Profile_db_mixin):
     """ Client for the N1KV Quantum Plugin v2.0."""
 
     #Metadata for deserializing xml

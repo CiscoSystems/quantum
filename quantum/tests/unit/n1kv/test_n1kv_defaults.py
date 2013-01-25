@@ -16,7 +16,7 @@
 import unittest
 
 from quantum.openstack.common import cfg
-from quantum.plugins.cisco.n1kv import cisco_n1kv_configuration as conf
+from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 
 
 class ConfigurationTest(unittest.TestCase):

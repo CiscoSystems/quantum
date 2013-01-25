@@ -17,7 +17,7 @@ import unittest2
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
-from quantum.plugins.cisco.db import n1k_db_v2
+from quantum.plugins.cisco.db import n1kv_db_v2
 
 PHYS_NET = 'physnet1'
 PHYS_NET_2 = 'physnet2'
@@ -35,82 +35,82 @@ TEST_NETWORK_ID = 'abcdefghijklmnopqrstuvwxyz'
 
 class VlanAllocationsTest(unittest2.TestCase):
     def setUp(self):
-        n1k_db_v2.initialize()
-        n1k_db_v2.sync_vlan_allocations(VLAN_RANGES)
+        n1kv_db_v2.initialize()
+        n1kv_db_v2.sync_vlan_allocations(VLAN_RANGES)
         self.session = db.get_session()
 
     def tearDown(self):
         db.clear_db()
 
     def test_sync_vlan_allocations(self):
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MIN - 1))
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 1).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX - 1).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX).allocated)
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MAX + 1))
 
-        n1k_db_v2.sync_vlan_allocations(UPDATED_VLAN_RANGES)
+        n1kv_db_v2.sync_vlan_allocations(UPDATED_VLAN_RANGES)
 
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MIN + 5 - 1))
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 5).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 5 + 1).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX + 5 - 1).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX + 5).
                          allocated)
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MAX + 5 + 1))
 
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                         VLAN_MIN + 20 - 1))
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                        VLAN_MIN + 20).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                        VLAN_MIN + 20 + 1).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                        VLAN_MAX + 20 - 1).
                          allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                        VLAN_MAX + 20).
                          allocated)
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                         VLAN_MAX + 20 + 1))
 
-        n1k_db_v2.sync_vlan_allocations(VLAN_RANGES)
+        n1kv_db_v2.sync_vlan_allocations(VLAN_RANGES)
 
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MIN - 1))
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 1).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX - 1).allocated)
-        self.assertFalse(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX).allocated)
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MAX + 1))
 
         """
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                         VLAN_MIN + 20))
-        self.assertIsNone(n1k_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                         VLAN_MAX + 20))
         """
 
