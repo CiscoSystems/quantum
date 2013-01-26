@@ -27,6 +27,7 @@ from quantum.plugins.cisco.db import nexus_models_v2
 from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_models_v2
 from quantum.plugins.cisco.db import n1kv_models_v2
+from quantum.plugins.cisco.db import n1kv_profile_db
 
 
 LOG = logging.getLogger(__name__)

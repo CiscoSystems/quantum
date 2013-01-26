@@ -188,17 +188,18 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
     def _get_instance_host(self, tenant_id, instance_id):
         keystone = cred._creds_dictionary['keystone']
-        kc = keystone_client.Client(username=keystone['username'],
-                                    password=keystone['password'],
+        url = keystone.keys()[0]
+        kc = keystone_client.Client(username=keystone[url]['username'],
+                                    password=keystone[url]['password'],
                                     tenant_id=tenant_id,
-                                    auth_url=keystone['auth_url'])
+                                    auth_url=url)
         tenant = kc.tenants.get(tenant_id)
         tenant_name = tenant.name
 
-        nc = nova_client.Client(keystone['username'],
-                                keystone['password'],
+        nc = nova_client.Client(keystone[url]['username'],
+                                keystone[url]['password'],
                                 tenant_name,
-                                keystone['auth_url'],
+                                url,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         host = serv.__getattr__('OS-EXT-SRV-ATTR:host')
