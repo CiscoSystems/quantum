@@ -11,7 +11,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from quantum.db.models_v2 import model_base
 
 
-class N1kVlanAllocation(model_base.BASEV2):
+class N1kvVlanAllocation(model_base.BASEV2):
     """Represents allocation state of vlan_id on physical network"""
     __tablename__ = 'n1kv_vlan_allocations'
 
@@ -30,7 +30,7 @@ class N1kVlanAllocation(model_base.BASEV2):
                                                self.vlan_id, self.allocated)
 
 
-class N1kTunnelAllocation(model_base.BASEV2):
+class N1kvTunnelAllocation(model_base.BASEV2):
     """Represents allocation state of tunnel_id"""
     __tablename__ = 'n1kv_tunnel_allocations'
 
@@ -45,7 +45,7 @@ class N1kTunnelAllocation(model_base.BASEV2):
     def __repr__(self):
         return "<TunnelAllocation(%d,%s)>" % (self.tunnel_id, self.allocated)
 
-class N1kPortBinding(model_base.BASEV2):
+class N1kvPortBinding(model_base.BASEV2):
     """Represents binding of ports"""
     __tablename__ = 'n1kv_port_bindings'
 
@@ -61,7 +61,7 @@ class N1kPortBinding(model_base.BASEV2):
         return "<PortBinding(%s,%s)>" % (self.port_id,
                                          self.profile_id)
 
-class N1kNetworkBinding(model_base.BASEV2):
+class N1kvNetworkBinding(model_base.BASEV2):
     """Represents binding of virtual network to physical realization"""
     __tablename__ = 'n1kv_network_bindings'
 
@@ -93,7 +93,7 @@ class N1kNetworkBinding(model_base.BASEV2):
                                                   self.profile_id)
 
 
-class N1kTunnelIP(model_base.BASEV2):
+class N1kvTunnelIP(model_base.BASEV2):
     """Represents tunnel endpoint in DB mode"""
     __tablename__ = 'n1kv_tunnel_ips'
 
@@ -106,7 +106,7 @@ class N1kTunnelIP(model_base.BASEV2):
         return "<TunnelIP(%s)>" % (self.ip_address)
 
 
-class N1kTunnelEndpoint(model_base.BASEV2):
+class N1kvTunnelEndpoint(model_base.BASEV2):
     """Represents tunnel endpoint in RPC mode"""
     __tablename__ = 'n1kv_tunnel_endpoints'
 

@@ -14,7 +14,8 @@
 # limitations under the License.
 
 import unittest
-
+from quantum.plugins.cisco.db import n1kv_models_v2
+from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.tests.unit import test_db_plugin as test_plugin
 
 
@@ -31,12 +32,14 @@ class TestN1kvRefactor(unittest.TestCase):
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
                     'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
-
     def setUp(self):
         pass
 
     def test_foo(self):
         self.assertTrue(1 == 1)
+
+    def test_db(self):
+        n1kv_db_v2.initialize()
 
 
 class TestN1kvBasicGet(test_plugin.TestBasicGet,
