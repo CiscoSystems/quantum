@@ -14,11 +14,15 @@
 # limitations under the License.
 
 import unittest
-
+from quantum import context
 from quantum.plugins.cisco.db import n1kv_profile_db
+"""
+Unit tests for module n1kv_profile_db.
+"""
 
 
-class N1kvProfileDbTest(unittest.TestCase):
+class N1kvProfileTest(unittest.TestCase):
+    'Tests for class n1kv_profile_db.Profile'
 
-    def test_defaults(self):
+    def test_create(self):
         pass
