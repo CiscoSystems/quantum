@@ -28,6 +28,10 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
 
 class TestN1kvRefactor(unittest.TestCase):
+    _plugin_name = ('quantum.plugins.cisco.n1kv.'
+                    'n1kv_quantum_plugin.N1kvQuantumPluginV2')
+
+
     def setUp(self):
         pass
 

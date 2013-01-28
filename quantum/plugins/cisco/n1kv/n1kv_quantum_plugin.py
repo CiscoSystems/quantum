@@ -86,13 +86,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _poll_policies(self):
         #Poll policies
-        n1kclient = n1kv_client.Client()
-        self._add_policy_profiles(n1kclient)
+        n1kvclient = n1kv_client.Client()
+        self._add_policy_profiles(n1kvclient)
         LOG.debug('_poll_policies')
 
-    def _add_policy_profiles(self, n1kclient):
+    def _add_policy_profiles(self, n1kvclient):
         """Populate Profiles of type Policy on init."""
-        profiles = n1kclient.list_profiles()
+        profiles = n1kvclient.list_profiles()
         for profile in profiles[const.SET]:
             _profile_id = profile[const.PROPERTIES][const.ID]
             _profile_name = profile[const.PROPERTIES][const.NAME]
@@ -272,11 +272,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_create_network_request(self, network):
         LOG.debug('_send_create_network_request: %s', network['id'])
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
-        n1kclient = n1kv_client.Client()
-        n1kclient.create_fnd(profile)
+        n1kvclient = n1kv_client.Client()
+        n1kvclient.create_fnd(profile)
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
-            n1kclient.create_bridge_domain(network)
-        n1kclient.create_vmnd(network)
+            n1kvclient.create_bridge_domain(network)
+        n1kvclient.create_vmnd(network)
 
     def _send_update_network_request(self, network):
         LOG.debug('_send_update_network_request: %s', network['id'])
@@ -285,20 +285,20 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'id': network['id'],
                 'networkDefinition': profile['name'],
                 'vlan': network[provider.SEGMENTATION_ID]}
-        n1kclient = n1kv_client.Client()
-        n1kclient.update_vmnd(network['name'], body)
+        n1kvclient = n1kv_client.Client()
+        n1kvclient.update_vmnd(network['name'], body)
 
     def _send_delete_network_request(self, network):
         LOG.debug('_send_delete_network_request: %s', network['id'])
-        n1kclient = n1kv_client.Client()
-        n1kclient.delete_vmnd(network['name'])
+        n1kvclient = n1kv_client.Client()
+        n1kvclient.delete_vmnd(network['name'])
 
     def _send_create_subnet_request(self, context, subnet):
         network = self.get_network(context, subnet['network_id'])
-        n1kclient = n1kv_client.Client()
-        n1kclient.create_ip_pool(subnet)
+        n1kvclient = n1kv_client.Client()
+        n1kvclient.create_ip_pool(subnet)
         body = {'ipPoolName': subnet['name']}
-        n1kclient.update_vmnd(network['name'], body=body)
+        n1kvclient.update_vmnd(network['name'], body=body)
         LOG.debug('_send_create_subnet_request: %s', subnet['id'])
 
     def _send_update_subnet_request(self, subnet):
@@ -320,15 +320,15 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kv_db_v2.add_vm_network(vm_network_name,
                                      port[n1kv_profile.PROFILE_ID],
                                      port['network_id'])
-            n1kclient = n1kv_client.Client()
-            n1kclient.create_port(port, vm_network_name)
+            n1kvclient = n1kv_client.Client()
+            n1kvclient.create_port(port, vm_network_name)
         LOG.debug('_send_create_port_request: %s', port['id'])
 
     def _send_update_port_request(self, port, vm_network_name):
         body = {'portId': port['id'],
                 'macAddress': port['mac_address']}
-        n1kclient = n1kv_client.Client()
-        n1kclient.update_port(vm_network_name, body)
+        n1kvclient = n1kv_client.Client()
+        n1kvclient.update_port(vm_network_name, body)
         LOG.debug('_send_update_port_request: %s', port['id'])
 
     def _send_delete_port_request(self, id):
