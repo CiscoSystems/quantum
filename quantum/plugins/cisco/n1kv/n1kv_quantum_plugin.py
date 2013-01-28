@@ -70,7 +70,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         #cred.Store.initialize()
         self._parse_network_vlan_ranges()
         n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
-        self.enable_tunneling = conf.N1K['enable_tunneling']
+        self.enable_tunneling = conf.N1KV['enable_tunneling']
         self.tunnel_id_ranges = []
         if self.enable_tunneling:
             self._parse_tunnel_id_ranges()
@@ -101,7 +101,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
-        ranges = conf.N1K['network_vlan_ranges']
+        ranges = conf.N1KV['network_vlan_ranges']
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -128,7 +128,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.network_vlan_ranges[physical_network] = []
 
     def _parse_tunnel_id_ranges(self):
-        ranges = conf.N1K['tunnel_id_ranges']
+        ranges = conf.N1KV['tunnel_id_ranges']
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()

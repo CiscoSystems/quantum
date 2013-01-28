@@ -22,10 +22,10 @@ from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 class ConfigurationTest(unittest.TestCase):
 
     def test_defaults(self):
-        self.assertEqual('br-int', conf.N1K['integration_bridge'])
+        self.assertEqual('br-int', conf.N1KV['integration_bridge'])
         """
         These are some of the OVS config checks. Change them to
-        test the N1K config, as shown above.
+        test the N1KV config, as shown above.
 
 
         self.assertEqual('br-int', cfg.CONF.OVS.integration_bridge)

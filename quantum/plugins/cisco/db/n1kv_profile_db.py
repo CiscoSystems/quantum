@@ -207,7 +207,7 @@ class Profile_db_mixin(profile.ProfileBase):
 
     def _validate_vlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        for entry in cfg.CONF.N1K.network_vlan_ranges:
+        for entry in cfg.CONF.N1KV.network_vlan_ranges:
             entry = entry.strip()
             if ':' in entry:
                 g_phy_nw, g_seg_min, g_seg_max = entry.split(':')
@@ -218,7 +218,7 @@ class Profile_db_mixin(profile.ProfileBase):
 
     def _validate_vxlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        g_seg_min, g_seg_max = map(int, cfg.CONF.N1K.tunnel_id_ranges[0].split(':'))
+        g_seg_min, g_seg_max = map(int, cfg.CONF.N1KV.tunnel_id_ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min, seg_max, g_seg_min, g_seg_max)
         if (seg_min < g_seg_min) or (seg_max > g_seg_max):
             msg = _("Vxlan out of range")
