@@ -21,7 +21,7 @@ from quantum.tests.unit import test_db_plugin as test_plugin
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
-                    'n1kv_quantum_plugin.N1KQuantumPluginV2')
+                    'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
     def setUp(self):
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)

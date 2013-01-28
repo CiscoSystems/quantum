@@ -41,7 +41,7 @@ VM_NETWORK_NUM = 0
 TENANT = const.NETWORK_ADMIN
 
 
-class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
+class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
                          n1kv_profile_db.Profile_db_mixin):
     """Implement the Quantum abstractions using Open vSwitch.
@@ -364,7 +364,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 if network_type == const.TYPE_VLAN:
                     n1kv_db_v2.reserve_specific_vlan(session, physical_network,
                         segmentation_id)
-            net = super(N1KQuantumPluginV2, self).create_network(context,
+            net = super(N1kvQuantumPluginV2, self).create_network(context,
                 network)
             n1kv_db_v2.add_network_binding(session, net['id'], network_type,
                 physical_network, segmentation_id, multicast_ip, profile_id)
@@ -383,7 +383,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         session = context.session
         with session.begin(subtransactions=True):
-            net = super(N1KQuantumPluginV2, self).update_network(context, id,
+            net = super(N1kvQuantumPluginV2, self).update_network(context, id,
                 network)
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
@@ -396,7 +396,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             binding = n1kv_db_v2.get_network_binding(session, id)
             network = self.get_network(context, id)
-            super(N1KQuantumPluginV2, self).delete_network(context, id)
+            super(N1kvQuantumPluginV2, self).delete_network(context, id)
             if binding.network_type == const.TYPE_VXLAN:
                 n1kv_db_v2.release_tunnel(session, binding.segmentation_id,
                     self.tunnel_id_ranges)
@@ -411,14 +411,14 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("Deleted network: %s", id)
 
     def get_network(self, context, id, fields=None):
-        net = super(N1KQuantumPluginV2, self).get_network(context, id, None)
+        net = super(N1kvQuantumPluginV2, self).get_network(context, id, None)
         self._extend_network_dict_provider(context, net)
         self._extend_network_dict_profile(context, net)
         LOG.debug("Get network: %s", id)
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
-        nets = super(N1KQuantumPluginV2, self).get_networks(context, filters,
+        nets = super(N1kvQuantumPluginV2, self).get_networks(context, filters,
             None)
         for net in nets:
             self._extend_network_dict_provider(context, net)
@@ -436,7 +436,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.debug('Aruna: create port: profile_id=%s', profile_id)
             session = context.session
             with session.begin(subtransactions=True):
-                pt = super(N1KQuantumPluginV2, self).create_port(context,
+                pt = super(N1kvQuantumPluginV2, self).create_port(context,
                     port)
                 n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
@@ -483,9 +483,9 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def update_port(self, context, id, port):
         if self.agent_vsm:
-            original_port = super(N1KQuantumPluginV2, self).get_port(context,
+            original_port = super(N1kvQuantumPluginV2, self).get_port(context,
                 id)
-        port = super(N1KQuantumPluginV2, self).update_port(context, id, port)
+        port = super(N1kvQuantumPluginV2, self).update_port(context, id, port)
         self._extend_port_dict_profile(context, port)
         if self.agent_vsm:
             if original_port['admin_state_up'] != port['admin_state_up']:
@@ -494,16 +494,16 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def delete_port(self, context, id):
         self._send_delete_port_request(id)
-        return super(N1KQuantumPluginV2, self).delete_port(context, id)
+        return super(N1kvQuantumPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):
-        port = super(N1KQuantumPluginV2, self).get_port(context, id, fields)
+        port = super(N1kvQuantumPluginV2, self).get_port(context, id, fields)
         self._extend_port_dict_profile(context, port)
         LOG.debug("Get port: %s", id)
         return self._fields(port, fields)
 
     def get_ports(self, context, filters=None, fields=None):
-        ports = super(N1KQuantumPluginV2, self).get_ports(context, filters,
+        ports = super(N1kvQuantumPluginV2, self).get_ports(context, filters,
             fields)
         for port in ports:
             self._extend_port_dict_profile(context, port)
@@ -513,14 +513,14 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_subnet(self, context, subnet):
         LOG.debug('Create subnet')
-        sub = super(N1KQuantumPluginV2, self).create_subnet(context, subnet)
+        sub = super(N1kvQuantumPluginV2, self).create_subnet(context, subnet)
         self._send_create_subnet_request(context, sub)
         LOG.debug("Created subnet: %s", sub['id'])
         return sub
 
     def update_subnet(self, context, id, subnet):
         LOG.debug('Update subnet')
-        sub = super(N1KQuantumPluginV2, self).update_subnet(context, subnet)
+        sub = super(N1kvQuantumPluginV2, self).update_subnet(context, subnet)
         self._send_update_subnet_request(sub)
         LOG.debug("Updated subnet: %s", sub['id'])
         return sub
@@ -528,16 +528,16 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_subnet(self, context, id):
         LOG.debug('Delete subnet: %s', id)
         self._send_subnet_delete_request(id)
-        return super(N1KQuantumPluginV2, self).delete_subnet(context, id)
+        return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):
-        subnet = super(N1KQuantumPluginV2, self).get_subnet(context, id,
+        subnet = super(N1kvQuantumPluginV2, self).get_subnet(context, id,
                                                             fields)
         LOG.debug("Get subnet: %s", id)
         return self._fields(subnet, fields)
 
     def get_subnets(self, context, filters=None, fields=None):
-        subnets = super(N1KQuantumPluginV2, self).get_subnets(context, filters,
+        subnets = super(N1kvQuantumPluginV2, self).get_subnets(context, filters,
             fields)
         LOG.debug("Get subnets")
         return [self._fields(subnet, fields) for subnet in subnets]
