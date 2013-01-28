@@ -36,7 +36,7 @@ from quantum.openstack.common import cfg
 LOG = logging.getLogger(__name__)
 
 class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-    """Represents N1K profiles"""
+    """Represents N1kv profiles"""
     __tablename__ = 'profile'
 
     name = Column(String(255))
@@ -82,7 +82,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
         return (min_ip, max_ip)
 
 class Profile_db_mixin(profile.ProfileBase):
-    """Mixin class to add N1K Profile methods to db_plugin_base_v2"""
+    """Mixin class to add N1kv Profile methods to db_plugin_base_v2"""
 
     def create_profile(self, context, profile):
         p = profile['profile']
@@ -122,14 +122,14 @@ class Profile_db_mixin(profile.ProfileBase):
     '''
 
     def get_profile_by_type(self, profile_type):
-	"""List the N1K Profiles by its type"""
+	"""List the N1Kv Profiles by its type"""
 	session = db.get_session()
         try:
             profile = (session.query(Profile).
                        filter_by(profile_type=profile_type).all())
             return profile
         except exc.NoResultFound:
-            raise n1k_exc.ProfileTypeNotFound(profile_type=profile_type)
+            raise n1kv_exc.ProfileTypeNotFound(profile_type=profile_type)
 
     '''
 
@@ -151,7 +151,7 @@ class Profile_db_mixin(profile.ProfileBase):
             return profiledb
 
     def get_profile_by_id(self, profile_id):
-        """Get N1K Profile Name by its id"""
+        """Get N1kv Profile Name by its id"""
         session = db.get_session()
         try:
             profile = (session.query(Profile).

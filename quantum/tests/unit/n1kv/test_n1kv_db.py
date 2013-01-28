@@ -116,7 +116,7 @@ class VlanAllocationsTest(unittest2.TestCase):
 
 """
 This is the remainder of the OVS DB tests. Please adapt as necessary
-to test all N1K Db functions.
+to test all N1kv Db functions.
 
 
     def test_vlan_pool(self):

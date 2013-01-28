@@ -62,7 +62,7 @@ class Profile(object):
 
     @classmethod
     def get_name(cls):
-        return "Cisco N1K Profiles"
+        return "Cisco N1kv Profiles"
 
     @classmethod
     def get_alias(cls):
@@ -70,11 +70,11 @@ class Profile(object):
 
     @classmethod
     def get_description(cls):
-        return ("Profile includes the type of profile for N1KV")
+        return ("Profile includes the type of profile for N1kv")
 
     @classmethod
     def get_namespace(cls):
-        return "http://docs.openstack.org/ext/n1k/api/v2.0"
+        return "http://docs.openstack.org/ext/n1kv/api/v2.0"
 
     @classmethod
     def get_updated(cls):
