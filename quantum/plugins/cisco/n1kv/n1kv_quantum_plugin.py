@@ -38,7 +38,7 @@ from novaclient.v1_1 import client as nova_client
 
 LOG = logging.getLogger(__name__)
 VM_NETWORK_NUM = 0
-TENANT_ID = const.NETWORK_ADMIN
+TENANT = const.NETWORK_ADMIN
 
 
 class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
@@ -96,7 +96,7 @@ class N1KQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         for profile in profiles[const.SET]:
             _profile_id = profile[const.PROPERTIES][const.ID]
             _profile_name = profile[const.PROPERTIES][const.NAME]
-            self.add_profile(TENANT_ID,
+            self.add_profile(TENANT,
                              _profile_id, _profile_name, const.POLICY)
 
     def _parse_network_vlan_ranges(self):
