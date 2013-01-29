@@ -18,7 +18,7 @@ from quantum.db import l3_db
 from quantum.extensions import providernet as provider
 from quantum.extensions import n1kv_profile as n1kv_profile
 from quantum.openstack.common import context
-from quantum.openstack.common import quantum_cfg
+from quantum.openstack.common import cfg as quantum_cfg
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
@@ -334,6 +334,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_delete_port_request(self, id):
         LOG.debug('_send_delete_port_request: %s', id)
 
+    def _get_segmentation_id(self, context, id):
+        session = context.session
+        binding_seg_id = n1kv_db_v2.get_network_binding(session, id)
+        return binding_seg_id.segmentation_id
+
     def create_network1(self, tenant_id, network_id, network_context):
         """
         """
@@ -445,7 +450,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.debug("Created port: %s", pt)
             return pt
         else:
-
             tenant_id = port['port']['tenant_id']
             instance_id = port['port']['device_id']
             device_owner = port['port']['device_owner']
@@ -465,16 +469,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _get_instance_port_id(self, tenant_id, instance_id):
         keystone = cred._creds_dictionary['keystone']
-        kc = keystone_client.Client(username=keystone['username'],
-                                    password=keystone['password'],
+        url = keystone.keys()[0]
+        kc = keystone_client.Client(username=keystone[url]['username'],
+                                    password=keystone[url]['password'],
                                     tenant_id=tenant_id,
-                                    auth_url=keystone['auth_url'])
+                                    auth_url=url)
         tenant = kc.tenants.get(tenant_id)
         tenant_name = tenant.name
-        nc = nova_client.Client(keystone['username'],
-                                keystone['password'],
+        nc = nova_client.Client(keystone[url]['username'],
+                                keystone[url]['password'],
                                 tenant_name,
-                                keystone['auth_url'],
+                                url,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         port_id = serv.__getattr__('metadata')

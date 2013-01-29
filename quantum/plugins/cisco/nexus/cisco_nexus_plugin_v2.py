@@ -84,7 +84,6 @@ class NexusPlugin(L2DevicePluginBase):
         # Grab the switch IP and port for this host
         switch_ip = ''
         port_id = ''
-        LOG.debug("\n\n\n\n%s %s\n\n\n" % (host, self._nexus_switches))
         for switch in self._nexus_switches.keys():
             for hostname in self._nexus_switches[switch].keys():
                 if str(hostname) == str(host):
