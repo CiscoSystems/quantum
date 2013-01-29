@@ -45,7 +45,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     MANAGE_STATE = True
     __native_bulk_support = True
-    supported_extension_aliases = []
+    supported_extension_aliases = ["provider", "profile", "n1kv_profile", "router"]
     _plugins = {}
     _inventory = {}
     _methods_to_delegate = ['get_network', 'get_networks',
@@ -168,9 +168,12 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             else:
                 return func(*args)
 
-    def _get_segmentation_id(self, network_id):
-        binding_seg_id = odb.get_network_binding(None, network_id)
-        return binding_seg_id.segmentation_id
+    def _get_segmentation_id(self, *args, **kwargs):
+        #binding_seg_id = odb.get_network_binding(None, network_id)
+        #return binding_seg_id.segmentation_id
+        return self._invoke_plugin(const.VSWITCH_PLUGIN,
+                                   '_get_segmentation_id',
+                                   args, kwargs)
 
     def _get_all_segmentation_ids(self):
         vlan_ids = cdb.get_ovs_vlans()
@@ -217,7 +220,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
-            vlan_id = self._get_segmentation_id(ovs_output[0]['id'])
+            vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
             if not self._validate_vlan_id(vlan_id):
                 return ovs_output[0]
             vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
@@ -258,7 +261,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                     self._func_name(),
                                                     args)
-        vlan_id = self._get_segmentation_id(ovs_output[0]['id'])
+        vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
         if not self._validate_vlan_id(vlan_id):
             return ovs_output[0]
         vlanids = self._get_all_segmentation_ids()
@@ -279,7 +282,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             base_plugin_ref = QuantumManager.get_plugin()
             n = base_plugin_ref.get_network(context, id)
             tenant_id = n['tenant_id']
-            vlan_id = self._get_segmentation_id(id)
+            vlan_id = self._get_segmentation_id(context, id)
             args = [context, id]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
@@ -320,20 +323,20 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             net_dict = self.get_network(context, net_id)
             net_name = net_dict['name']
 
-            vlan_id = self._get_segmentation_id(net_id)
+            vlan_id = self._get_segmentation_id(context, net_id)
             host = ''
             if hasattr(conf, 'TEST'):
                 host = conf.TEST['host']
-            else:
+            elif instance_id:
                 host = self._get_instance_host(tenant_id, instance_id)
 
-            # Trunk segmentation id for only this host
-            vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
-            n_args = [tenant_id, net_name, net_id,
-                      vlan_name, vlan_id, host, instance_id]
-            nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
-                                                          'create_network',
-                                                          n_args)
+                # Trunk segmentation id for only this host
+                vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
+                n_args = [tenant_id, net_name, net_id,
+                          vlan_name, vlan_id, host, instance_id]
+                nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
+                                                              'create_network',
+                                                              n_args)
             return ovs_output[0]
         except:
             # TODO (asomya): Check if we need to perform any rollback here
@@ -360,7 +363,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         try:
             args = [context, id]
             port = self.get_port(context, id)
-            vlan_id = self._get_segmentation_id(port['network_id'])
+            vlan_id = self._get_segmentation_id(context, port['network_id'])
             n_args = [port['device_id'], vlan_id]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),

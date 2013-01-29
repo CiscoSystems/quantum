@@ -23,17 +23,21 @@ import quantum.db.api as db
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import exc
+
+from quantum.api.v2.attributes import _validate_ip_address
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.db.models_v2 import model_base
-from quantum.plugins.cisco.common import cisco_exceptions
-from quantum.extensions import profile
 from quantum.common import exceptions as q_exc
 from quantum.common import utils
-from quantum.api.v2.attributes import _validate_ip_address
+from quantum.extensions import profile
 from quantum.openstack.common import cfg
+from quantum.plugins.cisco.common import cisco_exceptions
+from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
+
 
 LOG = logging.getLogger(__name__)
+
 
 class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents N1kv profiles"""
@@ -88,7 +92,7 @@ class Profile_db_mixin(profile.ProfileBase):
         p = profile['profile']
         self._validate_arguments(context, p)
         tenant_id = self._get_tenant_id_for_create(context, p)
-        p['profile_id'] = utils.str_uuid()
+        p['profile_id'] = uuid.uuid4() 
         try:
             with context.session.begin(subtransactions=True):
                 profile_db = Profile(
@@ -207,7 +211,9 @@ class Profile_db_mixin(profile.ProfileBase):
 
     def _validate_vlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        for entry in cfg.CONF.N1KV.network_vlan_ranges:
+        ranges = conf.N1K['network_vlan_ranges']
+        ranges = ranges.split(',') 
+        for entry in ranges:
             entry = entry.strip()
             if ':' in entry:
                 g_phy_nw, g_seg_min, g_seg_max = entry.split(':')
@@ -218,7 +224,9 @@ class Profile_db_mixin(profile.ProfileBase):
 
     def _validate_vxlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        g_seg_min, g_seg_max = map(int, cfg.CONF.N1KV.tunnel_id_ranges[0].split(':'))
+        ranges = conf.N1K['tunnel_id_ranges']
+        ranges = ranges.split(',')
+        g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min, seg_max, g_seg_min, g_seg_max)
         if (seg_min < g_seg_min) or (seg_max > g_seg_max):
             msg = _("Vxlan out of range")
