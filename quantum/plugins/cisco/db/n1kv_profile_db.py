@@ -39,7 +39,7 @@ LOG = logging.getLogger(__name__)
 
 class N1kvProfile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents N1kv profiles"""
-    __tablename__ = 'profile'
+    __tablename__ = 'profiles'
 
     name = Column(String(255))
     profile_type = Column(String(255))
@@ -155,7 +155,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
             return profiledb
 
     def get_profile_by_id(self, profile_id):
-        """Get N1kv Profile Name by its id"""
+        """Get N1kv Profile by its id"""
         session = db.get_session()
         try:
             profile = (session.query(N1kvProfile).
@@ -247,7 +247,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_segment_range(self, p):
         mo = re.match(r"(\d+)\-(\d+)", p['segment_range'])
-        if mo == None:
+        if mo is None:
             msg = _("invalid segment range. example range: 500-550")
             raise q_exc.InvalidInput(error_message=msg)
 
@@ -268,7 +268,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         else:
             self._validate_vxlan(p)
 
-    def _validate_uniqueness(self, context, p):
+    def _validate_segment_range_uniqueness(self, context, p):
         profiles = self.get_profiles(context)
         for prfl in profiles:
             if p['name'] == prfl['name']:
@@ -297,4 +297,4 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
             p['segment_type'] = ''
             p['segment_range'] = ''
             p['multicast_ip_range'] = ''
-        self._validate_uniqueness(context, p)
+        self._validate_segment_range_uniqueness(context, p)
