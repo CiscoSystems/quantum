@@ -157,8 +157,10 @@ def reserve_tunnel(session, profile):
         try:
             alloc = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
                     filter(and_(
-                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id >= seg_min,
-                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id <= seg_max,
+                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id >=
+                           seg_min,
+                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id <=
+                           seg_max,
                        n1kv_models_v2.N1kvTunnelAllocation.allocated == False)
                        ).first())
             segment_id = alloc.tunnel_id
@@ -203,7 +205,8 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
         except exc.NoResultFound:
             LOG.debug("reserving specific vlan %s on physical network %s "
                       "outside pool" % (vlan_id, physical_network))
-            alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network, vlan_id)
+            alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
+                                                      vlan_id)
             alloc.allocated = True
             session.add(alloc)
 

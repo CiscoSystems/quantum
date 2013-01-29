@@ -64,7 +64,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                 min_ip, max_ip = self._get_multicast_ip_range()
                 min_addr = int(min_ip.split('.')[3])
                 max_addr = int(max_ip.split('.')[3])
-                addr_list = list(xrange(min_addr, max_addr+1))
+                addr_list = list(xrange(min_addr, max_addr + 1))
 
                 mul_ip = min_ip.split('.')
                 mul_ip[3] = str(addr_list[self.multicast_ip_index])
@@ -85,6 +85,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
         min_ip, max_ip = self.multicast_ip_range.split('-')
         return (min_ip, max_ip)
 
+
 class Profile_db_mixin(profile.ProfileBase):
     """Mixin class to add N1kv Profile methods to db_plugin_base_v2"""
 
@@ -92,7 +93,7 @@ class Profile_db_mixin(profile.ProfileBase):
         p = profile['profile']
         self._validate_arguments(context, p)
         tenant_id = self._get_tenant_id_for_create(context, p)
-        p['profile_id'] = uuid.uuid4() 
+        p['profile_id'] = uuid.uuid4()
         try:
             with context.session.begin(subtransactions=True):
                 profile_db = Profile(
@@ -143,7 +144,8 @@ class Profile_db_mixin(profile.ProfileBase):
         try:
             profiledb = (session.query(Profile).
                     filter_by(profile_id=profile_id).one())
-            LOG.debug("Add Profile failed: Profile %s already exists", profile_id)
+            LOG.debug("Add Profile failed: Profile %s already exists",
+                      profile_id)
         except exc.NoResultFound:
             profiledb = Profile(tenant_id=tenant_id,
                                 profile_id=profile_id,
@@ -174,14 +176,14 @@ class Profile_db_mixin(profile.ProfileBase):
         return self._make_profile_dict(profile, fields)
 
     def _make_profile_dict(self, profile, fields=None):
-        res  = {'profile_id': profile['profile_id'],
-                'name': profile['name'],
-                'profile_type': profile['profile_type'],
-                'tenant_id': profile['tenant_id'],
-                'segment_type' : profile['segment_type'],
-                'segment_range' : profile['segment_range'],
-                'multicast_ip_range' : profile['multicast_ip_range']
-               }
+        res = {'profile_id': profile['profile_id'],
+               'name': profile['name'],
+               'profile_type': profile['profile_type'],
+               'tenant_id': profile['tenant_id'],
+               'segment_type': profile['segment_type'],
+               'segment_range': profile['segment_range'],
+               'multicast_ip_range': profile['multicast_ip_range']
+              }
         LOG.debug("ABS DB %s\n", res)
         return self._fields(res, fields)
 
@@ -212,7 +214,7 @@ class Profile_db_mixin(profile.ProfileBase):
     def _validate_vlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         ranges = conf.N1K['network_vlan_ranges']
-        ranges = ranges.split(',') 
+        ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
             if ':' in entry:
@@ -227,7 +229,8 @@ class Profile_db_mixin(profile.ProfileBase):
         ranges = conf.N1K['tunnel_id_ranges']
         ranges = ranges.split(',')
         g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
-        LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min, seg_max, g_seg_min, g_seg_max)
+        LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min,
+                  seg_max, g_seg_min, g_seg_max)
         if (seg_min < g_seg_min) or (seg_max > g_seg_max):
             msg = _("Vxlan out of range")
             LOG.exception(msg)
@@ -236,7 +239,8 @@ class Profile_db_mixin(profile.ProfileBase):
             msg = _("Multicast ip range is required")
             raise q_exc.InvalidInput(error_message=msg)
         if p['multicast_ip_range'].count('-') != 1:
-            msg = _("invalid ip range. example range: 225.280.100.10-225.280.100.20")
+            msg = _("invalid ip range. example range: 225.280.100.10-"
+                    "225.280.100.20")
             raise q_exc.InvalidInput(error_message=msg)
         for ip in p['multicast_ip_range'].split('-'):
             if _validate_ip_address(ip) != None:
@@ -250,8 +254,9 @@ class Profile_db_mixin(profile.ProfileBase):
             raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_network_profile(self, p):
-        if any(p[arg]=='' for arg in ('segment_type', 'segment_range')):
-            msg = _("arguments segment_type and segment_range missing for network profile")
+        if any(p[arg] == '' for arg in ('segment_type', 'segment_range')):
+            msg = _("arguments segment_type and segment_range missing"
+                    " for network profile")
             LOG.exception(msg)
             raise q_exc.InvalidInput(error_message=msg)
         if p['segment_type'].lower() not in ['vlan', 'vxlan']:
@@ -272,12 +277,17 @@ class Profile_db_mixin(profile.ProfileBase):
                 msg = _("Profile name %s already exists" % p['name'])
                 LOG.exception(msg)
                 raise q_exc.InvalidInput(error_message=msg)
-            if (p['profile_type']=='network') and (prfl['profile_type']=='network'):
+            if (p['profile_type'] == 'network') and (prfl['profile_type'] ==
+                'network'):
                 seg_min, seg_max = self._get_segment_range(p['segment_range'])
-                prfl_seg_min, prfl_seg_max = self._get_segment_range(prfl['segment_range'])
-                if (((seg_min>=prfl_seg_min) and (seg_min<=prfl_seg_max)) or
-                    ((seg_max>=prfl_seg_min) and (seg_max<=prfl_seg_max)) or
-                    ((seg_min<=prfl_seg_min) and (seg_max>=prfl_seg_max))):
+                prfl_seg_min, prfl_seg_max = self._get_segment_range(
+                    prfl['segment_range'])
+                if (((seg_min >= prfl_seg_min) and
+                     (seg_min <= prfl_seg_max)) or
+                    ((seg_max >= prfl_seg_min) and
+                     (seg_max <= prfl_seg_max)) or
+                    ((seg_min <= prfl_seg_min) and
+                     (seg_max >= prfl_seg_max))):
                     msg = _("segment range overlaps with another profile")
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
