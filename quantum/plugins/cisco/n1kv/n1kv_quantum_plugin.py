@@ -44,7 +44,7 @@ TENANT = const.NETWORK_ADMIN
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         n1kv_profile_db.Profile_db_mixin):
+                         n1kv_profile_db.N1kvProfile_db_mixin):
     """Implement the Quantum abstractions using Open vSwitch.
 
     Depending on whether tunneling is enabled, either a GRE tunnel or

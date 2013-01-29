@@ -174,7 +174,7 @@ def reserve_tunnel(session, profile):
 def alloc_network(session, profile_id):
     with session.begin(subtransactions=True):
         try:
-            profile = (session.query(n1kv_profile_db.Profile).
+            profile = (session.query(n1kv_profile_db.N1kvProfile).
                     filter_by(profile_id=profile_id).one())
             if profile:
                 if profile.segment_type == 'vlan':
@@ -182,7 +182,7 @@ def alloc_network(session, profile_id):
                 else:
                     return reserve_tunnel(session, profile)
         except q_exc.NotFound:
-            LOG.debug("Profile not found")
+            LOG.debug("N1kvProfile not found")
 
 
 def reserve_specific_vlan(session, physical_network, vlan_id):

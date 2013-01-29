@@ -40,7 +40,7 @@ def exception_handler(status_code, error_content):
     pass
 
 
-class Client(n1kv_profile_db.Profile_db_mixin):
+class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     """ Client for the N1KV Quantum Plugin v2.0."""
 
     #Metadata for deserializing xml

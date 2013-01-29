@@ -21,7 +21,7 @@ import uuid
 import logging
 import quantum.db.api as db
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import exc
 
 from quantum.api.v2.attributes import _validate_ip_address
@@ -29,9 +29,7 @@ from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.db.models_v2 import model_base
 from quantum.common import exceptions as q_exc
-from quantum.common import utils
 from quantum.extensions import profile
-from quantum.openstack.common import cfg
 from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 
@@ -39,7 +37,7 @@ from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 LOG = logging.getLogger(__name__)
 
 
-class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
+class N1kvProfile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents N1kv profiles"""
     __tablename__ = 'profile'
 
@@ -54,7 +52,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     def get_segment_range(self, session):
         with session.begin(subtransactions=True):
             seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
-            LOG.debug("Profile: seg_min %s seg_max %s", seg_min, seg_max)
+            LOG.debug("N1kvProfile: seg_min %s seg_max %s", seg_min, seg_max)
             return (int(seg_min), int(seg_max))
 
     def get_multicast_ip(self, session):
@@ -86,7 +84,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
         return (min_ip, max_ip)
 
 
-class Profile_db_mixin(profile.ProfileBase):
+class N1kvProfile_db_mixin(profile.ProfileBase):
     """Mixin class to add N1kv Profile methods to db_plugin_base_v2"""
 
     def create_profile(self, context, profile):
@@ -96,7 +94,7 @@ class Profile_db_mixin(profile.ProfileBase):
         p['profile_id'] = uuid.uuid4()
         try:
             with context.session.begin(subtransactions=True):
-                profile_db = Profile(
+                profile_db = N1kvProfile(
                         id=p['profile_id'],
                         tenant_id=tenant_id,
                         name=p['name'],
@@ -130,7 +128,7 @@ class Profile_db_mixin(profile.ProfileBase):
         """List the N1Kv Profiles by its type"""
         session = db.get_session()
         try:
-            profile = (session.query(Profile).
+            profile = (session.query(N1kvProfile).
                        filter_by(profile_type=profile_type).all())
             return profile
         except exc.NoResultFound:
@@ -142,14 +140,14 @@ class Profile_db_mixin(profile.ProfileBase):
         """Adds a qos to tenant association"""
         session = db.get_session()
         try:
-            profiledb = (session.query(Profile).
+            profiledb = (session.query(N1kvProfile).
                     filter_by(profile_id=profile_id).one())
-            LOG.debug("Add Profile failed: Profile %s already exists",
+            LOG.debug("Add N1kvProfile failed: Profile %s already exists",
                       profile_id)
         except exc.NoResultFound:
-            profiledb = Profile(tenant_id=tenant_id,
-                                profile_id=profile_id,
-                                id=profile_id,
+            profiledb = N1kvProfile(tenant_id=tenant_id,
+                                    profile_id=profile_id,
+                                    id=profile_id,
                                 name=name,
                                 profile_type=profile_type)
             session.add(profiledb)
@@ -160,14 +158,14 @@ class Profile_db_mixin(profile.ProfileBase):
         """Get N1kv Profile Name by its id"""
         session = db.get_session()
         try:
-            profile = (session.query(Profile).
+            profile = (session.query(N1kvProfile).
                        filter_by(profile_id=profile_id).one())
             return profile
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileId
 
     def get_profiles(self, context, filters=None, fields=None):
-        return self._get_collection(context, Profile,
+        return self._get_collection(context, N1kvProfile,
                                     self._make_profile_dict,
                                     filters=filters, fields=fields)
 
@@ -189,7 +187,7 @@ class Profile_db_mixin(profile.ProfileBase):
 
     def _get_profile(self, context, id):
         try:
-            profile = self._get_by_id(context, Profile, id)
+            profile = self._get_by_id(context, N1kvProfile, id)
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
         except exc.MultipleResultsFound:
@@ -274,7 +272,7 @@ class Profile_db_mixin(profile.ProfileBase):
         profiles = self.get_profiles(context)
         for prfl in profiles:
             if p['name'] == prfl['name']:
-                msg = _("Profile name %s already exists" % p['name'])
+                msg = _("N1kvProfile name %s already exists" % p['name'])
                 LOG.exception(msg)
                 raise q_exc.InvalidInput(error_message=msg)
             if (p['profile_type'] == 'network') and (prfl['profile_type'] ==
