@@ -37,7 +37,7 @@ from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 LOG = logging.getLogger(__name__)
 
 
-class N1kvProfile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
+class N1kvProfile_db(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents N1kv profiles"""
     __tablename__ = 'profiles'
 
@@ -52,7 +52,7 @@ class N1kvProfile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     def get_segment_range(self, session):
         with session.begin(subtransactions=True):
             seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
-            LOG.debug("N1kvProfile: seg_min %s seg_max %s", seg_min, seg_max)
+            LOG.debug("N1kvProfile_db: seg_min %s seg_max %s", seg_min,seg_max)
             return (int(seg_min), int(seg_max))
 
     def get_multicast_ip(self, session):
@@ -94,7 +94,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         p['profile_id'] = uuid.uuid4()
         try:
             with context.session.begin(subtransactions=True):
-                profile_db = N1kvProfile(
+                profile_db = N1kvProfile_db(
                         id=p['profile_id'],
                         tenant_id=tenant_id,
                         name=p['name'],
@@ -128,7 +128,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         """List the N1Kv Profiles by its type"""
         session = db.get_session()
         try:
-            profile = (session.query(N1kvProfile).
+            profile = (session.query(N1kvProfile_db).
                        filter_by(profile_type=profile_type).all())
             return profile
         except exc.NoResultFound:
@@ -140,14 +140,14 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         """Adds a qos to tenant association"""
         session = db.get_session()
         try:
-            profiledb = (session.query(N1kvProfile).
+            profiledb = (session.query(N1kvProfile_db).
                     filter_by(profile_id=profile_id).one())
-            LOG.debug("Add N1kvProfile failed: Profile %s already exists",
+            LOG.debug("Add N1kvProfile_db failed: Profile %s already exists",
                       profile_id)
         except exc.NoResultFound:
-            profiledb = N1kvProfile(tenant_id=tenant_id,
-                                    profile_id=profile_id,
-                                    id=profile_id,
+            profiledb = N1kvProfile_db(tenant_id=tenant_id,
+                                       profile_id=profile_id,
+                                       id=profile_id,
                                 name=name,
                                 profile_type=profile_type)
             session.add(profiledb)
@@ -158,14 +158,14 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         """Get N1kv Profile by its id"""
         session = db.get_session()
         try:
-            profile = (session.query(N1kvProfile).
+            profile = (session.query(N1kvProfile_db).
                        filter_by(profile_id=profile_id).one())
             return profile
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileId
 
     def get_profiles(self, context, filters=None, fields=None):
-        return self._get_collection(context, N1kvProfile,
+        return self._get_collection(context, N1kvProfile_db,
                                     self._make_profile_dict,
                                     filters=filters, fields=fields)
 
@@ -187,7 +187,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _get_profile(self, context, id):
         try:
-            profile = self._get_by_id(context, N1kvProfile, id)
+            profile = self._get_by_id(context, N1kvProfile_db, id)
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
         except exc.MultipleResultsFound:
@@ -272,7 +272,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         profiles = self.get_profiles(context)
         for prfl in profiles:
             if p['name'] == prfl['name']:
-                msg = _("N1kvProfile name %s already exists" % p['name'])
+                msg = _("N1kvProfile_db name %s already exists" % p['name'])
                 LOG.exception(msg)
                 raise q_exc.InvalidInput(error_message=msg)
             if (p['profile_type'] == 'network') and (prfl['profile_type'] ==

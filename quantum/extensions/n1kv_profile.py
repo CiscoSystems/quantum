@@ -37,7 +37,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
 }
 
 
-class N1KvProfile(object):
+class N1kvProfile(object):
     """Extension class supporting provider networks.
 
     This class is used by quantum's extension framework to make
