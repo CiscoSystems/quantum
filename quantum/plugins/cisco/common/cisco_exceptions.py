@@ -160,4 +160,4 @@ class ProfileAlreadyExists(exceptions.QuantumException):
 
 class ProfileIdNotFound(exceptions.QuantumException):
     """Profile cannot be found"""
-    message = _("Profile %(profile_id)s caould not be found ")
+    message = _("Profile %(profile_id)s could not be found ")
