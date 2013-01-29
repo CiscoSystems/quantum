@@ -52,10 +52,9 @@ class Store(object):
                         id_type)
                 except cexc.CredentialAlreadyExists:
                     # We are quietly ignoring this, since it only happens
-                    # if this class module is loaded more than once, in 
+                    # if this class module is loaded more than once, in
                     # which case, the credentials are already populated
                     pass
-                    
 
     @staticmethod
     def put_credential(cred_name, username, password):

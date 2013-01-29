@@ -45,6 +45,7 @@ class N1kvTunnelAllocation(model_base.BASEV2):
     def __repr__(self):
         return "<TunnelAllocation(%d,%s)>" % (self.tunnel_id, self.allocated)
 
+
 class N1kvPortBinding(model_base.BASEV2):
     """Represents binding of ports"""
     __tablename__ = 'n1kv_port_bindings'
@@ -53,6 +54,7 @@ class N1kvPortBinding(model_base.BASEV2):
         ForeignKey('ports.id', ondelete="CASCADE"),
         primary_key=True)
     profile_id = Column(String(36))
+
     def __init__(self, port_id, profile_id):
         self.port_id = port_id
         self.profile_id = profile_id
@@ -60,6 +62,7 @@ class N1kvPortBinding(model_base.BASEV2):
     def __repr__(self):
         return "<PortBinding(%s,%s)>" % (self.port_id,
                                          self.profile_id)
+
 
 class N1kvNetworkBinding(model_base.BASEV2):
     """Represents binding of virtual network to physical realization"""
@@ -73,7 +76,7 @@ class N1kvNetworkBinding(model_base.BASEV2):
     physical_network = Column(String(64))
     segmentation_id = Column(Integer)  # tunnel_id or vlan_id
     multicast_ip = Column(String(32))  # multicast ip
-    profile_id = Column(String(36))  #n1kv profile id
+    profile_id = Column(String(36))  # n1kv profile id
 
     def __init__(self, network_id, network_type, physical_network,
                  segmentation_id, multicast_ip, profile_id):
@@ -165,7 +168,7 @@ class L2NetworkBase(object):
 class N1kVmNetwork(model_base.BASEV2):
     """Represents VM Network information"""
     __tablename__ = 'vmnetwork'
-    
+
     name = Column(String(255), primary_key=True)
     profile_id = Column(String(36))
     network_id = Column(String(36))
@@ -178,4 +181,4 @@ class N1kVmNetwork(model_base.BASEV2):
     def __repr__(self):
         return "<VmNetwork(%s,%s,%s)>" % (self.name,
                                           self.profile_id,
-                                          self.network_id)                                                                 
+                                          self.network_id)
