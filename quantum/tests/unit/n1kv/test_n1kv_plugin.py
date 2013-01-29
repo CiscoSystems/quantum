@@ -17,7 +17,7 @@ import unittest
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.tests.unit import test_db_plugin as test_plugin
-
+import quantum.plugins.cisco.n1kv.n1kv_quantum_plugin
 
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
