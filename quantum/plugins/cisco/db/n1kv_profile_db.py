@@ -76,7 +76,7 @@ class Profile(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
                 return mul_ip_str
 
             except exc.NoResultFound:
-	            raise cisco_exceptions.ProfileNotFound(profile_id=id)
+                raise cisco_exceptions.ProfileNotFound(profile_id=id)
 
     def _get_multicast_ip_range(self):
         # Assumption: ip range belongs to the same subnet
@@ -112,9 +112,9 @@ class Profile_db_mixin(profile.ProfileBase):
         return self._make_profile_dict(profile_db)
 
     def delete_profile(self, context, id):
-	profile = self._get_profile(context, id)
-	with context.session.begin(subtransactions=True):
-	    context.session.delete(profile)
+        profile = self._get_profile(context, id)
+        with context.session.begin(subtransactions=True):
+            context.session.delete(profile)
 
     def update_profile(self, context, id, profile):
         p = profile['profile']
@@ -126,8 +126,8 @@ class Profile_db_mixin(profile.ProfileBase):
     '''
 
     def get_profile_by_type(self, profile_type):
-	"""List the N1Kv Profiles by its type"""
-	session = db.get_session()
+        """List the N1Kv Profiles by its type"""
+        session = db.get_session()
         try:
             profile = (session.query(Profile).
                        filter_by(profile_type=profile_type).all())
@@ -186,14 +186,14 @@ class Profile_db_mixin(profile.ProfileBase):
         return self._fields(res, fields)
 
     def _get_profile(self, context, id):
-	try:
-	    profile = self._get_by_id(context, Profile, id)
-	except exc.NoResultFound:
-	    raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
-	except exc.MultipleResultsFound:
-	    LOG.error("Muliple profile match for %s" % id)
-	    raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
-	return profile
+        try:
+            profile = self._get_by_id(context, Profile, id)
+        except exc.NoResultFound:
+            raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
+        except exc.MultipleResultsFound:
+            LOG.error("Muliple profile match for %s" % id)
+            raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
+        return profile
 
     def network_profile_exist(self, context, id):
         try:
@@ -203,7 +203,7 @@ class Profile_db_mixin(profile.ProfileBase):
             else:
                 return True
         except exc.NoResultFound:
-	        raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
+            raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
 
     def _get_segment_range(self, data):
         seg_min, seg_max = sorted(map(int, data.split('-')))
