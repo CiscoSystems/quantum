@@ -7,6 +7,7 @@
 import logging
 import os
 import sys
+import itertools
 
 from quantum.api.v2 import attributes
 from quantum.common import constants as q_const
@@ -37,7 +38,7 @@ from keystoneclient.v2_0 import client as keystone_client
 from novaclient.v1_1 import client as nova_client
 
 LOG = logging.getLogger(__name__)
-VM_NETWORK_NUM = 0
+VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
 TENANT = const.NETWORK_ADMIN
 
 
@@ -314,9 +315,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             vm_network_name = vm_network['name']
             self._send_update_port_request(port, vm_network_name)
         else:
-            global VM_NETWORK_NUM
-            VM_NETWORK_NUM = VM_NETWORK_NUM + 1
-            vm_network_name = 'vm_network_' + str(VM_NETWORK_NUM)
+            current_vm_network_num = VM_NETWORK_NUM.next()
+            vm_network_name = 'vm_network_' + str(current_vm_network_num)
             n1kv_db_v2.add_vm_network(vm_network_name,
                                      port[n1kv_profile.PROFILE_ID],
                                      port['network_id'])
