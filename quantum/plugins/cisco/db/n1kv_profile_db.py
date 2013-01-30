@@ -137,7 +137,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
     '''
 
     def add_profile(self, tenant_id, profile_id, name, profile_type):
-        """Adds a qos to tenant association"""
+        """Add a qos to tenant association"""
         session = db.get_session()
         try:
             profiledb = (session.query(N1kvProfile_db).
