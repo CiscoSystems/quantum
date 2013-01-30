@@ -20,6 +20,7 @@ from quantum.common import topics
 from quantum.common import rpc as q_rpc
 
 from quantum.db import db_base_plugin_v2
+from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 
@@ -235,7 +236,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _add_policy_profiles(self, n1kvclient):
         """Populate Profiles of type Policy on init."""
         profiles = n1kvclient.list_profiles()
-        LOG.debug("\n\n\n\n%s\n\n\n\n" % profiles)
         for profile in profiles[const.SET]:
             profile_id = profile[const.PROPERTIES][const.ID]
             profile_name = profile[const.PROPERTIES][const.NAME]
