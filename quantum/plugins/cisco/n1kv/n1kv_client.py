@@ -205,8 +205,6 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
             return self.deserialize(replybody, status_code)
         elif status_code == httplib.CREATED:
             LOG.debug("Created VMND/FND: %s\n", replybody)
-        else:
-            self._handle_fault_response(status_code, replybody)
 
     def _get_status_code(self, response):
         """
