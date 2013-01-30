@@ -18,9 +18,7 @@
 
 import httplib
 import logging
-import urllib
 import base64
-import time
 
 from quantum.plugins.cisco.n1kv.common.serializer import Serializer
 from quantum.plugins.cisco.db import network_db_v2 as cdb
@@ -28,16 +26,11 @@ from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.extensions import providernet as provider
-from quantum.extensions import n1kv_profile as n1kv_profile
+from quantum.extensions import n1kv_profile
 
 LOG = logging.getLogger(__name__)
 
 TENANT = const.NETWORK_ADMIN
-
-
-def exception_handler(status_code, error_content):
-    """ Exception handler for N1KV plugin """
-    pass
 
 
 class Client(n1kv_profile_db.N1kvProfile_db_mixin):
@@ -90,7 +83,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
         Creates a VMND on the VSM
         """
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
-        LOG.debug("Abs seg id %s\n", profile['name'])
+        LOG.debug("seg id %s\n", profile['name'])
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': profile['name'], }
@@ -116,7 +109,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
         """
         Creates a FND on the VSM
         """
-        LOG.debug("Abhishek: fnd")
+        LOG.debug("fnd")
         body = {'name': profile['name'],
                 'id': profile['profile_id'],
                 'fabricNetworkName': 'test'}
@@ -157,7 +150,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
                 'gateway': subnet['gateway_ip'], }
         return self.post(self.ip_pools_path, body=body, params=_params)
 
-    def create_port(self, port, name, **_params):
+    def create_n1kv_port(self, port, name, **_params):
         """
         Creates a Port on the VSM
         """
@@ -172,13 +165,13 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
                 'macAddress': port['mac_address']}
         return self.post(self.ports_path, body=body, params=_params)
 
-    def update_port(self, port, body):
+    def update_n1kv_port(self, port, body):
         """
         Updates a Port on the VSM
         """
         return self.post(self.port_path % (port), body=body)
 
-    def delete_port(self, port, **_params):
+    def delete_n1kv_port(self, port, **_params):
         """
         Deletes a Port on the VSM
         """
@@ -207,13 +200,13 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
             body = self.serialize(body)
             # body = json.dumps(body)
             body = body + '  '
-            LOG.debug("abs req: %s", body)
+            LOG.debug("req: %s", body)
         conn = httplib.HTTPConnection(self.hosts[0])
         conn.request(method, action, body, headers)
         resp = conn.getresponse()
         replybody = resp.read()
         status_code = self.get_status_code(resp)
-        LOG.debug("abs status_code %s\n", status_code)
+        LOG.debug("status_code %s\n", status_code)
         if status_code in (httplib.OK, httplib.ACCEPTED, httplib.NO_CONTENT):
             return self.deserialize(replybody, status_code)
         elif status_code == httplib.CREATED:

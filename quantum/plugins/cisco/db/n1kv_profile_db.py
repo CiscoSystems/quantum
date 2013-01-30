@@ -211,7 +211,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_vlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1K['network_vlan_ranges']
+        ranges = conf.N1KV['network_vlan_ranges']
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -224,7 +224,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_vxlan(self, p):
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1K['tunnel_id_ranges']
+        ranges = conf.N1KV['tunnel_id_ranges']
         ranges = ranges.split(',')
         g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min,

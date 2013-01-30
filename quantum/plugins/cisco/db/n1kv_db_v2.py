@@ -89,24 +89,21 @@ def sync_vlan_allocations(network_vlan_ranges):
                 vlan_ids |= set(xrange(vlan_range[0], vlan_range[1] + 1))
 
             # remove from table unallocated vlans not currently allocatable
-            try:
-                allocs = (session.query(n1kv_models_v2.N1kvVlanAllocation).
-                          filter_by(physical_network=physical_network).
-                          all())
-                for alloc in allocs:
-                    try:
-                        # see if vlan is allocatable
-                        vlan_ids.remove(alloc.vlan_id)
-                    except KeyError:
-                        # it's not allocatable, so check if its allocated
-                        if not alloc.allocated:
-                            # it's not, so remove it from table
-                            LOG.debug("removing vlan %s on physical network "
-                                      "%s from pool" %
-                                      (alloc.vlan_id, physical_network))
-                            session.delete(alloc)
-            except exc.NoResultFound:
-                pass
+            allocs = (session.query(n1kv_models_v2.N1kvVlanAllocation).
+                        filter_by(physical_network=physical_network).
+                        all())
+            for alloc in allocs:
+                try:
+                    # see if vlan is allocatable
+                    vlan_ids.remove(alloc.vlan_id)
+                except KeyError:
+                    # it's not allocatable, so check if its allocated
+                    if not alloc.allocated:
+                        # it's not, so remove it from table
+                        LOG.debug("removing vlan %s on physical network "
+                                    "%s from pool" %
+                                    (alloc.vlan_id, physical_network))
+                        session.delete(alloc)
 
             # add missing allocatable vlans to table
             for vlan_id in sorted(vlan_ids):
@@ -250,22 +247,18 @@ def sync_tunnel_allocations(tunnel_id_ranges):
     session = db.get_session()
     with session.begin():
         # remove from table unallocated tunnels not currently allocatable
-        try:
-            allocs = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
-                      all())
-            for alloc in allocs:
-                try:
-                    # see if tunnel is allocatable
-                    tunnel_ids.remove(alloc.tunnel_id)
-                except KeyError:
-                    # it's not allocatable, so check if its allocated
-                    if not alloc.allocated:
-                        # it's not, so remove it from table
-                        LOG.debug("removing tunnel %s from pool" %
-                                  alloc.tunnel_id)
-                        session.delete(alloc)
-        except exc.NoResultFound:
-            pass
+        allocs = (session.query(n1kv_models_v2.N1kvTunnelAllocation).all())
+        for alloc in allocs:
+            try:
+                # see if tunnel is allocatable
+                tunnel_ids.remove(alloc.tunnel_id)
+            except KeyError:
+                # it's not allocatable, so check if its allocated
+                if not alloc.allocated:
+                    # it's not, so remove it from table
+                    LOG.debug("removing tunnel %s from pool" %
+                                alloc.tunnel_id)
+                    session.delete(alloc)
 
         # add missing allocatable tunnels to table
         for tunnel_id in sorted(tunnel_ids):
