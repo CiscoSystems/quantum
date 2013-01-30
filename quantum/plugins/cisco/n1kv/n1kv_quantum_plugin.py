@@ -8,29 +8,166 @@ import logging
 import sys
 import itertools
 
-from quantum.api.v2 import attributes
-from quantum.common import exceptions as q_exc
-from quantum.db import db_base_plugin_v2
-from quantum.db import l3_db
-from quantum.extensions import providernet as provider
-from quantum.extensions import n1kv_profile as n1kv_profile
-
-from quantum.plugins.cisco.n1kv import n1kv_configuration as n1kv_conf
-from quantum.plugins.cisco.db import n1kv_db_v2
+from keystoneclient.v2_0 import client as keystone_client
+from novaclient.v1_1 import client as nova_client
 
 from quantum import policy
 
-from quantum.plugins.cisco.db import n1kv_profile_db
-from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.n1kv import n1kv_client
-from quantum.plugins.cisco.common import cisco_constants as const
+from quantum.api.v2 import attributes
+from quantum.common import constants as q_const
+from quantum.common import exceptions as q_exc
+from quantum.common import topics
+from quantum.common import rpc as q_rpc
 
-from keystoneclient.v2_0 import client as keystone_client
-from novaclient.v1_1 import client as nova_client
+from quantum.db import db_base_plugin_v2
+from quantum.db import l3_db
+from quantum.db import l3_rpc_base
+
+from quantum.extensions import providernet as provider
+from quantum.extensions import n1kv_profile as n1kv_profile
+
+from quantum.openstack.common import context
+from quantum.openstack.common import cfg as quantum_cfg
+from quantum.openstack.common import rpc
+from quantum.openstack.common.rpc import dispatcher
+from quantum.openstack.common.rpc import proxy
+
+from quantum.plugins.cisco.common import cisco_constants as const
+from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
+from quantum.plugins.cisco.db import n1kv_db_v2
+from quantum.plugins.cisco.db import n1kv_profile_db
+from quantum.plugins.cisco.n1kv import n1kv_configuration as n1kv_conf
+from quantum.plugins.cisco.n1kv import n1kv_client
+
 
 LOG = logging.getLogger(__name__)
 VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
 TENANT = const.NETWORK_ADMIN
+
+
+class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
+                       l3_rpc_base.L3RpcCallbackMixin):
+
+    # Set RPC API version to 1.0 by default.
+    RPC_API_VERSION = '1.0'
+
+    def __init__(self, notifier):
+        self.notifier = notifier
+
+    def create_rpc_dispatcher(self):
+        '''Get the rpc dispatcher for this manager.
+
+        If a manager would like to set an rpc API version, or support more than
+        one class as the target of rpc messages, override this method.
+        '''
+        return q_rpc.PluginRpcDispatcher([self])
+
+    def get_device_details(self, rpc_context, **kwargs):
+        """Agent requests device details"""
+        agent_id = kwargs.get('agent_id')
+        device = kwargs.get('device')
+        LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
+                  locals())
+        port = n1kv_db_v2.get_port(device)
+        if port:
+            binding = n1kv_db_v2.get_network_binding(None, port['network_id'])
+            entry = {'device': device,
+                     'network_id': port['network_id'],
+                     'port_id': port['id'],
+                     'admin_state_up': port['admin_state_up'],
+                     'network_type': binding.network_type,
+                     'segmentation_id': binding.segmentation_id,
+                     'physical_network': binding.physical_network}
+            # Set the port status to UP
+            n1kv_db_v2.set_port_status(port['id'], q_const.PORT_STATUS_ACTIVE)
+        else:
+            entry = {'device': device}
+            LOG.debug(_("%s can not be found in database"), device)
+        return entry
+
+    def update_device_down(self, rpc_context, **kwargs):
+        """Device no longer exists on agent"""
+        # (TODO) garyk - live migration and port status
+        agent_id = kwargs.get('agent_id')
+        device = kwargs.get('device')
+        LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
+                  locals())
+        port = n1kv_db_v2.get_port(device)
+        if port:
+            entry = {'device': device,
+                     'exists': True}
+            # Set port status to DOWN
+            n1kv_db_v2.set_port_status(port['id'], q_const.PORT_STATUS_DOWN)
+        else:
+            entry = {'device': device,
+                     'exists': False}
+            LOG.debug(_("%s can not be found in database"), device)
+        return entry
+
+    def tunnel_sync(self, rpc_context, **kwargs):
+        """Update new tunnel.
+
+        Updates the datbase with the tunnel IP. All listening agents will also
+        be notified about the new tunnel IP.
+        """
+        tunnel_ip = kwargs.get('tunnel_ip')
+        # Update the database with the IP
+        tunnel = n1kv_db_v2.add_tunnel_endpoint(tunnel_ip)
+        tunnels = n1kv_db_v2.get_tunnel_endpoints()
+        entry = dict()
+        entry['tunnels'] = tunnels
+        # Notify all other listening agents
+        self.notifier.tunnel_update(rpc_context, tunnel.ip_address,
+                                    tunnel.id)
+        # Return the list of tunnels IP's to the agent
+        return entry
+
+
+class AgentNotifierApi(proxy.RpcProxy):
+    '''Agent side of the N1kv rpc API.
+
+    API version history:
+        1.0 - Initial version.
+
+    '''
+
+    BASE_RPC_API_VERSION = '1.0'
+
+    def __init__(self, topic):
+        super(AgentNotifierApi, self).__init__(
+            topic=topic, default_version=self.BASE_RPC_API_VERSION)
+        self.topic_network_delete = topics.get_topic_name(topic,
+                                                          topics.NETWORK,
+                                                          topics.DELETE)
+        self.topic_port_update = topics.get_topic_name(topic,
+                                                       topics.PORT,
+                                                       topics.UPDATE)
+        self.topic_tunnel_update = topics.get_topic_name(topic,
+                                                         const.TUNNEL,
+                                                         topics.UPDATE)
+
+    def network_delete(self, context, network_id):
+        self.fanout_cast(context,
+                         self.make_msg('network_delete',
+                                       network_id=network_id),
+                         topic=self.topic_network_delete)
+
+    def port_update(self, context, port, network_type, segmentation_id,
+                    physical_network):
+        self.fanout_cast(context,
+                         self.make_msg('port_update',
+                                       port=port,
+                                       network_type=network_type,
+                                       segmentation_id=segmentation_id,
+                                       physical_network=physical_network),
+                         topic=self.topic_port_update)
+
+    def tunnel_update(self, context, tunnel_ip, tunnel_id):
+        self.fanout_cast(context,
+                         self.make_msg('tunnel_update',
+                                       tunnel_ip=tunnel_ip,
+                                       tunnel_id=tunnel_id),
+                         topic=self.topic_tunnel_update)
 
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
@@ -68,7 +205,20 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._parse_tunnel_id_ranges()
             n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
         self._setup_vsm()
+        self.setup_rpc()
         self._poll_policies()
+
+    def setup_rpc(self):
+        # RPC support
+        self.topic = topics.PLUGIN
+        self.conn = rpc.create_connection(new=True)
+        self.notifier = AgentNotifierApi(topics.AGENT)
+        self.callbacks = N1kvRpcCallbacks(self.notifier)
+        self.dispatcher = self.callbacks.create_rpc_dispatcher()
+        self.conn.create_consumer(self.topic, self.dispatcher,
+                                  fanout=False)
+        # Consume from all consumers in a thread
+        self.conn.consume_in_thread()
 
     def _setup_vsm(self):
         #setup VSM connection
@@ -85,6 +235,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _add_policy_profiles(self, n1kvclient):
         """Populate Profiles of type Policy on init."""
         profiles = n1kvclient.list_profiles()
+        LOG.debug("\n\n\n\n%s\n\n\n\n" % profiles)
         for profile in profiles[const.SET]:
             profile_id = profile[const.PROPERTIES][const.ID]
             profile_name = profile[const.PROPERTIES][const.NAME]
@@ -436,23 +587,45 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._send_create_port_request(pt)
             LOG.debug("Created port: %s", pt)
             return pt
-        else:
-            tenant_id = port['port']['tenant_id']
-            instance_id = port['port']['device_id']
-            device_owner = port['port']['device_owner']
+        elif 'device_id' in port['port'].keys():
+            if port['port']['device_id'].startswith('dhcp'):
+                # Grab profile id from the network
+                network_id = port['port']['network_id']
+                network = self.get_network(context, network_id)
+                port['port']['n1kv:profile_id'] = network['n1kv:profile_id']
+                tenant_id = port['port']['tenant_id']
+                instance_id = port['port']['device_id']
+                device_owner = port['port']['device_owner']
+                # Create this port
+                cport = self.create_port(context, port)
+                LOG.debug("Abs PORT UUID: %s\n", port)
+                pt = self.get_port(context, cport['port']['id'])
+                pt['device_owner'] = device_owner
+                if 'fixed_ip' in port:
+                    fixed_ip = cport['port']['fixed_ip']
+                    pt['fixed_ips'] = fixed_ip
+                pt['device_id'] = instance_id
+                port['port'] = pt
+                pt = self.update_port(context, pt['id'], cport)
+                LOG.debug("Abs PORT: %s\n", pt)
+                return pt
+            else:
+                tenant_id = port['port']['tenant_id']
+                instance_id = port['port']['device_id']
+                device_owner = port['port']['device_owner']
 
-            port_id = self._get_instance_port_id(tenant_id, instance_id)
-            LOG.debug("PORT UUID: %s\n", port_id)
-            pt = self.get_port(context, port_id['port_id'])
-            pt['device_owner'] = device_owner
-            if 'fixed_ip' in port:
-                fixed_ip = port['port']['fixed_ip']
-                pt['fixed_ips'] = fixed_ip
-            pt['device_id'] = instance_id
-            port['port'] = pt
-            pt = self.update_port(context, pt['id'], port)
-            LOG.debug("PORT: %s\n", pt)
-            return pt
+                port_id = self._get_instance_port_id(tenant_id, instance_id)
+                LOG.debug("Abs PORT UUID: %s\n", port_id)
+                pt = self.get_port(context, port_id['port_id'])
+                pt['device_owner'] = device_owner
+                if 'fixed_ip' in port:
+                    fixed_ip = port['port']['fixed_ip']
+                    pt['fixed_ips'] = fixed_ip
+                pt['device_id'] = instance_id
+                port['port'] = pt
+                pt = self.update_port(context, pt['id'], port)
+                LOG.debug("Abs PORT: %s\n", pt)
+                return pt
 
     def _get_instance_port_id(self, tenant_id, instance_id):
         keystone = cred._creds_dictionary['keystone']
