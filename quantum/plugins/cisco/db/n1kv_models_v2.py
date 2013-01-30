@@ -4,8 +4,6 @@
 #
 # @author: Aruna Kushwaha, Cisco Systems, Inc.
 
-import uuid
-
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 
 from quantum.db.models_v2 import model_base
