@@ -207,7 +207,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
         self._setup_vsm()
         self.setup_rpc()
-        self._poll_policies()
 
     def setup_rpc(self):
         # RPC support
@@ -227,19 +226,19 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.agent_vsm = True
         self._send_register_request()
 
-    def _poll_policies(self):
+    def _poll_policies(self, tenant_id):
         #Poll policies
         LOG.debug('_poll_policies')
         n1kvclient = n1kv_client.Client()
-        self._add_policy_profiles(n1kvclient)
+        self._add_policy_profiles(n1kvclient, tenant_id)
 
-    def _add_policy_profiles(self, n1kvclient):
+    def _add_policy_profiles(self, n1kvclient, tenant_id):
         """Populate Profiles of type Policy on init."""
         profiles = n1kvclient.list_profiles()
         for profile in profiles[const.SET]:
             profile_id = profile[const.PROPERTIES][const.ID]
             profile_name = profile[const.PROPERTIES][const.NAME]
-            self.add_profile(TENANT,
+            self.add_profile(tenant_id,
                              profile_id, profile_name, const.POLICY)
 
     def _parse_network_vlan_ranges(self):
@@ -486,6 +485,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('subplugin: create network')
 
     def create_network(self, context, network):
+        self._poll_policies(network['network']['tenant_id'])
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])

@@ -270,6 +270,8 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     def _get_vsm_hosts(self, tenant_id):
         """
         Returns a list of VSM ip addresses.
+        CREDENTIAL_NAME in the credentials object corresponds to an 
+        ip address.
         """
         host_list = []
         credentials = cdb.get_all_n1kv_credentials(tenant_id)
