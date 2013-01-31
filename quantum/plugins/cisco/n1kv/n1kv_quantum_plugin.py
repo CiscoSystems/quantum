@@ -756,7 +756,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_subnet(self, context, id):
         """ Delete a Subnet """
         LOG.debug('Delete subnet: %s', id)
-        self._send_subnet_delete_request(id)
+        self._send_delete_subnet_request(id)
         return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):
