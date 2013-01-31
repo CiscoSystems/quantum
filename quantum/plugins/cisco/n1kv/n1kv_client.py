@@ -34,7 +34,55 @@ TENANT = const.NETWORK_ADMIN
 
 
 class Client(n1kv_profile_db.N1kvProfile_db_mixin):
-    """ Client for the N1KV Quantum Plugin v2.0."""
+    """ 
+    Client for the Cisco Nexus1000V Quantum Plugin 
+
+    This client implements functions to communicate with 
+    Cisco Nexus1000V VSM.
+
+    For every Quantum objects Cisco Nexus1000V Quantum Plugin 
+    creates a corresponding object in the controller (Cisco
+    Nexus1000V VSM). 
+
+    CONCEPTS:
+
+    Following are few concepts used in Nexus1000V VSM
+
+    network-segment:
+
+    Each network-segment represents a broadcast domain
+
+    network-segment-pool:
+
+    A network-segment-pool contains one or more network-segments
+
+    logical-network:
+
+    A logical-network contains one or more network-segment-pool
+
+    vm-network:
+
+    vm-network refers to a network and port-profile
+    It also has a list of ports that uses the network and 
+    port-profile this vm-network refers to.
+
+    WORK FLOW:
+
+    For every network profile a corresponding logical-network and
+    network-segment-pool under this logical-network will be created
+
+    For every network created from a given network profile a 
+    network-segment will be added to that network-segment-pool that
+    corresponds to the network profile
+
+    A port uses a network and port-profile. Hence for every unique
+    combination of a network and a port-profile a unique vm-network
+    will be created, and a reference to the port will be added. If 
+    the same combination is used by another port, the refernce to 
+    that port will be added to the same vm-network.
+
+
+    """
 
     #Metadata for deserializing xml
     _serialization_metadata = {
@@ -52,10 +100,10 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     # Define paths here
     profiles_path = "/virtual-port-profile"
     profile_path = "/virtual-port-profile/%s"
-    vmnds_path = "/vm-network-definition"
-    vmnd_path = "/vm-network-definition/%s"
-    fnds_path = "/fabric-network-definition"
-    fnd_path = "/fabric-network-definition/%s"
+    network_segments_path = "/vm-network-definition"
+    network_segment_path = "/vm-network-definition/%s"
+    network_segment_pools_path = "/fabric-network-definition"
+    network_segment_pool_path = "/fabric-network-definition/%s"
     ip_pools_path = "/ip-address-pool"
     ip_pool_path = "/ip-address-pool/%s"
     ports_path = "/port"
@@ -78,9 +126,9 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
                 'groupIp': network[n1kv_profile.MULTICAST_IP], }
         return self._post(self.bridge_domains_path, body=body, params=_params)
 
-    def create_vmnd(self, network, **_params):
+    def create_network_segment(self, network, **_params):
         """
-        Creates a VMND on the VSM
+        Creates a Nework Segment on the VSM
         """
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
         LOG.debug("seg id %s\n", profile['name'])
@@ -91,41 +139,41 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
             body.update({'vlan': network[provider.SEGMENTATION_ID]})
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             body.update({'bridgeDomain': network['name'] + '_bd'})
-        return self._post(self.vmnds_path, body=body, params=_params)
+        return self._post(self.network_segments_path, body=body, params=_params)
 
-    def update_vmnd(self, vmnd, body):
+    def update_network_segment(self, network_segment, body):
         """
-        Updates a VMND on the VSM
+        Updates a Nework Segment on the VSM
         """
-        return self._post(self.vmnd_path % (vmnd), body=body)
+        return self._post(self.network_segment_path % (network_segment), body=body)
 
-    def delete_vmnd(self, vmnd, **_params):
+    def delete_network_segment(self, network_segment, **_params):
         """
-        Deletes a VMND on the VSM
+        Deletes a Nework Segment on the VSM
         """
-        return self._delete(self.vmnd_path % (vmnd))
+        return self._delete(self.network_segment_path % (network_segment))
 
-    def create_fnd(self, profile, **_params):
+    def create_network_segment_pool(self, profile, **_params):
         """
-        Creates a FND on the VSM
+        Creates a Network Segment Pool on the VSM
         """
-        LOG.debug("fnd")
+        LOG.debug("network_segment_pool")
         body = {'name': profile['name'],
                 'id': profile['profile_id'],
                 'fabricNetworkName': 'test'}
-        return self._post(self.fnds_path, body=body, params=_params)
+        return self._post(self.network_segment_pools_path, body=body, params=_params)
 
-    def update_fnd(self, fnd, body):
+    def update_network_segment_pool(self, network_segment_pool, body):
         """
-        Updates a FND on the VSM
+        Updates a Network Segment Pool on the VSM
         """
-        return self._post(self.fnd_path % (fnd), body=body)
+        return self._post(self.network_segment_pool_path % (network_segment_pool), body=body)
 
-    def delete_fnd(self, fnd, **_params):
+    def delete_network_segment_pool(self, network_segment_pool, **_params):
         """
-        Deletes a FND on the VSM
+        Deletes a Network Segment Pool on the VSM
         """
-        return self._delete(self.fnd_path % (fnd))
+        return self._delete(self.network_segment_pool_path % (network_segment_pool))
 
     def create_ip_pool(self, subnet, **_params):
         """
@@ -204,7 +252,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
         if status_code in (httplib.OK, httplib.ACCEPTED, httplib.NO_CONTENT):
             return self.deserialize(replybody, status_code)
         elif status_code == httplib.CREATED:
-            LOG.debug("Created VMND/FND: %s\n", replybody)
+            LOG.debug("Created Nework Segment/Network Segment Pool: %s\n", replybody)
 
     def _get_status_code(self, response):
         """
@@ -240,7 +288,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
                               data, self._content_type('xml'))
         except:
             if status_code == 200:
-                LOG.debug("Created VMND/FND\n")
+                LOG.debug("Created Nework Segment/Network Segment Pool\n")
 
     def _content_type(self, format=None):
         """

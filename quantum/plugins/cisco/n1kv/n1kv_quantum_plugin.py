@@ -1,7 +1,23 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-# Copyright 2011 Cisco Systems, Inc.
-# All Rights Reserved.
+#   
+# Copyright 2011 Cisco Systems, Inc.  All rights reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+#
 # @author: Aruna Kushwaha, Cisco Systems, Inc.
+# @author: Rudrajit Tapadar, Cisco Systems, Inc.
+# @author: Abhishek Raut, Cisco Systems, Inc.
+
 
 
 import logging
@@ -433,10 +449,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_send_create_network_request: %s', network['id'])
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
         n1kvclient = n1kv_client.Client()
-        n1kvclient.create_fnd(profile)
+        n1kvclient.create_network_segment_pool(profile)
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             n1kvclient.create_bridge_domain(network)
-        n1kvclient.create_vmnd(network)
+        n1kvclient.create_network_segment(network)
 
     def _send_update_network_request(self, network):
         """ Send Update network request to VSM """
@@ -447,13 +463,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'networkDefinition': profile['name'],
                 'vlan': network[provider.SEGMENTATION_ID]}
         n1kvclient = n1kv_client.Client()
-        n1kvclient.update_vmnd(network['name'], body)
+        n1kvclient.update_network_segment(network['name'], body)
 
     def _send_delete_network_request(self, network):
         """ Send Delete network request to VSM """
         LOG.debug('_send_delete_network_request: %s', network['id'])
         n1kvclient = n1kv_client.Client()
-        n1kvclient.delete_vmnd(network['name'])
+        n1kvclient.delete_network_segment(network['name'])
 
     def _send_create_subnet_request(self, context, subnet):
         """ Send Create Subnet request to VSM """
@@ -462,7 +478,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient = n1kv_client.Client()
         n1kvclient.create_ip_pool(subnet)
         body = {'ipPoolName': subnet['name']}
-        n1kvclient.update_vmnd(network['name'], body=body)
+        n1kvclient.update_network_segment(network['name'], body=body)
 
     # TBD Begin : Need to implement this function
     def _send_update_subnet_request(self, subnet):
