@@ -174,18 +174,12 @@ class AgentNotifierApi(proxy.RpcProxy):
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
                          n1kv_profile_db.N1kvProfile_db_mixin):
-    """Implement the Quantum abstractions using Open vSwitch.
+    """
+    Implement the Quantum abstractions using Cisco Nexus1000V
 
-    Depending on whether tunneling is enabled, either a GRE tunnel or
-    a new VLAN is created for each network. An agent is relied upon to
-    perform the actual OVS configuration on each host.
+    Read README file for the architecture, new features, and 
+    workflow
 
-    The provider extension is also supported. As discussed in
-    https://bugs.launchpad.net/quantum/+bug/1023156, this class could
-    be simplified, and filtering on extended attributes could be
-    handled, by adding support for extended attributes to the
-    QuantumDbPluginV2 base class. When that occurs, this class should
-    be updated to take advantage of it.
     """
 
     # This attribute specifies whether the plugin supports or not
@@ -196,8 +190,16 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                     "router"]
 
     def __init__(self, configfile=None):
+        """
+        Initialize Nexus1000V Quantum plugin
+
+        1. Initialize DB
+        2. Establish communication with Cisco Nexus1000V
+        3. Retrieve port-profiles
+        """
         n1kv_db_v2.initialize()
         #cred.Store.initialize()
+        # TBD Begin : To be removed. No need for this parameters
         self._parse_network_vlan_ranges()
         n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         self.enable_tunneling = n1kv_conf.N1KV['enable_tunneling']
@@ -205,9 +207,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if self.enable_tunneling:
             self._parse_tunnel_id_ranges()
             n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
+        # TBD end 
         self._setup_vsm()
-        self.setup_rpc()
         self._poll_policies()
+        # TBD : Temporary change to enabld dhcp. To be removed
+        self.setup_rpc()
 
     def setup_rpc(self):
         # RPC support
@@ -222,13 +226,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.consume_in_thread()
 
     def _setup_vsm(self):
-        #setup VSM connection
+        """ Establish Communication with Cisco Nexus1000V VSM """
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         self._send_register_request()
 
     def _poll_policies(self):
-        #Poll policies
+        """ Retrieve Port-Profiles from Cisco Nexus1000V VSM """
         LOG.debug('_poll_policies')
         n1kvclient = n1kv_client.Client()
         self._add_policy_profiles(n1kvclient)
@@ -242,6 +246,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.add_profile(TENANT,
                              profile_id, profile_name, const.POLICY)
 
+    # TBD Begin : To be removed. Needs some change in logic before removal
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
         ranges = n1kv_conf.N1KV['network_vlan_ranges']
@@ -286,6 +291,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # TODO(rkukura) Use core mechanism for attribute authorization
     # when available.
 
+    # TBD End 
+
     def _check_provider_view_auth(self, context, network):
         return policy.check(context,
             "extension:provider_network:view",
@@ -297,6 +304,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             network)
 
     def _extend_network_dict_provider(self, context, network):
+        """ Add extended network parameters """
 #        if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_network_binding(context.session,
             network['id'])
@@ -346,6 +354,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not segmentation_id_set:
                 msg = _("provider:segmentation_id required")
                 raise q_exc.InvalidInput(error_message=msg)
+            if segmentation_id < 5000:
+                msg = _("provider:segmentation_id out of range "
+                        "(5000+)")
+                raise q_exc.InvalidInput(error_message=msg)
         else:
             msg = _("provider:network_type %s not supported" % network_type)
             raise q_exc.InvalidInput(error_message=msg)
@@ -365,6 +377,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return (network_type, physical_network, segmentation_id)
 
     def _check_provider_update(self, context, attrs):
+        """ Handle Provider network updates """
         network_type = attrs.get(provider.NETWORK_TYPE)
         physical_network = attrs.get(provider.PHYSICAL_NETWORK)
         segmentation_id = attrs.get(provider.SEGMENTATION_ID)
@@ -380,21 +393,25 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # Authorize before exposing plugin details to client
         self._enforce_provider_set_auth(context, attrs)
 
+        # TBD : Need to handle provider network updates
         msg = _("plugin does not support updating provider attributes")
         raise q_exc.InvalidInput(error_message=msg)
 
     def _extend_network_dict_profile(self, context, network):
+        """ Add the extended parameter network profile to the network """
         binding = n1kv_db_v2.get_network_binding(context.session,
                                                  network['id'])
         network[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _extend_port_dict_profile(self, context, port):
+        """ Add the extended parameter port profile to the port """
         #if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_port_binding(context.session,
                 port['id'])
         port[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _process_profile(self, context, attrs):
+        """ Validate profile exists """
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
 
         profile_id_set = attributes.is_attr_set(profile_id)
@@ -412,6 +429,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_send_register_request')
 
     def _send_create_network_request(self, network):
+        """ Send Create network request to VSM """
         LOG.debug('_send_create_network_request: %s', network['id'])
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
         n1kvclient = n1kv_client.Client()
@@ -421,6 +439,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.create_vmnd(network)
 
     def _send_update_network_request(self, network):
+        """ Send Update network request to VSM """
         LOG.debug('_send_update_network_request: %s', network['id'])
         profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
         body = {'name': network['name'],
@@ -431,11 +450,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.update_vmnd(network['name'], body)
 
     def _send_delete_network_request(self, network):
+        """ Send Delete network request to VSM """
         LOG.debug('_send_delete_network_request: %s', network['id'])
         n1kvclient = n1kv_client.Client()
         n1kvclient.delete_vmnd(network['name'])
 
     def _send_create_subnet_request(self, context, subnet):
+        """ Send Create Subnet request to VSM """
         LOG.debug('_send_create_subnet_request: %s', subnet['id'])
         network = self.get_network(context, subnet['network_id'])
         n1kvclient = n1kv_client.Client()
@@ -443,13 +464,18 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         body = {'ipPoolName': subnet['name']}
         n1kvclient.update_vmnd(network['name'], body=body)
 
+    # TBD Begin : Need to implement this function
     def _send_update_subnet_request(self, subnet):
+        """ Send Create Subnet request to VSM """
         LOG.debug('_send_update_subnet_request: %s', subnet['id'])
 
     def _send_delete_subnet_request(self, id):
+        """ Send Delete Subnet request to VSM """
         LOG.debug('_send_delete_subnet_request: %s', id)
+    # TBD End : 
 
     def _send_create_port_request(self, port):
+        """ Send Create Port request to VSM """
         LOG.debug('_send_create_port_request: %s', port['id'])
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                 port['network_id'])
@@ -466,6 +492,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kvclient.create_n1kv_port(port, vm_network_name)
 
     def _send_update_port_request(self, port, vm_network_name):
+        """ Send Update Port request to VSM """
         LOG.debug('_send_update_port_request: %s', port['id'])
         body = {'portId': port['id'],
                 'macAddress': port['mac_address']}
@@ -473,19 +500,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.update_n1kv_port(vm_network_name, body)
 
     def _send_delete_port_request(self, id):
+        """ Send Delete Port request to VSM """
         LOG.debug('_send_delete_port_request: %s', id)
 
     def _get_segmentation_id(self, context, id):
+        """ Send Delete Port request to VSM """
         session = context.session
         binding_seg_id = n1kv_db_v2.get_network_binding(session, id)
         return binding_seg_id.segmentation_id
 
-    def create_network1(self, tenant_id, network_id, network_context):
-        """
-        """
-        LOG.debug('subplugin: create network')
-
     def create_network(self, context, network):
+        """ Create network based on Network Profile """
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])
@@ -525,6 +550,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return net
 
     def update_network(self, context, id, network):
+        """ Update network Parameters """
         self._check_provider_update(context, network['network'])
 
         session = context.session
@@ -538,6 +564,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return net
 
     def delete_network(self, context, id):
+        """ Delete Network """
         session = context.session
         with session.begin(subtransactions=True):
             binding = n1kv_db_v2.get_network_binding(session, id)
@@ -557,6 +584,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("Deleted network: %s", id)
 
     def get_network(self, context, id, fields=None):
+        """ Read Network """
         LOG.debug("Get network: %s", id)
         net = super(N1kvQuantumPluginV2, self).get_network(context, id, None)
         self._extend_network_dict_provider(context, net)
@@ -564,6 +592,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
+        """ Read All Networks """
         LOG.debug("Get networks")
         nets = super(N1kvQuantumPluginV2, self).get_networks(context, filters,
             None)
@@ -574,6 +603,18 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(net, fields) for net in nets]
 
     def create_port(self, context, port):
+        """ 
+        Create Quantum port
+        
+        Create Port will be called twice when using this plugin
+        Once directly, and another through Nova
+
+        If it call directly it must have the port-profile ID set
+
+        If called from Nova, then the metadata should be present
+        to identify the pre created port
+
+        """
         if n1kv_profile.PROFILE_ID in port['port']:
             profile_id = self._process_profile(context, port['port'])
             LOG.debug('create port: profile_id=%s', profile_id)
@@ -628,6 +669,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 return pt
 
     def _get_instance_port_id(self, tenant_id, instance_id):
+        """ Get the port IDs from the meta data """
         keystone = cred._creds_dictionary['keystone']
         url = keystone.keys()[0]
         kc = keystone_client.Client(username=keystone[url]['username'],
@@ -647,6 +689,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return port_id
 
     def update_port(self, context, id, port):
+        """ Update port parameters """
         if self.agent_vsm:
             original_port = super(N1kvQuantumPluginV2, self).get_port(context,
                 id)
@@ -658,16 +701,19 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return port
 
     def delete_port(self, context, id):
+        """ Delete port """
         self._send_delete_port_request(id)
         return super(N1kvQuantumPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):
+        """ Read port """
         LOG.debug("Get port: %s", id)
         port = super(N1kvQuantumPluginV2, self).get_port(context, id, fields)
         self._extend_port_dict_profile(context, port)
         return self._fields(port, fields)
 
     def get_ports(self, context, filters=None, fields=None):
+        """ Read all ports """
         LOG.debug("Get ports")
         ports = super(N1kvQuantumPluginV2, self).get_ports(context, filters,
             fields)
@@ -677,6 +723,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(port, fields) for port in ports]
 
     def create_subnet(self, context, subnet):
+        """ Create Subnet for a given network """
         LOG.debug('Create subnet')
         sub = super(N1kvQuantumPluginV2, self).create_subnet(context, subnet)
         self._send_create_subnet_request(context, sub)
@@ -684,6 +731,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return sub
 
     def update_subnet(self, context, id, subnet):
+        """ Update Subnet """
         LOG.debug('Update subnet')
         sub = super(N1kvQuantumPluginV2, self).update_subnet(context, subnet)
         self._send_update_subnet_request(sub)
@@ -691,17 +739,20 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return sub
 
     def delete_subnet(self, context, id):
+        """ Delete a Subnet """
         LOG.debug('Delete subnet: %s', id)
         self._send_subnet_delete_request(id)
         return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):
+        """ Read a Subnet """
         LOG.debug("Get subnet: %s", id)
         subnet = super(N1kvQuantumPluginV2, self).get_subnet(context, id,
                                                             fields)
         return self._fields(subnet, fields)
 
     def get_subnets(self, context, filters=None, fields=None):
+        """ Read all the Subnets """
         LOG.debug("Get subnets")
         subnets = super(N1kvQuantumPluginV2, self).get_subnets(context, filters,
             fields)
