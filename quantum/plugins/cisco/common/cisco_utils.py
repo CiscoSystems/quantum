@@ -54,7 +54,7 @@ def find_config_file(options, config_file):
     conf_dir = cfg.CONF.config_dir
 
     # Search files in the config dir
-    files = os.listdir(conf_dir)
+    files = os.listdir(str(conf_dir))
 
     path = False
     for file in files:
