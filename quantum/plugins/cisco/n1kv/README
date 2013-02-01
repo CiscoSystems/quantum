@@ -1,98 +1,101 @@
 Cisco Nexus1000V Quantum Plugin
-=========================
+===============================
 
 The Cisco N1KV Quantum Plugin is a simple plugin which helps
-the qunatum enviorment to deal with the Cisco N1KV Switch.
+the Quantum environment to deal with the Cisco N1KV switch.
 
 More Details at can be found at:
 https://blueprints.launchpad.net/quantum/+spec/cisco-plugin-n1k-support
 
-Cisco Nexus1000V Quantum Plugin fits into Cisco Quantum Meta Plugin, 
-to enable Cisco Nexus1000V, Cisco VSG, and Cisco CSR1000V to provide 
-L2, & L3 services.
+The Cisco Nexus1000V Quantum plugin fits into the Cisco Quantum meta plugin, 
+to enable Cisco Nexus1000V, Cisco VSG and Cisco CSR1000V to provide L2 and
+L3 services.
 
 ARCHITECTURE:
+-------------
+    The Cisco OpenStack networking solution consists of the following pieces. 
+    Please note: Not all pieces will be present in Grizzly or are part of
+    a standard Quantum install.
 
-    Cisco Openstack networkign solution consists of the following pieces. 
-    Please note not all pieces will be present in conjunction to Grizzly
-
-    1. Cisco Quantum Meta Plugin with Cisco Nexus1000V Quantum Plugin
-    2. Cisco Nexus1000V VSM, a central network controller
-    3. Cisco Nexus1000V VEM, residing on each compute node handling 
-       the traffic and provide L2 services
-    4. Cisco VSG, a virtual Firewall
-    5. Cisco CSR1000V, providing L3 services
+        1. Cisco Quantum meta plugin with Cisco Nexus1000V Quantum plugin
+        2. Cisco Nexus1000V VSM, a central network controller
+        3. Cisco Nexus1000V VEM, residing on each compute node handling 
+           the traffic and provide L2 services
+        4. Cisco VSG, a virtual firewall
+        5. Cisco CSR1000V, providing L3 services
 
 
     Following is a picture that depicts the interaction between all 
-    these components
+    these components:
     
     
-    ----------   ------------
-    |  Nova  |   | Quantum  |<-----------------------------------
-    ----------   ------------         |             |            |
-                     |                |             |            |
-                     |                V             V            V
-                     V             --------     ---------    --------
-                  -------          | L3   |     |  VSM  |    |  VSG |
-                  | CSR |<---------| Agent|     ---------    --------
-                  -------          --------         ^            ^
-                     :                              |            |
-                     :                              |            |
-    --------------------------                      |            |
-    |   Compute Node         |                      |            |
-    |------------------------|                      |            |
-    |         VEM            |<----------------------------------
-    --------------------------
+        ----------   ------------
+        |  Nova  |   | Quantum  |<-----------------------------------
+        ----------   ------------         |             |            |
+                         |                |             |            |
+                         |                V             V            V
+                         V             --------     ---------    --------
+                      -------          | L3   |     |  VSM  |    |  VSG |
+                      | CSR |<---------| Agent|     ---------    --------
+                      -------          --------         ^            ^
+                         :                              |            |
+                         :                              |            |
+        --------------------------                      |            |
+        |   Compute Node         |                      |            |
+        |------------------------|                      |            |
+        |         VEM            |<----------------------------------
+        --------------------------
+
 
 NEW CONCEPTS:
-
-   Cisco Nexus1000V Quantum brings in multiple new concepts. They are
+-------------
+   The Cisco Nexus1000V Quantum plugin introduces multiple new concepts.
+   They are:
 
    NETWORK PROFILE:
 
-   A network profile defines the type of network, whether its VLAN or 
-   VXLAN based.  In addition it can define type specific parameters 
-   such as L2Domain and VLAN range for VLAN type, and VXLAN ID range 
-   for VXLAN type.
+       A network profile defines the type of network, whether it's VLAN or 
+       VXLAN based. In addition it can define type specific parameters,
+       such as L2-domain and VLAN range for VLAN type, or VXLAN ID range 
+       for VXLAN type.
 
    PORT PROFILE:
 
-   A port profile represents the set of Policies that are applied to the 
-   port. 
+       A port profile represents the set of policies that are applied to the 
+       port. 
 
    MULTI SEGMENT NETWORK:
 
-   Multi segment network is a sequence of networks that forms a single
-   broadcast domain. Each segment can be of differnt type. 
+       Multi segment network is a sequence of networks that forms a single
+       broadcast domain. Each segment can be of different type. 
+
 
 WORK FLOW:
-
-   Cloud Admnistrator can create multiple Network Profiles and allow 
+----------
+   The cloud admnistrator can create multiple network profiles and allow 
    them to be visible to selected tenants.
 
-   Cloud Administrator has to register with atleast one Cisco Nexus1000V.
+   The cloud administrator has to register with at least one Cisco Nexus1000V.
    Once registerd the plugin will pull the list of port-profiles and
-   add it to the database. Cloud Adminstrator can make these port-profiles
+   add it to the database. The cloud adminstrator can make these port-profiles
    visible to selected tenants.
 
    Tenant creates a network by specifying a network profile. Plugin will
    then allocate a VLAN/VXLAN based on the network profile. 
    
-   Tenant creates a VM, for every port on VM, selects a network and a 
+   Tenant creates a VM and for every port on VM selects a network and a 
    port-profile. This is done by sending a Create Port request directly
-   to quantum by specifying the port-profile ID. Later when Nova create
+   to Quantum by specifying the port-profile ID. Later when Nova create
    is done, the port ID returned by Quantum will be specified in the 
-   metadata. When Nova network manager sends a Create Port request
-   plugin will correlate the request with the precreated port and 
-   set the parameters accordingly.  On the compute node, Cisco Nexus1000v 
+   metadata. When Nova network manager sends a Create Port request, the
+   plugin will correlate the request with the pre-created port and 
+   set the parameters accordingly. On the compute node, Cisco Nexus1000V 
    VEM will retreive the port ID and using the port ID retrieve
-   the port-profile associated with it and enforce the policy. Similarly
-   using the networkID  retrive the connection parameters and connect
-   the port to the right broadcast domain.
+   the port-profile associated with it and enforce the policy. Similarly,
+   using the network-ID, it retrieves the connection parameters and connects
+   the port to the correct broadcast domain.
 
-   For every tenant router, plugin will talk to an L3 agent that will
-   instantiate a CSR isntance using Openstack APIs on the compute node
-   and configure it. 
+   For every tenant router the plugin talks to an L3 agent that instantiates
+   a CSR isntance using Openstack APIs on a compute node and configure it. 
 
 
