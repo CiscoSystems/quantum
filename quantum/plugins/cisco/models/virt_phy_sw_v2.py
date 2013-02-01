@@ -325,6 +325,11 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
             vlan_id = self._get_segmentation_id(context, net_id)
             host = ''
+
+            if port['port']['device_id'].startswith('dhcp'):
+                # Do nothing, dhcp port
+                return ovs_output[0]
+
             if hasattr(conf, 'TEST'):
                 host = conf.TEST['host']
             elif instance_id:

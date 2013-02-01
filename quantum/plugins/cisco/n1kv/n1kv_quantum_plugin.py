@@ -655,14 +655,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 # Create this port
                 cport = self.create_port(context, port)
                 LOG.debug("Abs PORT UUID: %s\n", port)
-                pt = self.get_port(context, cport['port']['id'])
+                pt = self.get_port(context, cport['id'])
                 pt['device_owner'] = device_owner
                 if 'fixed_ip' in port:
-                    fixed_ip = cport['port']['fixed_ip']
+                    fixed_ip = cport['fixed_ip']
                     pt['fixed_ips'] = fixed_ip
                 pt['device_id'] = instance_id
                 port['port'] = pt
-                pt = self.update_port(context, pt['id'], cport)
+                pt = self.update_port(context, pt['id'], port)
                 LOG.debug("Abs PORT: %s\n", pt)
                 return pt
             else:
