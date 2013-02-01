@@ -490,7 +490,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _send_create_port_request(self, port):
         """ Send Create Port request to VSM """
-        LOG.debug('_send_create_port_request: %s', port['id'])
+        LOG.debug('_send_create_port_request: %s', port)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                 port['network_id'])
         if vm_network:

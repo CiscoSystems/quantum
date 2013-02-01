@@ -18,9 +18,11 @@
 
 import hashlib
 import logging
+import os
 
+from quantum.common.utils import find_config_file as q_find_config_file
 from quantum.plugins.cisco.common import cisco_constants as const
-
+from quantum.openstack.common import cfg
 
 LOG = logging.getLogger(__name__)
 
@@ -46,3 +48,20 @@ def make_port_dict(port_id, port_state, net_id, attachment):
     res[const.NET_ID] = net_id
     res[const.ATTACHMENT] = attachment
     return res
+
+def find_config_file(options, config_file):
+    # Grab the config dir
+    conf_dir = cfg.CONF.config_dir
+
+    # Search files in the config dir
+    files = os.listdir(conf_dir)
+
+    path = False
+    for file in files:
+        if file == config_file:
+            path = os.path.join(conf_dir, file)
+
+    if path:
+        return path
+    else:
+        return q_find_config_file(options, config_file)
