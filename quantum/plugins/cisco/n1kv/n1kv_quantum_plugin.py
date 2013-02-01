@@ -59,7 +59,6 @@ from quantum.plugins.cisco.n1kv import n1kv_client
 
 LOG = logging.getLogger(__name__)
 VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
-TENANT = const.NETWORK_ADMIN
 
 
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
@@ -225,7 +224,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
         # TBD end 
         self._setup_vsm()
-        self._poll_policies()
         # TBD : Temporary change to enabld dhcp. To be removed
         self.setup_rpc()
 
@@ -247,19 +245,19 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.agent_vsm = True
         self._send_register_request()
 
-    def _poll_policies(self):
+    def _poll_policies(self, tenant_id):
         """ Retrieve Port-Profiles from Cisco Nexus1000V VSM """
         LOG.debug('_poll_policies')
         n1kvclient = n1kv_client.Client()
-        self._add_policy_profiles(n1kvclient)
+        self._add_policy_profiles(n1kvclient, tenant_id)
 
-    def _add_policy_profiles(self, n1kvclient):
+    def _add_policy_profiles(self, n1kvclient, tenant_id):
         """Populate Profiles of type Policy on init."""
         profiles = n1kvclient.list_profiles()
         for profile in profiles[const.SET]:
             profile_id = profile[const.PROPERTIES][const.ID]
             profile_name = profile[const.PROPERTIES][const.NAME]
-            self.add_profile(TENANT,
+            self.add_profile(tenant_id,
                              profile_id, profile_name, const.POLICY)
 
     # TBD Begin : To be removed. Needs some change in logic before removal
@@ -527,6 +525,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_network(self, context, network):
         """ Create network based on Network Profile """
+        self._poll_policies(network['network']['tenant_id'])
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])
