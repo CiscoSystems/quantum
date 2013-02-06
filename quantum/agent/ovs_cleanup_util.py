@@ -47,6 +47,9 @@ def setup_conf():
     conf.register_cli_opts(opts)
     conf.register_opts(l3_agent.L3NATAgent.OPTS)
     conf.register_opts(interface.OPTS)
+    # Because db/api.py is imported indirectly, this required config option
+    # defined (but not needed). Must override.
+    cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
     agent_config.register_root_helper(conf)
     return conf
 

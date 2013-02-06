@@ -17,6 +17,7 @@ import unittest2
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
+from quantum.openstack.common import cfg
 from quantum.plugins.linuxbridge.db import l2network_db_v2 as lb_db
 from quantum.tests.unit import test_db_plugin as test_plugin
 
@@ -31,6 +32,7 @@ UPDATED_VLAN_RANGES = {PHYS_NET: [(VLAN_MIN + 5, VLAN_MAX + 5)],
 
 class NetworkStatesTest(unittest2.TestCase):
     def setUp(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         lb_db.initialize()
         lb_db.sync_network_states(VLAN_RANGES)
         self.session = db.get_session()

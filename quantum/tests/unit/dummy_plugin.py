@@ -21,6 +21,7 @@ from quantum.common import exceptions
 from quantum.db import servicetype_db
 from quantum.extensions import servicetype
 from quantum import manager
+from quantum.openstack.common import cfg
 from quantum.openstack.common import uuidutils
 from quantum.plugins.common import constants
 from quantum.plugins.services.service_base import ServicePluginBase
@@ -97,6 +98,7 @@ class DummyServicePlugin(ServicePluginBase):
     supported_extension_aliases = ['dummy', servicetype.EXT_ALIAS]
 
     def __init__(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         self.svctype_mgr = servicetype_db.ServiceTypeManager.get_instance()
         self.dummys = {}
 

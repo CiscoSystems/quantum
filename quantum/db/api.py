@@ -39,7 +39,7 @@ LOG = logging.getLogger(__name__)
 
 
 database_opts = [
-    cfg.StrOpt('sql_connection', default='sqlite://',
+    cfg.StrOpt('sql_connection', required=True,
                help=_('The SQLAlchemy connection string used to connect to '
                       'the database')),
     cfg.IntOpt('sql_max_retries', default=-1,
@@ -111,6 +111,8 @@ def configure_db():
     global _ENGINE
     if not _ENGINE:
         sql_connection = cfg.CONF.DATABASE.sql_connection
+        if not sql_connection:
+            raise cfg.RequiredOptError('sql_connection', 'DATABASE')
         connection_dict = sql.engine.url.make_url(sql_connection)
         engine_args = {
             'pool_recycle': 3600,

@@ -28,6 +28,7 @@ import mock
 import quantum
 from quantum.common import exceptions
 from quantum import context
+from quantum.openstack.common import cfg
 from quantum.openstack.common import importutils
 from quantum.openstack.common import policy as common_policy
 from quantum import policy
@@ -251,6 +252,7 @@ class QuantumPolicyTestCase(unittest.TestCase):
                                          'init',
                                          new=fakepolicyinit)
         self.patcher.start()
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         self.context = context.Context('fake', 'fake', roles=['user'])
         plugin_klass = importutils.import_class(
             "quantum.db.db_base_plugin_v2.QuantumDbPluginV2")

@@ -17,7 +17,12 @@ import os
 import unittest
 
 from quantum.common import config
+from quantum.db import api as db
 from quantum.openstack.common import cfg
+
+
+TEST_ETC_AREA = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                             'etc')
 
 
 class ConfigurationTest(unittest.TestCase):
@@ -41,3 +46,14 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(120, cfg.CONF.dhcp_lease_duration)
         self.assertFalse(cfg.CONF.allow_overlapping_ips)
         self.assertEqual('quantum', cfg.CONF.control_exchange)
+
+
+class RequiredConfigTest(unittest.TestCase):
+
+    def tearDown(self):
+        cfg.CONF.reset()
+
+    def test_missing_required_config(self):
+        args = ['--config-file',
+                os.path.join(TEST_ETC_AREA, 'bad-quantum.conf.test')]
+        self.assertRaises(cfg.RequiredOptError, config.parse, args=args)

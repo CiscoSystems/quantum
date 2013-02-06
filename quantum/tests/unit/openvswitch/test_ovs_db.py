@@ -17,6 +17,7 @@ import unittest2
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
+from quantum.openstack.common import cfg
 from quantum.plugins.openvswitch import ovs_db_v2
 from quantum.tests.unit import test_db_plugin as test_plugin
 
@@ -35,6 +36,7 @@ UPDATED_TUNNEL_RANGES = [(TUN_MIN + 5, TUN_MAX + 5)]
 
 class VlanAllocationsTest(unittest2.TestCase):
     def setUp(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         ovs_db_v2.initialize()
         ovs_db_v2.sync_vlan_allocations(VLAN_RANGES)
         self.session = db.get_session()
@@ -180,6 +182,7 @@ class VlanAllocationsTest(unittest2.TestCase):
 
 class TunnelAllocationsTest(unittest2.TestCase):
     def setUp(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         ovs_db_v2.initialize()
         ovs_db_v2.sync_tunnel_allocations(TUNNEL_RANGES)
         self.session = db.get_session()
@@ -258,6 +261,7 @@ class TunnelAllocationsTest(unittest2.TestCase):
 class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):
     def setUp(self):
         super(NetworkBindingsTest, self).setUp()
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         ovs_db_v2.initialize()
         self.session = db.get_session()
 

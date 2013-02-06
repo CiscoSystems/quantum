@@ -17,6 +17,7 @@
 
 import unittest
 
+from quantum.openstack.common import cfg
 from quantum.openstack.common import uuidutils
 from quantum.plugins.nec.common import config
 from quantum.plugins.nec.db import api as ndb
@@ -30,6 +31,7 @@ class OFCManagerTest(unittest.TestCase):
     def setUp(self):
         driver = "quantum.tests.unit.nec.stub_ofc_driver.StubOFCDriver"
         config.CONF.set_override('driver', driver, 'OFC')
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         ndb.initialize()
         self.ofc = ofc_manager.OFCManager()
 

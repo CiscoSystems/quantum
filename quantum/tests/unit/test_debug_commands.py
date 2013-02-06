@@ -36,6 +36,7 @@ class TestDebugCommands(unittest.TestCase):
     def setUp(self):
         cfg.CONF.register_opts(interface.OPTS)
         cfg.CONF.register_opts(QuantumDebugAgent.OPTS)
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         cfg.CONF(args=[], project='quantum')
         cfg.CONF.set_override('use_namespaces', True)
         config.register_root_helper(cfg.CONF)

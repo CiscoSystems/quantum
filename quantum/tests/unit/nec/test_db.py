@@ -18,6 +18,7 @@
 import random
 import unittest
 
+from quantum.openstack.common import cfg
 from quantum.openstack.common import uuidutils
 from quantum.plugins.nec.common import exceptions as nexc
 from quantum.plugins.nec.db import api as ndb
@@ -29,6 +30,7 @@ class NECPluginV2DBTest(unittest.TestCase):
 
     def setUp(self):
         """Setup for tests"""
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         ndb.initialize()
 
     def tearDown(self):

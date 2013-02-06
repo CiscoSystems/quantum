@@ -329,9 +329,9 @@ class DuplicateOptError(Error):
 class RequiredOptError(Error):
     """Raised if an option is required but no value is supplied by the user."""
 
-    def __init__(self, opt_name, group=None):
+    def __init__(self, opt_name, group_or_name=None):
         self.opt_name = opt_name
-        self.group = group
+        self.group = CONF._get_group(group_or_name)
 
     def __str__(self):
         if self.group is None:

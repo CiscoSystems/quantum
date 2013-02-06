@@ -25,6 +25,7 @@ import webtest
 from quantum.api import extensions
 from quantum.common import config
 from quantum.db import db_base_plugin_v2
+from quantum.openstack.common import cfg
 from quantum.openstack.common import jsonutils
 from quantum.openstack.common import log as logging
 from quantum.plugins.common import constants
@@ -60,6 +61,10 @@ class FakePluginWithExtension(db_base_plugin_v2.QuantumDbPluginV2):
     """A fake plugin used only for extension testing in this file."""
 
     supported_extension_aliases = ["FOXNSOX"]
+
+    def __init__(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
+        super(FakePluginWithExtension, self).__init__()
 
     def method_to_support_foxnsox_extension(self, context):
         self._log("method_to_support_foxnsox_extension", context)

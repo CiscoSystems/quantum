@@ -25,7 +25,14 @@ from quantum.openstack.common import cfg
 
 class DBTestCase(unittest.TestCase):
     def test_db_reconnect(self):
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         cfg.CONF.set_override('sql_max_retries', 3, 'DATABASE')
         with mock.patch.object(db, 'register_models') as mock_register:
             mock_register.return_value = False
             db.configure_db()
+
+    def test_missing_required_db_config(self):
+        cfg.CONF.set_override('sql_max_retries', 3, 'DATABASE')
+        with mock.patch.object(db, 'register_models') as mock_register:
+            mock_register.return_value = False
+            self.assertRaises(cfg.RequiredOptError, db.configure_db())

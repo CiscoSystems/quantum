@@ -75,6 +75,7 @@ class MetaQuantumPluginV2Test(unittest.TestCase):
         self.fake_tenant_id = uuidutils.generate_uuid()
         self.context = context.get_admin_context()
 
+        cfg.CONF.set_override('sql_connection', 'sqlite://', 'DATABASE')
         db.configure_db()
 
         setup_metaplugin_conf()
