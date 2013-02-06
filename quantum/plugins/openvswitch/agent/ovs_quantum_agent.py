@@ -34,6 +34,7 @@ from quantum.agent.linux import utils
 from quantum.common import constants as q_const
 from quantum.common import config as logging_config
 from quantum.common import topics
+from quantum.common import utils as q_utils
 from quantum.openstack.common import cfg
 from quantum.openstack.common import context
 from quantum.openstack.common import rpc
@@ -141,7 +142,7 @@ class OVSQuantumAgent(object):
         :param integ_br: name of the integration bridge.
         :param tun_br: name of the tunnel bridge.
         :param local_ip: local IP address of this hypervisor.
-        :param bridge_mappings: mappings from phyiscal interface to bridge.
+        :param bridge_mappings: mappings from physical network name to bridge.
         :param root_helper: utility to use when running shell cmds.
         :param polling_interval: interval (secs) to poll DB.
         :param reconnect_internal: retry interval (secs) on DB error.
@@ -452,7 +453,8 @@ class OVSQuantumAgent(object):
         if int(self.patch_tun_ofport) < 0 or int(self.patch_int_ofport) < 0:
             LOG.error("Failed to create OVS patch port. Cannot have tunneling "
                       "enabled on this agent, since this version of OVS does "
-                      "not support tunnels or patch ports.")
+                      "not support tunnels or patch ports. "
+                      "Agent terminated!")
             exit(1)
         self.tun_br.remove_all_flows()
         self.tun_br.add_flow(priority=1, actions="drop")
@@ -460,7 +462,7 @@ class OVSQuantumAgent(object):
     def setup_physical_bridges(self, bridge_mappings):
         '''Setup the physical network bridges.
 
-        Creates phyiscal network bridges and links them to the
+        Creates physical network bridges and links them to the
         integration bridge using veths.
 
         :param bridge_mappings: map physical network names to bridge names.'''
@@ -471,7 +473,8 @@ class OVSQuantumAgent(object):
         for physical_network, bridge in bridge_mappings.iteritems():
             # setup physical bridge
             if not ip_lib.device_exists(bridge, self.root_helper):
-                LOG.error("Bridge %s for physical network %s does not exist",
+                LOG.error("Bridge %s for physical network %s does not exist. "
+                          "Agent terminated!",
                           bridge, physical_network)
                 sys.exit(1)
             br = ovs_lib.OVSBridge(bridge, self.root_helper)
@@ -802,24 +805,24 @@ def main():
     local_ip = cfg.CONF.OVS.local_ip
     enable_tunneling = cfg.CONF.OVS.enable_tunneling
 
-    bridge_mappings = {}
-    for mapping in cfg.CONF.OVS.bridge_mappings:
-        mapping = mapping.strip()
-        if mapping != '':
-            try:
-                physical_network, bridge = mapping.split(':')
-                bridge_mappings[physical_network] = bridge
-                LOG.info("Physical network %s mapped to bridge %s",
-                         physical_network, bridge)
-            except ValueError as ex:
-                LOG.error("Invalid bridge mapping: \'%s\' - %s", mapping, ex)
-                sys.exit(1)
+    if enable_tunneling and not local_ip:
+        LOG.error("Tunnelling cannot be enabled without a valid local_ip.")
+        sys.exit(1)
+
+    try:
+        bridge_mappings = q_utils.parse_mappings(cfg.CONF.OVS.bridge_mappings)
+    except ValueError as e:
+        LOG.error(_("Parsing bridge mappings failed: %s."
+                    " Agent terminated!"), e)
+        sys.exit(1)
+    LOG.info(_("Bridge mappings: %s") % bridge_mappings)
 
     plugin = OVSQuantumAgent(integ_br, tun_br, local_ip, bridge_mappings,
                              root_helper, polling_interval,
                              reconnect_interval, rpc, enable_tunneling)
 
     # Start everything.
+    LOG.info("Agent initialized successfully, now running... ")
     plugin.daemon_loop(db_connection_url)
 
     sys.exit(0)

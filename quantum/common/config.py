@@ -50,7 +50,12 @@ core_opts = [
     cfg.IntOpt('max_subnet_host_routes', default=20),
     cfg.StrOpt('state_path', default='.'),
     cfg.IntOpt('dhcp_lease_duration', default=120),
-    cfg.BoolOpt('allow_overlapping_ips', default=False)
+    cfg.BoolOpt('allow_overlapping_ips', default=False),
+    cfg.StrOpt('control_exchange',
+               default='quantum',
+               help='AMQP exchange to connect to if using RabbitMQ or Qpid'),
+    cfg.BoolOpt('force_gateway_on_subnet', default=False,
+                help=_("Ensure that configured gateway is on subnet")),
 ]
 
 # Register the configuration options
@@ -114,6 +119,7 @@ def setup_logging(conf):
 
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
+    LOG.info("Logging enabled!")
 
 
 def load_paste_app(app_name):

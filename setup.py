@@ -113,7 +113,7 @@ setuptools.setup(
             'quantum-dhcp-agent-dnsmasq-lease-update ='
             'quantum.agent.linux.dhcp:Dnsmasq.lease_update',
             'quantum-netns-cleanup = quantum.agent.netns_cleanup_util:main',
-            'quantum-l3-agent = quantum.agent.l3_nat_agent:main',
+            'quantum-l3-agent = quantum.agent.l3_agent:main',
             'quantum-linuxbridge-agent ='
             'quantum.plugins.linuxbridge.agent.linuxbridge_quantum_agent:main',
             'quantum-openvswitch-agent ='
@@ -124,6 +124,7 @@ setuptools.setup(
             'quantum.plugins.nec.agent.nec_quantum_agent:main',
             'quantum-server = quantum.server:main',
             'quantum-debug = quantum.debug.shell:main',
+            'quantum-ovs-cleanup = quantum.agent.ovs_cleanup_util:main',
         ]
     },
 )
