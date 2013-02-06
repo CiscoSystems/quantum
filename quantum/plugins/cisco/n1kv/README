@@ -57,7 +57,10 @@ NEW CONCEPTS:
        A network profile defines the type of network, whether it's VLAN or 
        VXLAN based. In addition it can define type specific parameters,
        such as L2-domain and VLAN range for VLAN type, or VXLAN ID range 
-       for VXLAN type.
+       and Multicast IP range for VXLAN type.
+
+       Please read the following IETF draft to understand VXLAN
+       https://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02
 
    PORT PROFILE:
 
@@ -99,3 +102,6 @@ WORK FLOW:
    a CSR isntance using Openstack APIs on a compute node and configure it. 
 
 
+DISCLAIMER:
+-----------
+   Not all these functionality will be implemented in Grizzly.
