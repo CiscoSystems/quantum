@@ -26,8 +26,7 @@ class ConfigurationTest(unittest.TestCase):
         """
         These are some of the OVS config checks. Change them to
         test the N1KV config, as shown above.
-
-
+        """
         self.assertEqual('br-int', cfg.CONF.OVS.integration_bridge)
         self.assertFalse(cfg.CONF.OVS.enable_tunneling)
         self.assertEqual('br-tun', cfg.CONF.OVS.tunnel_bridge)
@@ -41,5 +40,4 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(0, len(cfg.CONF.OVS.bridge_mappings))
         self.assertEqual(0, len(cfg.CONF.OVS.network_vlan_ranges))
         self.assertEqual(0, len(cfg.CONF.OVS.tunnel_id_ranges))
-        """
         pass
