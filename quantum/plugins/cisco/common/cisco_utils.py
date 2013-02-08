@@ -51,7 +51,10 @@ def make_port_dict(port_id, port_state, net_id, attachment):
 
 def find_config_file(options, config_file):
     # Grab the config dir
-    conf_dir = cfg.CONF.config_dir
+    if hasattr(cfg.CONF, 'config_dir'):
+        conf_dir = cfg.CONF.config_dir
+    else:
+        conf_dir = "/"
 
     # Search files in the config dir
     files = os.listdir(str(conf_dir))
