@@ -54,6 +54,11 @@ class FakeHTTPConnection(object):
     Returns the fake-response.
 
     """
+    # After mocking the FakeHTTPConnection class in place of the real
+    # one, you can set these class attributes to the value you need.
+    DEFAULT_RESP_BODY = ""
+    DEFAULT_RESP_CODE = httplib.OK
+
     def __init__(self, *args, **kwargs):
         # Not doing anything, but need to be able to accept parameters,
         # since standard Connection object does.
@@ -79,31 +84,8 @@ class FakeHTTPConnection(object):
         # Return an acceptable response as we may have received it from
         # the VSM.
         print "@@@@ getresponse: ", args, kwargs
-        resp = """<?xml version="1.0" encoding="UTF-8"?>
-<set name="virtual_port_profile_set">
-  <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB" url="/api/hyper-v/virtual-port-profile">
-    <properties>
-      <state>enabled</state>
-      <type>vethernet</type>
-      <name>AbhishekPP</name>
-      <id>41548d21-7f89-4da0-9131-3d4fd4e8BBBB</id>
-      <maxPorts>512</maxPorts>
-      <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-    </properties>
-  </instance>
-  <instance name="41548d21-7f89-4da0-9131-3d4fd4e8AAAA" url="/api/hyper-v/virtual-port-profile">
-    <properties>
-      <state>enabled</state>
-      <type>vethernet</type>
-      <name>grizzlyPP</name>
-      <id>41548d21-7f89-4da0-9131-3d4fd4e8AAAA</id>
-      <maxPorts>512</maxPorts>
-      <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-    </properties>
-  </instance>
-</set>
-"""
-        return FakeResponse(httplib.OK, resp)
+        return FakeResponse(FakeHTTPConnection.DEFAULT_RESP_CODE,
+                            FakeHTTPConnection.DEFAULT_RESP_BODY)
 
 # Override the ordinary HTTP connection object with our fake.
 n1kv_client.httplib.HTTPConnection = FakeHTTPConnection
@@ -140,6 +122,42 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
                     'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
     def setUp(self):
+        # First step is to define an acceptable response from the VSM to
+        # our requests. This needs to be done BEFORE the setUp() function
+        # of the super-class is called.
+        # This default here works for many cases. If you need something
+        # extra, please define your own setUp() function in your test class,
+        # and set your DEFAULT_RESPONSE value also BEFORE calling the
+        # setUp() of the super-function (this one here). If you have set
+        # a value already, it will not be overwritten by this code.
+        if not FakeHTTPConnection.DEFAULT_RESP_BODY:
+            FakeHTTPConnection.DEFAULT_RESP_BODY = \
+            """<?xml version="1.0" encoding="UTF-8"?>
+            <set name="virtual_port_profile_set">
+              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB"
+                        url="/api/hyper-v/virtual-port-profile">
+                <properties>
+                  <state>enabled</state>
+                  <type>vethernet</type>
+                  <name>AbhishekPP</name>
+                  <id>41548d21-7f89-4da0-9131-3d4fd4e8BBBB</id>
+                  <maxPorts>512</maxPorts>
+                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
+                </properties>
+              </instance>
+              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8AAAA"
+                        url="/api/hyper-v/virtual-port-profile">
+                <properties>
+                  <state>enabled</state>
+                  <type>vethernet</type>
+                  <name>grizzlyPP</name>
+                  <id>41548d21-7f89-4da0-9131-3d4fd4e8AAAA</id>
+                  <maxPorts>512</maxPorts>
+                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
+                </properties>
+              </instance>
+            </set>
+            """
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
         self.tenant_id = 'some_tenant'
@@ -172,8 +190,55 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         self.assertIn('tenant_id', body['networks'][0])
 
 
-class TestN1kvRefactor(unittest.TestCase):
+class TestN1kvBasicGet(test_plugin.TestBasicGet,
+                       N1kvPluginTestCase):
+    def setUp(self):
+        # Any non-default responses from the VSM required? Set them
+        # here:
+        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        super(TestN1kvBasicGet, self).setUp()
 
+
+
+class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
+                           N1kvPluginTestCase):
+    def setUp(self):
+        # Any non-default responses from the VSM required? Set them
+        # here:
+        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        super(TestN1kvHTTPResponse, self).setUp()
+
+
+class TestN1kvPorts(test_plugin.TestPortsV2,
+                    N1kvPluginTestCase):
+    def setUp(self):
+        # Any non-default responses from the VSM required? Set them
+        # here:
+        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        super(TestN1kvPorts, self).setUp()
+
+
+class TestN1kvNetworks(test_plugin.TestNetworksV2,
+                       N1kvPluginTestCase):
+    def setUp(self):
+        # Any non-default responses from the VSM required? Set them
+        # here:
+        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        super(TestN1kvNetworks, self).setUp()
+
+
+class TestN1kvNonStandardTest(unittest.TestCase):
+    """
+    This test class here can be used to test the plugin directly,
+    without going through the DB plugin test cases.
+
+    None of the set-up done in N1kvPluginTestCase applies here.
+
+    """
     def setUp(self):
         pass
 
@@ -184,24 +249,3 @@ class TestN1kvRefactor(unittest.TestCase):
         n1kv_db_v2.initialize()
 
 
-class TestN1kvBasicGet(test_plugin.TestBasicGet,
-                       N1kvPluginTestCase):
-    def setUp(self):
-        super(TestN1kvBasicGet, self).setUp()
-
-
-
-class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
-                           N1kvPluginTestCase):
-    def setUp(self):
-        super(TestN1kvHTTPResponse, self).setUp()
-
-
-class TestN1kvPorts(test_plugin.TestPortsV2,
-                    N1kvPluginTestCase):
-    pass
-
-
-class TestN1kvNetworks(test_plugin.TestNetworksV2,
-                       N1kvPluginTestCase):
-    pass
