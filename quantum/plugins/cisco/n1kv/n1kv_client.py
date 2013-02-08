@@ -34,15 +34,15 @@ TENANT = const.NETWORK_ADMIN
 
 
 class Client(n1kv_profile_db.N1kvProfile_db_mixin):
-    """ 
-    Client for the Cisco Nexus1000V Quantum Plugin 
+    """
+    Client for the Cisco Nexus1000V Quantum Plugin
 
-    This client implements functions to communicate with 
+    This client implements functions to communicate with
     Cisco Nexus1000V VSM.
 
-    For every Quantum objects Cisco Nexus1000V Quantum Plugin 
+    For every Quantum objects Cisco Nexus1000V Quantum Plugin
     creates a corresponding object in the controller (Cisco
-    Nexus1000V VSM). 
+    Nexus1000V VSM).
 
     CONCEPTS:
 
@@ -63,7 +63,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     vm-network:
 
     vm-network refers to a network and port-profile
-    It also has a list of ports that uses the network and 
+    It also has a list of ports that uses the network and
     port-profile this vm-network refers to.
 
     WORK FLOW:
@@ -71,14 +71,14 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     For every network profile a corresponding logical-network and
     network-segment-pool under this logical-network will be created
 
-    For every network created from a given network profile a 
+    For every network created from a given network profile a
     network-segment will be added to that network-segment-pool that
     corresponds to the network profile
 
     A port uses a network and port-profile. Hence for every unique
     combination of a network and a port-profile a unique vm-network
-    will be created, and a reference to the port will be added. If 
-    the same combination is used by another port, the refernce to 
+    will be created, and a reference to the port will be added. If
+    the same combination is used by another port, the refernce to
     that port will be added to the same vm-network.
 
 
@@ -250,7 +250,8 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
         status_code = self._get_status_code(resp)
         LOG.debug("status_code %s\n", status_code)
         if status_code in (httplib.OK, httplib.ACCEPTED, httplib.NO_CONTENT):
-            return self.deserialize(replybody, status_code)
+            ret = self.deserialize(replybody, status_code)
+            return ret
         elif status_code == httplib.CREATED:
             LOG.debug("Created Nework Segment/Network Segment Pool: %s\n", replybody)
 
@@ -286,7 +287,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
         try:
             return Serializer(self._serialization_metadata).deserialize(
                               data, self._content_type('xml'))
-        except:
+        except Exception:
             if status_code == 200:
                 LOG.debug("Created Nework Segment/Network Segment Pool\n")
 
@@ -318,7 +319,7 @@ class Client(n1kv_profile_db.N1kvProfile_db_mixin):
     def _get_vsm_hosts(self, tenant_id):
         """
         Returns a list of VSM ip addresses.
-        CREDENTIAL_NAME in the credentials object corresponds to an 
+        CREDENTIAL_NAME in the credentials object corresponds to an
         ip address.
         """
         host_list = []

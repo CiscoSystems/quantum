@@ -172,7 +172,8 @@ def alloc_network(session, profile_id):
     with session.begin(subtransactions=True):
         try:
             profile = (session.query(n1kv_profile_db.N1kvProfile_db).
-                    filter_by(profile_id=profile_id).one())
+                    filter_by(id=profile_id).one())
+                    #filter_by(profile_id=profile_id).one())   @@@@@@@@@@
             if profile:
                 if profile.segment_type == 'vlan':
                     return reserve_vlan(session, profile)

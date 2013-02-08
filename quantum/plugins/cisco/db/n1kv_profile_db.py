@@ -158,7 +158,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         session = db.get_session()
         try:
             profile = (session.query(N1kvProfile_db).
-                       filter_by(profile_id=profile_id).one())
+                       filter_by(id=profile_id).one())
+                       #filter_by(profile_id=profile_id).one())   @@@@@@
             return profile
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileId

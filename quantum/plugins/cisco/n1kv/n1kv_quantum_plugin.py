@@ -1,5 +1,5 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-#   
+#
 # Copyright 2011 Cisco Systems, Inc.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -192,7 +192,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
-    Read README file for the architecture, new features, and 
+    Read README file for the architecture, new features, and
     workflow
 
     """
@@ -222,7 +222,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if self.enable_tunneling:
             self._parse_tunnel_id_ranges()
             n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
-        # TBD end 
+        # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
         self.setup_rpc()
@@ -305,7 +305,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # TODO(rkukura) Use core mechanism for attribute authorization
     # when available.
 
-    # TBD End 
+    # TBD End
 
     def _check_provider_view_auth(self, context, network):
         return policy.check(context,
@@ -427,13 +427,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _process_profile(self, context, attrs):
         """ Validate profile exists """
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
-
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
-            msg = _("n1kv_profile:profile_id does not exist")
+            msg = _("n1kv:profile_id does not exist")
             raise q_exc.InvalidInput(error_message=msg)
         if not self.network_profile_exist(context, profile_id):
-            msg = _("n1kv_profile:profile_id does not exist")
+            msg = _("n1kv:profile_id does not exist")
             raise q_exc.InvalidInput(error_message=msg)
 
         return (profile_id)
@@ -486,7 +485,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_delete_subnet_request(self, id):
         """ Send Delete Subnet request to VSM """
         LOG.debug('_send_delete_subnet_request: %s', id)
-    # TBD End : 
+    # TBD End :
 
     def _send_create_port_request(self, port):
         """ Send Create Port request to VSM """
@@ -618,9 +617,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(net, fields) for net in nets]
 
     def create_port(self, context, port):
-        """ 
+        """
         Create Quantum port
-        
+
         Create Port will be called twice when using this plugin
         Once directly, and another through Nova
 
