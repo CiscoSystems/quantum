@@ -50,21 +50,27 @@ def make_port_dict(port_id, port_state, net_id, attachment):
     return res
 
 def find_config_file(options, config_file):
+<<<<<<< Updated upstream
     # Grab the config dir
     if hasattr(cfg.CONF, 'config_dir'):
         conf_dir = cfg.CONF.config_dir
     else:
         conf_dir = "/"
+=======
+    if hasattr(cfg.CONF, "config_dir"):
+        # Grab the config dir
+        conf_dir = cfg.CONF.config_dir
+>>>>>>> Stashed changes
 
-    # Search files in the config dir
-    files = os.listdir(str(conf_dir))
+        # Search files in the config dir
+        files = os.listdir(str(conf_dir))
 
-    path = False
-    for file in files:
-        if file == config_file:
-            path = os.path.join(conf_dir, file)
+        path = False
+        for file in files:
+            if file == config_file:
+                path = os.path.join(conf_dir, file)
 
-    if path:
-        return path
-    else:
-        return q_find_config_file(options, config_file)
+        if path:
+            return path
+    
+    return q_find_config_file(options, config_file)
