@@ -15,6 +15,10 @@
 #    under the License.
 # @author: Aaron Rosen, Nicira Networks, Inc.
 # @author: Bob Kukura, Red Hat, Inc.
+# @author: Aruna Kushwaha, Cisco Systems Inc.
+# @author: Abhishek Raut, Cisco Systems Inc.
+# @author: Rudrajit Tapadar, Cisco Systems Inc.
+
 
 import logging
 
@@ -50,6 +54,18 @@ def get_network_binding(session, network_id):
 
 def add_network_binding(session, network_id, network_type,
                  physical_network, segmentation_id, multicast_ip, profile_id):
+    """
+    Explanation for the parameters
+
+    network_type : Whether its a VLAN or VXLAN based network
+    physical_network : Only applicable for VLAN networks. It represents a
+                       L2 Domain
+    segmentation_id : VLAN / VXLAN ID
+    multicast IP : VXLAN technology needs a multicast IP to be associated
+                   with every VXLAN ID to deal with broadcast packets. A
+                   single Multicast IP can be shared by multiple VXLAN IDs.
+    profile_id : Network Profile ID based by which this network is created
+    """
     with session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kvNetworkBinding(network_id, network_type,
             physical_network,
@@ -145,27 +161,27 @@ def reserve_vlan(session, profile):
                     physical_network=segment_type)
 
 
-def reserve_tunnel(session, profile):
+def reserve_vxlan(session, profile):
     seg_min, seg_max = profile.get_segment_range(session)
     segment_type = 'vxlan'
     physical_network = ""
 
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
+            alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
                     filter(and_(
-                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id >=
+                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id >=
                            seg_min,
-                       n1kv_models_v2.N1kvTunnelAllocation.tunnel_id <=
+                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id <=
                            seg_max,
-                       n1kv_models_v2.N1kvTunnelAllocation.allocated == False)
+                       n1kv_models_v2.N1kvVxlanAllocation.allocated == False)
                        ).first())
-            segment_id = alloc.tunnel_id
+            segment_id = alloc.vxlan_id
             alloc.allocated = True
             return (physical_network, segment_type,
                     segment_id, profile.get_multicast_ip(session))
         except exc.NoResultFound:
-            raise q_exc.TunnelIdInUse(tunnel_id=segment_id)
+            raise q_exc.VxlanIdInUse(vxlan_id=segment_id)
 
 
 def alloc_network(session, profile_id):
@@ -178,7 +194,7 @@ def alloc_network(session, profile_id):
                 if profile.segment_type == 'vlan':
                     return reserve_vlan(session, profile)
                 else:
-                    return reserve_tunnel(session, profile)
+                    return reserve_vxlan(session, profile)
         except q_exc.NotFound:
             LOG.debug("N1kvProfile_db not found")
 
@@ -232,88 +248,88 @@ def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
                         (vlan_id, physical_network))
 
 
-def sync_tunnel_allocations(tunnel_id_ranges):
-    """Synchronize tunnel_allocations table with configured tunnel ranges"""
+def sync_vxlan_allocations(vxlan_id_ranges):
+    """Synchronize vxlan_allocations table with configured vxlan ranges"""
 
-    # determine current configured allocatable tunnels
-    tunnel_ids = set()
-    for tunnel_id_range in tunnel_id_ranges:
-        tun_min, tun_max = tunnel_id_range
+    # determine current configured allocatable vxlans
+    vxlan_ids = set()
+    for vxlan_id_range in vxlan_id_ranges:
+        tun_min, tun_max = vxlan_id_range
         if tun_max + 1 - tun_min > 1000000:
-            LOG.error("Skipping unreasonable tunnel ID range %s:%s" %
-                      tunnel_id_range)
+            LOG.error("Skipping unreasonable vxlan ID range %s:%s" %
+                      vxlan_id_range)
         else:
-            tunnel_ids |= set(xrange(tun_min, tun_max + 1))
+            vxlan_ids |= set(xrange(tun_min, tun_max + 1))
 
     session = db.get_session()
     with session.begin():
-        # remove from table unallocated tunnels not currently allocatable
-        allocs = (session.query(n1kv_models_v2.N1kvTunnelAllocation).all())
+        # remove from table unallocated vxlans not currently allocatable
+        allocs = (session.query(n1kv_models_v2.N1kvVxlanAllocation).all())
         for alloc in allocs:
             try:
-                # see if tunnel is allocatable
-                tunnel_ids.remove(alloc.tunnel_id)
+                # see if vxlan is allocatable
+                vxlan_ids.remove(alloc.vxlan_id)
             except KeyError:
                 # it's not allocatable, so check if its allocated
                 if not alloc.allocated:
                     # it's not, so remove it from table
-                    LOG.debug("removing tunnel %s from pool" %
-                                alloc.tunnel_id)
+                    LOG.debug("removing vxlan %s from pool" %
+                                alloc.vxlan_id)
                     session.delete(alloc)
 
-        # add missing allocatable tunnels to table
-        for tunnel_id in sorted(tunnel_ids):
-            alloc = n1kv_models_v2.N1kvTunnelAllocation(tunnel_id)
+        # add missing allocatable vxlans to table
+        for vxlan_id in sorted(vxlan_ids):
+            alloc = n1kv_models_v2.N1kvVxlanAllocation(vxlan_id)
             session.add(alloc)
 
 
-def get_tunnel_allocation(tunnel_id):
+def get_vxlan_allocation(vxlan_id):
     session = db.get_session()
     try:
-        alloc = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
-                 filter_by(tunnel_id=tunnel_id).
+        alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                 filter_by(vxlan_id=vxlan_id).
                  one())
         return alloc
     except exc.NoResultFound:
         return
 
 
-def reserve_specific_tunnel(session, tunnel_id):
+def reserve_specific_vxlan(session, vxlan_id):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
-                     filter_by(tunnel_id=tunnel_id).
+            alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                     filter_by(vxlan_id=vxlan_id).
                      one())
             if alloc.allocated:
-                raise q_exc.TunnelIdInUse(tunnel_id=tunnel_id)
-            LOG.debug("reserving specific tunnel %s from pool" % tunnel_id)
+                raise q_exc.VxlanIdInUse(vxlan_id=vxlan_id)
+            LOG.debug("reserving specific vxlan %s from pool" % vxlan_id)
             alloc.allocated = True
         except exc.NoResultFound:
-            LOG.debug("reserving specific tunnel %s outside pool" % tunnel_id)
-            alloc = n1kv_models_v2.N1kvTunnelAllocation(tunnel_id)
+            LOG.debug("reserving specific vxlan %s outside pool" % vxlan_id)
+            alloc = n1kv_models_v2.N1kvVxlanAllocation(vxlan_id)
             alloc.allocated = True
             session.add(alloc)
 
 
-def release_tunnel(session, tunnel_id, tunnel_id_ranges):
+def release_vxlan(session, vxlan_id, vxlan_id_ranges):
     with session.begin(subtransactions=True):
         try:
-            alloc = (session.query(n1kv_models_v2.N1kvTunnelAllocation).
-                     filter_by(tunnel_id=tunnel_id).
+            alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                     filter_by(vxlan_id=vxlan_id).
                      one())
             alloc.allocated = False
             inside = False
-            for tunnel_id_range in tunnel_id_ranges:
-                if (tunnel_id >= tunnel_id_range[0]
-                    and tunnel_id <= tunnel_id_range[1]):
+            for vxlan_id_range in vxlan_id_ranges:
+                if (vxlan_id >= vxlan_id_range[0]
+                    and vxlan_id <= vxlan_id_range[1]):
                     inside = True
                     break
             if not inside:
                 session.delete(alloc)
-            LOG.debug("releasing tunnel %s %s pool" %
-                      (tunnel_id, inside and "to" or "outside"))
+            LOG.debug("releasing vxlan %s %s pool" %
+                      (vxlan_id, inside and "to" or "outside"))
         except exc.NoResultFound:
-            LOG.warning("tunnel_id %s not found" % tunnel_id)
+            LOG.warning("vxlan_id %s not found" % vxlan_id)
 
 
 def get_port(port_id):
@@ -336,40 +352,40 @@ def set_port_status(port_id, status):
         raise q_exc.PortNotFound(port_id=port_id)
 
 
-def get_tunnel_endpoints():
+def get_vxlan_endpoints():
     session = db.get_session()
     try:
-        tunnels = session.query(n1kv_models_v2.N1kvTunnelEndpoint).all()
+        vxlans = session.query(n1kv_models_v2.N1kvVxlanEndpoint).all()
     except exc.NoResultFound:
         return []
-    return [{'id': tunnel.id,
-             'ip_address': tunnel.ip_address} for tunnel in tunnels]
+    return [{'id': vxlan.id,
+             'ip_address': vxlan.ip_address} for vxlan in vxlans]
 
 
-def _generate_tunnel_id(session):
+def _generate_vxlan_id(session):
     try:
-        tunnels = session.query(n1kv_models_v2.N1kvTunnelEndpoint).all()
+        vxlans = session.query(n1kv_models_v2.N1kvVxlanEndpoint).all()
     except exc.NoResultFound:
         return 0
-    tunnel_ids = ([tunnel['id'] for tunnel in tunnels])
-    if tunnel_ids:
-        id = max(tunnel_ids)
+    vxlan_ids = ([vxlan['id'] for vxlan in vxlans])
+    if vxlan_ids:
+        id = max(vxlan_ids)
     else:
         id = 0
     return id + 1
 
 
-def add_tunnel_endpoint(ip):
+def add_vxlan_endpoint(ip):
     session = db.get_session()
     try:
-        tunnel = (session.query(n1kv_models_v2.N1kvTunnelEndpoint).
+        vxlan = (session.query(n1kv_models_v2.N1kvVxlanEndpoint).
                   filter_by(ip_address=ip).one())
     except exc.NoResultFound:
-        id = _generate_tunnel_id(session)
-        tunnel = n1kv_models_v2.N1kvTunnelEndpoint(ip, id)
-        session.add(tunnel)
+        id = _generate_vxlan_id(session)
+        vxlan = n1kv_models_v2.N1kvVxlanEndpoint(ip, id)
+        session.add(vxlan)
         session.flush()
-    return tunnel
+    return vxlan
 
 
 def get_vm_network(profile_id, network_id):

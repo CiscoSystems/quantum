@@ -50,12 +50,15 @@ class N1kvProfile_db(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     multicast_ip_index = Column(Integer)
 
     def get_segment_range(self, session):
+        """Get the segment range min and max for a network profile."""
         with session.begin(subtransactions=True):
+            # Sort the range to ensure min, max is in order
             seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
             LOG.debug("N1kvProfile_db: seg_min %s seg_max %s", seg_min,seg_max)
             return (int(seg_min), int(seg_max))
 
     def get_multicast_ip(self, session):
+        "Returns a multicast ip from the defined pool."
         # Round robin multicast ip allocation
         with session.begin(subtransactions=True):
             try:
@@ -88,6 +91,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
     """Mixin class to add N1kv Profile methods to db_plugin_base_v2"""
 
     def create_profile(self, context, profile):
+        """Create a new N1kv profile."""
+
         p = profile['profile']
         self._validate_arguments(context, p)
         tenant_id = self._get_tenant_id_for_create(context, p)
@@ -111,11 +116,15 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         return self._make_profile_dict(profile_db)
 
     def delete_profile(self, context, id):
+        """Delete a N1kv profile."""
+
         profile = self._get_profile(context, id)
         with context.session.begin(subtransactions=True):
             context.session.delete(profile)
 
     def update_profile(self, context, id, profile):
+        """Update a N1kv profile."""
+
         p = profile['profile']
         with context.session.begin(subtransactions=True):
             profile_db = self._get_profile(context, id)
@@ -154,7 +163,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
             return profiledb
 
     def get_profile_by_id(self, profile_id):
-        """Get N1kv Profile by its id"""
+        """Get N1kv Profile by its id."""
+        
         session = db.get_session()
         try:
             profile = (session.query(N1kvProfile_db).
@@ -206,10 +216,13 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
             raise cisco_exceptions.ProfileIdNotFound(profile_id=id)
 
     def _get_segment_range(self, data):
+        # Sort the range to ensure min, max is in order
         seg_min, seg_max = sorted(map(int, data.split('-')))
         return (seg_min, seg_max)
 
     def _validate_vlan(self, p):
+        """Validate if vlan falls within segment boundaries."""
+        
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         ranges = conf.N1KV['network_vlan_ranges']
         ranges = ranges.split(',')
@@ -223,6 +236,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
                     raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_vxlan(self, p):
+        """Validate if vxlan falls within segment boundaries."""
+        
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         ranges = conf.N1KV['tunnel_id_ranges']
         ranges = ranges.split(',')
@@ -246,12 +261,16 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
                 raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_segment_range(self, p):
+        """Validate segment range values."""
+        
         mo = re.match(r"(\d+)\-(\d+)", p['segment_range'])
         if mo is None:
             msg = _("invalid segment range. example range: 500-550")
             raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_network_profile(self, p):
+        """Validate completeness of a network profile arguments."""
+        
         if any(p[arg] == '' for arg in ('segment_type', 'segment_range')):
             msg = _("arguments segment_type and segment_range missing"
                     " for network profile")
@@ -269,6 +288,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
             self._validate_vxlan(p)
 
     def _validate_segment_range_uniqueness(self, context, p):
+        """Validate that segment range doesn't overlap."""
+        
         profiles = self.get_profiles(context)
         for prfl in profiles:
             if p['name'] == prfl['name']:
@@ -291,6 +312,8 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
                     raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_arguments(self, context, p):
+        """Validate completeness of N1kv profile arguments."""
+        
         if p['profile_type'] == 'network':
             self._validate_network_profile(p)
         else:

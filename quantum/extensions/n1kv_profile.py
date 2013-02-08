@@ -1,4 +1,4 @@
-# Copyright (c) 2012 OpenStack, LLC.
+# Copyright (c) 2012 Cisco Systems, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,9 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# @author: Abhishek Raut, Cisco Systems, Inc.
+# @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
 from quantum.api.v2 import attributes
 
@@ -38,7 +41,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
 
 
 class N1kv_profile(object):
-    """Extension class supporting provider networks.
+    """Extension class supporting N1kv profiles.
 
     This class is used by quantum's extension framework to make
     metadata about the n1kv profile extension available to
@@ -72,7 +75,7 @@ class N1kv_profile(object):
 
     @classmethod
     def get_namespace(cls):
-        return "http://docs.openstack.org/ext/n1kv_profile/api/v1.0"
+        return "http://docs.openstack.org/ext/n1kv_profile/api/v2.0"
 
     @classmethod
     def get_updated(cls):

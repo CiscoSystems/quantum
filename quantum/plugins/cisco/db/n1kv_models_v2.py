@@ -1,8 +1,22 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-# Copyright 2011 Cisco Systems, Inc.
+# Copyright 2011 Nicira Networks, Inc.
 # All Rights Reserved.
 #
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+# @author: Aaron Rosen, Nicira Networks, Inc.
+# @author: Bob Kukura, Red Hat, Inc.
 # @author: Aruna Kushwaha, Cisco Systems, Inc.
+# @author: Abhishek Raut, Cisco Systems, Inc.
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 
@@ -28,20 +42,20 @@ class N1kvVlanAllocation(model_base.BASEV2):
                                                self.vlan_id, self.allocated)
 
 
-class N1kvTunnelAllocation(model_base.BASEV2):
-    """Represents allocation state of tunnel_id"""
-    __tablename__ = 'n1kv_tunnel_allocations'
+class N1kvVxlanAllocation(model_base.BASEV2):
+    """Represents allocation state of vxlan_id"""
+    __tablename__ = 'n1kv_vxlan_allocations'
 
-    tunnel_id = Column(Integer, nullable=False, primary_key=True,
+    vxlan_id = Column(Integer, nullable=False, primary_key=True,
         autoincrement=False)
     allocated = Column(Boolean, nullable=False)
 
-    def __init__(self, tunnel_id):
-        self.tunnel_id = tunnel_id
+    def __init__(self, vxlan_id):
+        self.vxlan_id = vxlan_id
         self.allocated = False
 
     def __repr__(self):
-        return "<TunnelAllocation(%d,%s)>" % (self.tunnel_id, self.allocated)
+        return "<VxlanAllocation(%d,%s)>" % (self.vxlan_id, self.allocated)
 
 
 class N1kvPortBinding(model_base.BASEV2):
@@ -72,7 +86,7 @@ class N1kvNetworkBinding(model_base.BASEV2):
     # 'vxlan', 'vlan'
     network_type = Column(String(32), nullable=False)
     physical_network = Column(String(64))
-    segmentation_id = Column(Integer)  # tunnel_id or vlan_id
+    segmentation_id = Column(Integer)  # vxlan_id or vlan_id
     multicast_ip = Column(String(32))  # multicast ip
     profile_id = Column(String(36))  # n1kv profile id
 
@@ -94,9 +108,9 @@ class N1kvNetworkBinding(model_base.BASEV2):
                                                   self.profile_id)
 
 
-class N1kvTunnelIP(model_base.BASEV2):
-    """Represents tunnel endpoint in DB mode"""
-    __tablename__ = 'n1kv_tunnel_ips'
+class N1kvVxlanIP(model_base.BASEV2):
+    """Represents vxlan endpoint in DB mode"""
+    __tablename__ = 'n1kv_vxlan_ips'
 
     ip_address = Column(String(255), primary_key=True)
 
@@ -104,12 +118,12 @@ class N1kvTunnelIP(model_base.BASEV2):
         self.ip_address = ip_address
 
     def __repr__(self):
-        return "<TunnelIP(%s)>" % (self.ip_address)
+        return "<VxlanIP(%s)>" % (self.ip_address)
 
 
-class N1kvTunnelEndpoint(model_base.BASEV2):
-    """Represents tunnel endpoint in RPC mode"""
-    __tablename__ = 'n1kv_tunnel_endpoints'
+class N1kvVxlanEndpoint(model_base.BASEV2):
+    """Represents vxlan endpoint in RPC mode"""
+    __tablename__ = 'n1kv_vxlan_endpoints'
 
     ip_address = Column(String(64), primary_key=True)
     id = Column(Integer, nullable=False)
@@ -119,7 +133,7 @@ class N1kvTunnelEndpoint(model_base.BASEV2):
         self.id = id
 
     def __repr__(self):
-        return "<TunnelEndpoint(%s,%s)>" % (self.ip_address, self.id)
+        return "<VxlanEndpoint(%s,%s)>" % (self.ip_address, self.id)
 
 
 class L2NetworkBase(object):

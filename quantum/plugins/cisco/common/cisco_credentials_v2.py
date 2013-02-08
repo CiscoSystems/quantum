@@ -18,12 +18,11 @@
 
 import logging as LOG
 
-from quantum.common.utils import find_config_file
+from quantum.plugins.cisco.common.cisco_utils import find_config_file
 from quantum.plugins.cisco.common import cisco_configparser as confp
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-
 
 LOG.basicConfig(level=LOG.WARN)
 LOG.getLogger(const.LOGGER_COMPONENT_NAME)

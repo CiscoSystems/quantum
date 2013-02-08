@@ -120,22 +120,22 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
             LOG.debug(_("%s can not be found in database"), device)
         return entry
 
-    def tunnel_sync(self, rpc_context, **kwargs):
-        """Update new tunnel.
+    def vxlan_sync(self, rpc_context, **kwargs):
+        """Update new vxlan.
 
-        Updates the datbase with the tunnel IP. All listening agents will also
-        be notified about the new tunnel IP.
+        Updates the datbase with the vxlan IP. All listening agents will also
+        be notified about the new vxlan IP.
         """
-        tunnel_ip = kwargs.get('tunnel_ip')
+        vxlan_ip = kwargs.get('vxlan_ip')
         # Update the database with the IP
-        tunnel = n1kv_db_v2.add_tunnel_endpoint(tunnel_ip)
-        tunnels = n1kv_db_v2.get_tunnel_endpoints()
+        vxlan = n1kv_db_v2.add_vxlan_endpoint(vxlan_ip)
+        vxlans = n1kv_db_v2.get_vxlan_endpoints()
         entry = dict()
-        entry['tunnels'] = tunnels
+        entry['vxlans'] = vxlans
         # Notify all other listening agents
-        self.notifier.tunnel_update(rpc_context, tunnel.ip_address,
-                                    tunnel.id)
-        # Return the list of tunnels IP's to the agent
+        self.notifier.vxlan_update(rpc_context, vxlan.ip_address,
+                                    vxlan.id)
+        # Return the list of vxlans IP's to the agent
         return entry
 
 
@@ -158,7 +158,7 @@ class AgentNotifierApi(proxy.RpcProxy):
         self.topic_port_update = topics.get_topic_name(topic,
                                                        topics.PORT,
                                                        topics.UPDATE)
-        self.topic_tunnel_update = topics.get_topic_name(topic,
+        self.topic_vxlan_update = topics.get_topic_name(topic,
                                                          const.TUNNEL,
                                                          topics.UPDATE)
 
@@ -178,12 +178,12 @@ class AgentNotifierApi(proxy.RpcProxy):
                                        physical_network=physical_network),
                          topic=self.topic_port_update)
 
-    def tunnel_update(self, context, tunnel_ip, tunnel_id):
+    def vxlan_update(self, context, vxlan_ip, vxlan_id):
         self.fanout_cast(context,
-                         self.make_msg('tunnel_update',
-                                       tunnel_ip=tunnel_ip,
-                                       tunnel_id=tunnel_id),
-                         topic=self.topic_tunnel_update)
+                         self.make_msg('vxlan_update',
+                                       vxlan_ip=vxlan_ip,
+                                       vxlan_id=vxlan_id),
+                         topic=self.topic_vxlan_update)
 
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
@@ -218,10 +218,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._parse_network_vlan_ranges()
         n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         self.enable_tunneling = n1kv_conf.N1KV['enable_tunneling']
-        self.tunnel_id_ranges = []
+        self.vxlan_id_ranges = []
         if self.enable_tunneling:
-            self._parse_tunnel_id_ranges()
-            n1kv_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
+            self._parse_vxlan_id_ranges()
+            n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
         # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
@@ -289,18 +289,18 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if physical_network not in self.network_vlan_ranges:
             self.network_vlan_ranges[physical_network] = []
 
-    def _parse_tunnel_id_ranges(self):
-        ranges = n1kv_conf.N1KV['tunnel_id_ranges']
+    def _parse_vxlan_id_ranges(self):
+        ranges = n1kv_conf.N1KV['vxlan_id_ranges']
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
             try:
                 tun_min, tun_max = entry.split(':')
-                self.tunnel_id_ranges.append((int(tun_min), int(tun_max)))
+                self.vxlan_id_ranges.append((int(tun_min), int(tun_max)))
             except ValueError as ex:
-                LOG.error("Invalid tunnel ID range: \'%s\' - %s", entry, ex)
+                LOG.error("Invalid vxlan ID range: \'%s\' - %s", entry, ex)
                 sys.exit(1)
-        LOG.info("Tunnel ID ranges: %s", self.tunnel_id_ranges)
+        LOG.info("Tunnel ID ranges: %s", self.vxlan_id_ranges)
 
     # TODO(rkukura) Use core mechanism for attribute authorization
     # when available.
@@ -489,7 +489,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _send_create_port_request(self, port):
         """ Send Create Port request to VSM """
-        LOG.debug('_send_create_port_request: %s', port['id'])
+        LOG.debug('_send_create_port_request: %s', port)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                 port['network_id'])
         if vm_network:
@@ -585,8 +585,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             network = self.get_network(context, id)
             super(N1kvQuantumPluginV2, self).delete_network(context, id)
             if binding.network_type == const.TYPE_VXLAN:
-                n1kv_db_v2.release_tunnel(session, binding.segmentation_id,
-                    self.tunnel_id_ranges)
+                n1kv_db_v2.release_vxlan(session, binding.segmentation_id,
+                    self.vxlan_id_ranges)
             elif binding.network_type == const.TYPE_VLAN:
                 n1kv_db_v2.release_vlan(session, binding.physical_network,
                     binding.segmentation_id,
@@ -654,14 +654,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 # Create this port
                 cport = self.create_port(context, port)
                 LOG.debug("Abs PORT UUID: %s\n", port)
-                pt = self.get_port(context, cport['port']['id'])
+                pt = self.get_port(context, cport['id'])
                 pt['device_owner'] = device_owner
                 if 'fixed_ip' in port:
-                    fixed_ip = cport['port']['fixed_ip']
+                    fixed_ip = cport['fixed_ip']
                     pt['fixed_ips'] = fixed_ip
                 pt['device_id'] = instance_id
                 port['port'] = pt
-                pt = self.update_port(context, pt['id'], cport)
+                pt = self.update_port(context, pt['id'], port)
                 LOG.debug("Abs PORT: %s\n", pt)
                 return pt
             else:
@@ -755,7 +755,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_subnet(self, context, id):
         """ Delete a Subnet """
         LOG.debug('Delete subnet: %s', id)
-        self._send_subnet_delete_request(id)
+        self._send_delete_subnet_request(id)
         return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):

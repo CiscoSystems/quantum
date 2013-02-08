@@ -21,7 +21,7 @@ This module will export the configuration parameters
 from the n1kv.ini file
 """
 
-from quantum.common.utils import find_config_file
+from quantum.plugins.cisco.common.cisco_utils import find_config_file
 from quantum.plugins.cisco.common import cisco_configparser as confp
 
 
