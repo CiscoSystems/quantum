@@ -12,7 +12,7 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
@@ -40,8 +40,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
 }
 
 
-class N1kvProfile(object):
-
+class N1kv_profile(object):
     """Extension class supporting N1kv profiles.
 
     This class is used by quantum's extension framework to make
