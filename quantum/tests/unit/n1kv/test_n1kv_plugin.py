@@ -231,7 +231,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
         super(TestN1kvNetworks, self).setUp()
 
 
-class TestN1kvNonStandardTest(unittest.TestCase):
+class TestN1kvNonDbTest(unittest.TestCase):
     """
     This test class here can be used to test the plugin directly,
     without going through the DB plugin test cases.
