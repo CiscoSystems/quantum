@@ -214,6 +214,17 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
 
     def _create_network(self, fmt, name, admin_status_up,
                         arg_list=None, **kwargs):
+        # The test case may have specified more args for this function.
+        if hasattr(self, 'more_args') and self.more_args:
+            if arg_list:
+                arg_list += self.more_args
+            else:
+                arg_list = self.more_args
+        else:
+            arg_list = None
+        if hasattr(self, 'more_kwargs') and self.more_kwargs:
+            kwargs.update(self.more_kwargs)
+
         data = {'network': {'name': name,
                             'admin_state_up': admin_status_up,
                             'tenant_id': self._tenant_id}}
@@ -329,19 +340,7 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
         return self._create_bulk(fmt, number, 'port', base_data, **kwargs)
 
     def _make_network(self, fmt, name, admin_status_up, **kwargs):
-        if hasattr(self, 'more_args') and self.more_args:
-            if kwargs and 'arg_list' in kwargs:
-                arg_list = kwargs['arg_list'] + self.more_args
-                del kwargs['arg_list']
-            else:
-                arg_list = self.more_args
-        else:
-            arg_list = None
-        if hasattr(self, 'more_kwargs') and self.more_kwargs:
-            kwargs.update(self.more_kwargs)
-
-        res = self._create_network(fmt, name, admin_status_up,
-                                   arg_list, **kwargs)
+        res = self._create_network(fmt, name, admin_status_up, **kwargs)
         # TODO(salvatore-orlando): do exception handling in this test module
         # in a uniform way (we do it differently for ports, subnets, and nets
         # Things can go wrong - raise HTTP exc with res code only
