@@ -1714,6 +1714,10 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
                     {'network': {'name': 'n2',
                                  'tenant_id': 't1'}}]
 
+        kwargs = dict()
+        arg_list, kwargs = self._create_network_args_expand(None, kwargs)
+        for net in networks:
+            net['network'].update(kwargs) # add test-case specified values
         res = self._create_bulk_from_list('json', 'network', networks)
         self.assertEqual(res.status_int, 201)
 
