@@ -212,19 +212,30 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
             req.environ['quantum.context'] = kwargs['context']
         return req.get_response(self.api)
 
-    def _create_network(self, fmt, name, admin_status_up,
-                        arg_list=None, **kwargs):
+    def _create_network_args_expand(self, arg_list, kwargs_dict):
+        """
+        Expand args-list and kwargs with values specified by test case.
+
+        """
         # The test case may have specified more args for this function.
-        if hasattr(self, 'more_args') and self.more_args:
+        if hasattr(self, 'more_args') and self.more_args.get("network"):
+            new_arg_dict = self.more_args.get("network")
+            # Some functions need the list of items (dict-keys) in a list
+            # as well...
+            new_arg_items = tuple(new_arg_dict.keys())
             if arg_list:
-                arg_list += self.more_args
+                arg_list += new_arg_items
             else:
-                arg_list = self.more_args
+                arg_list = new_arg_items
+            kwargs_dict.update(new_arg_dict)
         else:
             arg_list = None
-        if hasattr(self, 'more_kwargs') and self.more_kwargs:
-            kwargs.update(self.more_kwargs)
 
+        return arg_list, kwargs_dict
+
+    def _create_network(self, fmt, name, admin_status_up,
+                        arg_list=None, **kwargs):
+        arg_list, kwargs = self._create_network_args_expand(arg_list, kwargs)
         data = {'network': {'name': name,
                             'admin_state_up': admin_status_up,
                             'tenant_id': self._tenant_id}}
@@ -245,6 +256,8 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
                              admin_status_up, **kwargs):
         base_data = {'network': {'admin_state_up': admin_status_up,
                                  'tenant_id': self._tenant_id}}
+        arg_list, kwargs = self._create_network_args_expand(None, kwargs)
+        base_data['network'].update(kwargs) # add test-case specified values
         return self._create_bulk(fmt, number, 'network', base_data, **kwargs)
 
     def _create_subnet(self, fmt, net_id, cidr,

@@ -172,8 +172,9 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         session.add(profile_obj)
         session.flush()
         # Additional args for create_network()
-        self.more_args = ( "n1kv:profile_id", )
-        self.more_kwargs = { "n1kv:profile_id" : profile_obj.id }
+        self.more_args = {
+            "network" : { "n1kv:profile_id" : profile_obj.id }
+        }
 
     def test_plugin(self):
         self._make_network('json',
