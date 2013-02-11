@@ -212,14 +212,15 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
             req.environ['quantum.context'] = kwargs['context']
         return req.get_response(self.api)
 
-    def _create_network_args_expand(self, arg_list, kwargs_dict):
+    def _create_resource_args_expand(self, resource_name,
+                                     arg_list, kwargs_dict):
         """
         Expand args-list and kwargs with values specified by test case.
 
         """
         # The test case may have specified more args for this function.
-        if hasattr(self, 'more_args') and self.more_args.get("network"):
-            new_arg_dict = self.more_args.get("network")
+        if hasattr(self, 'more_args') and self.more_args.get(resource_name):
+            new_arg_dict = self.more_args.get(resource_name)
             # Some functions need the list of items (dict-keys) in a list
             # as well...
             new_arg_items = tuple(new_arg_dict.keys())
@@ -235,7 +236,8 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
 
     def _create_network(self, fmt, name, admin_status_up,
                         arg_list=None, **kwargs):
-        arg_list, kwargs = self._create_network_args_expand(arg_list, kwargs)
+        arg_list, kwargs = self._create_resource_args_expand("network",
+                                                             arg_list, kwargs)
         data = {'network': {'name': name,
                             'admin_state_up': admin_status_up,
                             'tenant_id': self._tenant_id}}
@@ -256,7 +258,8 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
                              admin_status_up, **kwargs):
         base_data = {'network': {'admin_state_up': admin_status_up,
                                  'tenant_id': self._tenant_id}}
-        arg_list, kwargs = self._create_network_args_expand(None, kwargs)
+        arg_list, kwargs = self._create_resource_args_expand("network",
+                                                             None, kwargs)
         base_data['network'].update(kwargs) # add test-case specified values
         return self._create_bulk(fmt, number, 'network', base_data, **kwargs)
 
@@ -306,6 +309,8 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
     def _create_port(self, fmt, net_id, expected_res_status=None,
                      arg_list=None, **kwargs):
         content_type = 'application/' + fmt
+        arg_list, kwargs = self._create_resource_args_expand("port",
+                                                             arg_list, kwargs)
         data = {'port': {'network_id': net_id,
                          'tenant_id': self._tenant_id}}
 
@@ -1671,6 +1676,7 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
                                      201,
                                      tenant_id='somebody_else',
                                      set_context=True)
+            """
             self._create_subnet('json',
                                 network['network']['id'],
                                 '10.0.0.0/24',
@@ -1685,6 +1691,7 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
 
             port1 = self.deserialize('json', res1)
             self._delete('ports', port1['port']['id'])
+            """
 
     def test_create_networks_bulk_native(self):
         if self._skip_native_bulk:
@@ -1715,7 +1722,8 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
                                  'tenant_id': 't1'}}]
 
         kwargs = dict()
-        arg_list, kwargs = self._create_network_args_expand(None, kwargs)
+        arg_list, kwargs = self._create_resource_args_expand("network",
+                                                             None, kwargs)
         for net in networks:
             net['network'].update(kwargs) # add test-case specified values
         res = self._create_bulk_from_list('json', 'network', networks)
@@ -1867,6 +1875,10 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
             data = {'network': {'name': 'net',
                                 'admin_state_up': v[0],
                                 'tenant_id': self._tenant_id}}
+            kwargs = dict()
+            arg_list, kwargs = self._create_resource_args_expand("network",
+                                                                 None, kwargs)
+            data['network'].update(kwargs) # add test-case specified values
             network_req = self.new_create_request('networks', data)
             req = network_req.get_response(self.api)
             self.assertEqual(req.status_int, v[2])
