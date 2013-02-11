@@ -164,7 +164,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def get_profile_by_id(self, profile_id):
         """Get N1kv Profile by its id."""
-        
+
         session = db.get_session()
         try:
             profile = (session.query(N1kvProfile_db).
@@ -222,7 +222,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_vlan(self, p):
         """Validate if vlan falls within segment boundaries."""
-        
+
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         ranges = conf.N1KV['network_vlan_ranges']
         ranges = ranges.split(',')
@@ -237,7 +237,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_vxlan(self, p):
         """Validate if vxlan falls within segment boundaries."""
-        
+
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
         ranges = conf.N1KV['tunnel_id_ranges']
         ranges = ranges.split(',')
@@ -262,7 +262,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_segment_range(self, p):
         """Validate segment range values."""
-        
+
         mo = re.match(r"(\d+)\-(\d+)", p['segment_range'])
         if mo is None:
             msg = _("invalid segment range. example range: 500-550")
@@ -270,7 +270,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_network_profile(self, p):
         """Validate completeness of a network profile arguments."""
-        
+
         if any(p[arg] == '' for arg in ('segment_type', 'segment_range')):
             msg = _("arguments segment_type and segment_range missing"
                     " for network profile")
@@ -289,7 +289,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_segment_range_uniqueness(self, context, p):
         """Validate that segment range doesn't overlap."""
-        
+
         profiles = self.get_profiles(context)
         for prfl in profiles:
             if p['name'] == prfl['name']:
@@ -313,7 +313,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
 
     def _validate_arguments(self, context, p):
         """Validate completeness of N1kv profile arguments."""
-        
+
         if p['profile_type'] == 'network':
             self._validate_network_profile(p)
         else:

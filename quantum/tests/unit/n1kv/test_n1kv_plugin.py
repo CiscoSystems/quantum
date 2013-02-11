@@ -121,15 +121,37 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
                     'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
+    _default_tenant = "some_tenant"
+
+    def _make_test_profile(self, tenant_id):
+        """
+        Create a profile record for testing purposes.
+
+        """
+        alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
+        alloc_obj.allocated = False
+        profile_obj = n1kv_profile_db.N1kvProfile_db()
+        profile_obj.tenant_id = tenant_id
+        profile_obj.segment_range = "100-900"
+        profile_obj.segment_type = 'vlan'
+        profile_obj.tunnel_id = 200
+        session = db.get_session()
+        session.add(profile_obj)
+        session.flush()
+        return profile_obj
+
     def setUp(self):
-        # First step is to define an acceptable response from the VSM to
-        # our requests. This needs to be done BEFORE the setUp() function
-        # of the super-class is called.
-        # This default here works for many cases. If you need something
-        # extra, please define your own setUp() function in your test class,
-        # and set your DEFAULT_RESPONSE value also BEFORE calling the
-        # setUp() of the super-function (this one here). If you have set
-        # a value already, it will not be overwritten by this code.
+        """
+        First step is to define an acceptable response from the VSM to
+        our requests. This needs to be done BEFORE the setUp() function
+        of the super-class is called.
+        This default here works for many cases. If you need something
+        extra, please define your own setUp() function in your test class,
+        and set your DEFAULT_RESPONSE value also BEFORE calling the
+        setUp() of the super-function (this one here). If you have set
+        a value already, it will not be overwritten by this code.
+
+        """
         if not FakeHTTPConnection.DEFAULT_RESP_BODY:
             FakeHTTPConnection.DEFAULT_RESP_BODY = \
             """<?xml version="1.0" encoding="UTF-8"?>
@@ -160,20 +182,12 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
             """
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
-        self.tenant_id = 'some_tenant'
-        alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
-        alloc_obj.allocated = False
-        profile_obj = n1kv_profile_db.N1kvProfile_db()
-        profile_obj.tenant_id = self.tenant_id
-        profile_obj.segment_range = "100-900"
-        profile_obj.segment_type = 'vlan'
-        profile_obj.tunnel_id = 200
-        session = db.get_session()
-        session.add(profile_obj)
-        session.flush()
-        # Additional args for create_network()
+        self.tenant_id = self._default_tenant
+        profile_obj = self._make_test_profile(self.tenant_id)
+        # Additional args for create_network(), create_port(), etc.
         self.more_args = {
-            "network" : { "n1kv:profile_id" : profile_obj.id }
+            "network" : { "n1kv:profile_id" : profile_obj.id },
+            "port" : { "n1kv:profile_id" : profile_obj.id }
         }
 
     def test_plugin(self):
@@ -194,10 +208,13 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 class TestN1kvBasicGet(test_plugin.TestBasicGet,
                        N1kvPluginTestCase):
     def setUp(self):
-        # Any non-default responses from the VSM required? Set them
-        # here:
-        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
-        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        """
+        Any non-default responses from the VSM required? Set them
+        here:
+        FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+
+        """
         super(TestN1kvBasicGet, self).setUp()
 
 
@@ -205,31 +222,55 @@ class TestN1kvBasicGet(test_plugin.TestBasicGet,
 class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
                            N1kvPluginTestCase):
     def setUp(self):
-        # Any non-default responses from the VSM required? Set them
-        # here:
-        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
-        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        """
+        Any non-default responses from the VSM required? Set them
+        here:
+        FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+
+        """
         super(TestN1kvHTTPResponse, self).setUp()
 
 
 class TestN1kvPorts(test_plugin.TestPortsV2,
                     N1kvPluginTestCase):
     def setUp(self):
-        # Any non-default responses from the VSM required? Set them
-        # here:
-        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
-        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        """
+        Any non-default responses from the VSM required? Set them
+        here:
+        FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+
+        """
         super(TestN1kvPorts, self).setUp()
 
 
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
+
+    _default_tenant = "somebody_else" # Tenant-id determined by underlying
+                                      # DB-plugin test cases. Need to use this
+                                      # one for profile creation
+
     def setUp(self):
-        # Any non-default responses from the VSM required? Set them
-        # here:
-        # FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
-        # FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+        """
+        Any non-default responses from the VSM required? Set them
+        here:
+        FakeHTTPConnection.DEFAULT_RESP_BODY = "...."
+        FakeHTTPConnection.DEFAULT_RESP_CODE = <num>
+
+        """
         super(TestN1kvNetworks, self).setUp()
+
+    def test_update_network_set_not_shared_single_tenant(self):
+        # The underlying test function needs a profile for a different tenant.
+        profile_obj = self._make_test_profile("test-tenant")
+        self.more_args = {
+            "network" : { "n1kv:profile_id" : profile_obj.id },
+            "port" : { "n1kv:profile_id" : profile_obj.id }
+        }
+        super(TestN1kvNetworks,
+              self).test_update_network_set_not_shared_single_tenant()
 
 
 class TestN1kvNonDbTest(unittest.TestCase):
