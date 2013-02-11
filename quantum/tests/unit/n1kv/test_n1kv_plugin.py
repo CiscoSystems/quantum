@@ -244,6 +244,26 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         """
         super(TestN1kvPorts, self).setUp()
 
+    def _make_other_tenant_profile(self):
+        """
+        Underlying test uses other tenant Id for tests: Make profile for it.
+
+        """
+        profile_obj = self._make_test_profile("another_tenant")
+        self.more_args = {
+            "network" : { "n1kv:profile_id" : profile_obj.id },
+            "port" : { "n1kv:profile_id" : profile_obj.id }
+        }
+
+    def test_create_port_public_network(self):
+        # The underlying test function needs a profile for a different tenant.
+        self._make_other_tenant_profile()
+        super(TestN1kvPorts, self).test_create_port_public_network()
+
+    def test_create_port_public_network_with_ip(self):
+        # The underlying test function needs a profile for a different tenant.
+        self._make_other_tenant_profile()
+        super(TestN1kvPorts, self).test_create_port_public_network_with_ip()
 
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
@@ -272,6 +292,42 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
         super(TestN1kvNetworks,
               self).test_update_network_set_not_shared_single_tenant()
 
+    def test_update_network_set_not_shared_multi_tenants_returns_409(self):
+        """
+        This is mostly a copy of the code from the basic test case. We
+        had to create a profile with a special tenant ID somewhere in the
+        middle. To do this, we copied the code for now and inserted our
+        profile creation in there. Can't create the profile ahead of time,
+        since we are passing special values to the _create_port() function
+        via object attributes. Need to clean this up a bit to avoid this
+        sort of duplication.  FIXIT!   @@@@
+
+        """
+        with self.network(shared=True) as network:
+            res1 = self._create_port('json',
+                                     network['network']['id'],
+                                     201,
+                                     tenant_id='somebody_else',
+                                     set_context=True)
+            profile_obj = self._make_test_profile("test-tenant")
+            self.more_args = {
+                "network" : { "n1kv:profile_id" : profile_obj.id },
+                "port" : { "n1kv:profile_id" : profile_obj.id }
+            }
+            res2 = self._create_port('json',
+                                     network['network']['id'],
+                                     201,
+                                     tenant_id=network['network']['tenant_id'],
+                                     set_context=True)
+            data = {'network': {'shared': False}}
+            req = self.new_update_request('networks',
+                                          data,
+                                          network['network']['id'])
+            self.assertEqual(req.get_response(self.api).status_int, 409)
+            port1 = self.deserialize('json', res1)
+            port2 = self.deserialize('json', res2)
+            self._delete('ports', port1['port']['id'])
+            self._delete('ports', port2['port']['id'])
 
 class TestN1kvNonDbTest(unittest.TestCase):
     """
