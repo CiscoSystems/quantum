@@ -311,8 +311,12 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
         content_type = 'application/' + fmt
         arg_list, kwargs = self._create_resource_args_expand("port",
                                                              arg_list, kwargs)
+        if 'tenant_id' in kwargs:
+            tenant_id = kwargs['tenant_id']
+        else:
+            tenant_id = self._tenant_id
         data = {'port': {'network_id': net_id,
-                         'tenant_id': self._tenant_id}}
+                         'tenant_id': tenant_id}}
 
         for arg in (('admin_state_up', 'device_id',
                     'mac_address', 'name', 'fixed_ips',
@@ -1676,7 +1680,6 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
                                      201,
                                      tenant_id='somebody_else',
                                      set_context=True)
-            """
             self._create_subnet('json',
                                 network['network']['id'],
                                 '10.0.0.0/24',
@@ -1691,7 +1694,6 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
 
             port1 = self.deserialize('json', res1)
             self._delete('ports', port1['port']['id'])
-            """
 
     def test_create_networks_bulk_native(self):
         if self._skip_native_bulk:
