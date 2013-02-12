@@ -768,7 +768,6 @@ class TestPortsV2(QuantumDbPluginV2TestCase):
             orig = QuantumManager.get_plugin().create_port
             with mock.patch.object(QuantumManager.get_plugin(),
                                    'create_port') as patched_plugin:
-
                 def side_effect(*args, **kwargs):
                     return self._do_side_effect(patched_plugin, orig,
                                                 *args, **kwargs)

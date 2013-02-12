@@ -277,6 +277,10 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         super(TestN1kvPorts,
               self).test_create_ports_bulk_emulated_plugin_failure()
 
+    def test_delete_port_public_network(self):
+        self._make_other_tenant_profile("another_tenant")
+        super(TestN1kvPorts, self).test_delete_port_public_network()
+
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
 
