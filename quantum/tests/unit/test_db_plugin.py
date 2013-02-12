@@ -359,6 +359,9 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
         base_data = {'port': {'network_id': net_id,
                               'admin_state_up': admin_status_up,
                               'tenant_id': self._tenant_id}}
+        arg_list, kwargs = self._create_resource_args_expand("port",
+                                                             None, kwargs)
+        base_data['port'].update(kwargs) # add test-case specified values
         return self._create_bulk(fmt, number, 'port', base_data, **kwargs)
 
     def _make_network(self, fmt, name, admin_status_up, **kwargs):

@@ -244,12 +244,12 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         """
         super(TestN1kvPorts, self).setUp()
 
-    def _make_other_tenant_profile(self):
+    def _make_other_tenant_profile(self, tenant_id):
         """
         Underlying test uses other tenant Id for tests: Make profile for it.
 
         """
-        profile_obj = self._make_test_profile("another_tenant")
+        profile_obj = self._make_test_profile(tenant_id)
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
             "port" : { "n1kv:profile_id" : profile_obj.id }
@@ -257,13 +257,25 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
 
     def test_create_port_public_network(self):
         # The underlying test function needs a profile for a different tenant.
-        self._make_other_tenant_profile()
+        self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_create_port_public_network()
 
     def test_create_port_public_network_with_ip(self):
         # The underlying test function needs a profile for a different tenant.
-        self._make_other_tenant_profile()
+        self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_create_port_public_network_with_ip()
+
+    def test_create_ports_bulk_emulated(self):
+        # The underlying test function needs a profile for a different tenant.
+        self._make_other_tenant_profile("test-tenant")
+        super(TestN1kvPorts,
+              self).test_create_ports_bulk_emulated()
+
+    def test_create_ports_bulk_emulated_plugin_failure(self):
+        # The underlying test function needs a profile for a different tenant.
+        self._make_other_tenant_profile("test-tenant")
+        super(TestN1kvPorts,
+              self).test_create_ports_bulk_emulated_plugin_failure()
 
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
