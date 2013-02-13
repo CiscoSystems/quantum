@@ -207,11 +207,18 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     query = query.filter(column.in_(value))
         return query
 
-    def _get_collection(self, context, model, dict_func, filters=None,
-                        fields=None):
+    def _get_collection_query(self, context, model, filters=None):
         collection = self._model_query(context, model)
         collection = self._apply_filters_to_query(collection, model, filters)
-        return [dict_func(c, fields) for c in collection.all()]
+        return collection
+
+    def _get_collection(self, context, model, dict_func, filters=None,
+                        fields=None):
+        query = self._get_collection_query(context, model, filters)
+        return [dict_func(c, fields) for c in query.all()]
+
+    def _get_collection_count(self, context, model, filters=None):
+        return self._get_collection_query(context, model, filters).count()
 
     @staticmethod
     def _generate_mac(context, network_id):
@@ -374,7 +381,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     def update_fixed_ip_lease_expiration(self, context, network_id,
                                          ip_address, lease_remaining):
 
-        expiration = timeutils.utcnow() + datetime.timedelta(lease_remaining)
+        expiration = (timeutils.utcnow() +
+                      datetime.timedelta(seconds=lease_remaining))
 
         query = context.session.query(models_v2.IPAllocation)
         query = query.filter_by(network_id=network_id, ip_address=ip_address)
@@ -484,6 +492,31 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 ip != net.broadcast and
                 net.netmask & ip == net.ip):
             return True
+        return False
+
+    @staticmethod
+    def _check_ip_in_allocation_pool(context, subnet_id, gateway_ip,
+                                     ip_address):
+        """Validate IP in allocation pool.
+
+        Validates that the IP address is either the default gateway or
+        in the allocation pools of the subnet.
+        """
+        # Check if the IP is the gateway
+        if ip_address == gateway_ip:
+            # Gateway is not in allocation pool
+            return False
+
+        # Check if the requested IP is in a defined allocation pool
+        pool_qry = context.session.query(models_v2.IPAllocationPool)
+        allocation_pools = pool_qry.filter_by(subnet_id=subnet_id).all()
+        ip = netaddr.IPAddress(ip_address)
+        for allocation_pool in allocation_pools:
+            allocation_pool_range = netaddr.IPRange(
+                allocation_pool['first_ip'],
+                allocation_pool['last_ip'])
+            if ip in allocation_pool_range:
+                return True
         return False
 
     def _test_fixed_ips_for_port(self, context, network_id, fixed_ips):
@@ -929,6 +962,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                     self._make_network_dict,
                                     filters=filters, fields=fields)
 
+    def get_networks_count(self, context, filters=None):
+        return self._get_collection_count(context, models_v2.Network,
+                                          filters=filters)
+
     def create_subnet_bulk(self, context, subnets):
         return self._create_bulk('subnet', context, subnets)
 
@@ -955,9 +992,14 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             s['gateway_ip'] and
             s['gateway_ip'] != attributes.ATTR_NOT_SPECIFIED):
             self._validate_ip_version(ip_ver, s['gateway_ip'], 'gateway_ip')
+            if (cfg.CONF.force_gateway_on_subnet and
+                not QuantumDbPluginV2._check_subnet_ip(s['cidr'],
+                                                       s['gateway_ip'])):
+                error_message = _("Gateway is not valid on subnet")
+                raise q_exc.InvalidInput(error_message=error_message)
 
-        if 'dns_nameservers' in s and \
-                s['dns_nameservers'] != attributes.ATTR_NOT_SPECIFIED:
+        if ('dns_nameservers' in s and
+            s['dns_nameservers'] != attributes.ATTR_NOT_SPECIFIED):
             if len(s['dns_nameservers']) > cfg.CONF.max_dns_nameservers:
                 raise q_exc.DNSNameServersExhausted(
                     subnet_id=id,
@@ -970,8 +1012,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                         error_message=("error parsing dns address %s" % dns))
                 self._validate_ip_version(ip_ver, dns, 'dns_nameserver')
 
-        if 'host_routes' in s and \
-                s['host_routes'] != attributes.ATTR_NOT_SPECIFIED:
+        if ('host_routes' in s and
+            s['host_routes'] != attributes.ATTR_NOT_SPECIFIED):
             if len(s['host_routes']) > cfg.CONF.max_subnet_host_routes:
                 raise q_exc.HostRoutesExhausted(
                     subnet_id=id,
@@ -1103,7 +1145,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                 a.ports.device_owner in AUTO_DELETE_PORT_OWNERS
                                 for a in allocated)
             if not only_auto_del:
-                raise q_exc.NetworkInUse(subnet_id=id)
+                raise q_exc.SubnetInUse(subnet_id=id)
 
             # remove network owned ports
             for allocation in allocated:
@@ -1119,6 +1161,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return self._get_collection(context, models_v2.Subnet,
                                     self._make_subnet_dict,
                                     filters=filters, fields=fields)
+
+    def get_subnets_count(self, context, filters=None):
+        return self._get_collection_count(context, models_v2.Subnet,
+                                          filters=filters)
 
     def create_port_bulk(self, context, ports):
         return self._create_bulk('port', context, ports)
@@ -1160,9 +1206,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                                   device_owner=p['device_owner'])
             context.session.add(port)
 
-        # Update the allocated IP's
-        if ips:
-            with context.session.begin(subtransactions=True):
+            # Update the allocated IP's
+            if ips:
                 for ip in ips:
                     LOG.debug("Allocated IP %s (%s/%s/%s)", ip['ip_address'],
                               port['network_id'], ip['subnet_id'], port.id)
@@ -1216,34 +1261,38 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
         allocated_qry = context.session.query(models_v2.IPAllocation)
         # recycle all of the IP's
-        # NOTE(garyk) this may be have to be addressed differently when
-        # working with a DHCP server.
         allocated = allocated_qry.filter_by(port_id=id).all()
         if allocated:
             for a in allocated:
                 subnet = self._get_subnet(context, a['subnet_id'])
-                if a['ip_address'] == subnet['gateway_ip']:
-                    # Gateway address will not be recycled, but we do
-                    # need to delete the allocation from the DB
+                # Check if IP was allocated from allocation pool
+                if QuantumDbPluginV2._check_ip_in_allocation_pool(
+                    context, a['subnet_id'], subnet['gateway_ip'],
+                    a['ip_address']):
+                    QuantumDbPluginV2._hold_ip(context,
+                                               a['network_id'],
+                                               a['subnet_id'],
+                                               id,
+                                               a['ip_address'])
+                else:
+                    # IPs out of allocation pool will not be recycled, but
+                    # we do need to delete the allocation from the DB
                     QuantumDbPluginV2._delete_ip_allocation(
                         context, a['network_id'],
                         a['subnet_id'], a['ip_address'])
-                    LOG.debug("Gateway address (%s/%s) is not recycled",
-                              a['ip_address'], a['subnet_id'])
-                    continue
+                    msg_dict = dict(address=a['ip_address'],
+                                    subnet_id=a['subnet_id'])
+                    msg = _("%(address)s (%(subnet_id)s) is not "
+                            "recycled") % msg_dict
+                    LOG.debug(msg)
 
-                QuantumDbPluginV2._hold_ip(context,
-                                           a['network_id'],
-                                           a['subnet_id'],
-                                           id,
-                                           a['ip_address'])
         context.session.delete(port)
 
     def get_port(self, context, id, fields=None):
         port = self._get_port(context, id)
         return self._make_port_dict(port, fields)
 
-    def get_ports(self, context, filters=None, fields=None):
+    def _get_ports_query(self, context, filters=None):
         Port = models_v2.Port
         IPAllocation = models_v2.IPAllocation
 
@@ -1263,4 +1312,11 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 query = query.filter(IPAllocation.subnet_id.in_(subnet_ids))
 
         query = self._apply_filters_to_query(query, Port, filters)
+        return query
+
+    def get_ports(self, context, filters=None, fields=None):
+        query = self._get_ports_query(context, filters)
         return [self._make_port_dict(c, fields) for c in query.all()]
+
+    def get_ports_count(self, context, filters=None):
+        return self._get_ports_query(context, filters).count()

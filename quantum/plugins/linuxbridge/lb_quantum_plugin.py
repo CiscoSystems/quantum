@@ -72,8 +72,10 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin):
                      'network_id': port['network_id'],
                      'port_id': port['id'],
                      'admin_state_up': port['admin_state_up']}
-            # Set the port status to UP
-            db.set_port_status(port['id'], q_const.PORT_STATUS_ACTIVE)
+            new_status = (q_const.PORT_STATUS_ACTIVE if port['admin_state_up']
+                          else q_const.PORT_STATUS_DOWN)
+            if port['status'] != new_status:
+                db.set_port_status(port['id'], new_status)
         else:
             entry = {'device': device}
             LOG.debug("%s can not be found in database", device)
@@ -89,13 +91,28 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin):
         if port:
             entry = {'device': device,
                      'exists': True}
-            # Set port status to DOWN
-            db.set_port_status(port['id'], q_const.PORT_STATUS_DOWN)
+            if port['status'] != q_const.PORT_STATUS_DOWN:
+                # Set port status to DOWN
+                db.set_port_status(port['id'], q_const.PORT_STATUS_DOWN)
         else:
             entry = {'device': device,
                      'exists': False}
             LOG.debug("%s can not be found in database", device)
         return entry
+
+    def update_device_up(self, rpc_context, **kwargs):
+        """Device is up on agent"""
+        agent_id = kwargs.get('agent_id')
+        device = kwargs.get('device')
+        LOG.debug(_("Device %(device)s up %(agent_id)s"),
+                  locals())
+        port = db.get_port_from_device(device[self.TAP_PREFIX_LEN:])
+        if port:
+            if port['status'] != q_const.PORT_STATUS_ACTIVE:
+                # Set port status to ACTIVE
+                db.set_port_status(port['id'], q_const.PORT_STATUS_ACTIVE)
+        else:
+            LOG.debug(_("%s can not be found in database"), device)
 
 
 class AgentNotifierApi(proxy.RpcProxy):
@@ -163,7 +180,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if self.tenant_network_type not in [constants.TYPE_LOCAL,
                                             constants.TYPE_VLAN,
                                             constants.TYPE_NONE]:
-            LOG.error("Invalid tenant_network_type: %s" %
+            LOG.error("Invalid tenant_network_type: %s. "
+                      "Service terminated!" %
                       self.tenant_network_type)
             sys.exit(1)
         self.agent_rpc = cfg.CONF.AGENT.rpc
@@ -194,7 +212,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                  int(vlan_min),
                                                  int(vlan_max))
                 except ValueError as ex:
-                    LOG.error("Invalid network VLAN range: \'%s\' - %s" %
+                    LOG.error("Invalid network VLAN range: '%s' - %s. "
+                              "Service terminated!" %
                               (entry, ex))
                     sys.exit(1)
             else:
@@ -380,20 +399,26 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.notifier.network_delete(self.rpc_context, id)
 
     def get_network(self, context, id, fields=None):
-        net = super(LinuxBridgePluginV2, self).get_network(context, id, None)
-        self._extend_network_dict_provider(context, net)
-        self._extend_network_dict_l3(context, net)
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(LinuxBridgePluginV2, self).get_network(context,
+                                                               id, None)
+            self._extend_network_dict_provider(context, net)
+            self._extend_network_dict_l3(context, net)
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
-        nets = super(LinuxBridgePluginV2, self).get_networks(context, filters,
-                                                             None)
-        for net in nets:
-            self._extend_network_dict_provider(context, net)
-            self._extend_network_dict_l3(context, net)
+        session = context.session
+        with session.begin(subtransactions=True):
+            nets = super(LinuxBridgePluginV2, self).get_networks(context,
+                                                                 filters,
+                                                                 None)
+            for net in nets:
+                self._extend_network_dict_provider(context, net)
+                self._extend_network_dict_l3(context, net)
 
-        # TODO(rkukura): Filter on extended provider attributes.
-        nets = self._filter_nets_l3(context, nets, filters)
+            # TODO(rkukura): Filter on extended provider attributes.
+            nets = self._filter_nets_l3(context, nets, filters)
 
         return [self._fields(net, fields) for net in nets]
 

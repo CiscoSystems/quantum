@@ -39,19 +39,27 @@ class RouterInUse(qexception.InUse):
     message = _("Router %(router_id)s still has active ports")
 
 
+class RouterInterfaceInUseByFloatingIP(qexception.InUse):
+    message = _("Router interface for subnet %(subnet_id)s on router "
+                "%(router_id)s cannot be deleted, as it is required "
+                "by one or more floating IPs.")
+
+
 class FloatingIPNotFound(qexception.NotFound):
     message = _("Floating IP %(floatingip_id)s could not be found")
 
 
 class ExternalGatewayForFloatingIPNotFound(qexception.NotFound):
-    message = _("Could not find an external network gateway reachable "
+    message = _("External network %(external_network_id)s is not reachable "
                 "from subnet %(subnet_id)s.  Therefore, cannot associate "
                 "Port %(port_id)s with a Floating IP.")
 
 
 class FloatingIPPortAlreadyAssociated(qexception.InUse):
-    message = _("Port %(port_id)s already has a floating IP"
-                " associated with it")
+    message = _("Cannot associate floating IP %(floating_ip_address)s "
+                "(%(fip_id)s) with port %(port_id)s "
+                "using fixed IP %(fixed_ip)s, as that fixed IP already "
+                "has a floating IP on external network %(net_id)s.")
 
 
 class L3PortInUse(qexception.InUse):
@@ -62,6 +70,12 @@ class L3PortInUse(qexception.InUse):
 class ExternalNetworkInUse(qexception.InUse):
     message = _("External network %(net_id)s cannot be updated to be made "
                 "non-external, since it has existing gateway ports")
+
+
+class RouterExternalGatewayInUseByFloatingIp(qexception.InUse):
+    message = _("Gateway cannot be updated for router %(router_id)s, since a "
+                "gateway to external network %(net_id)s is required by one or "
+                "more floating IPs.")
 
 
 def _validate_uuid_or_none(data, valid_values=None):
@@ -78,6 +92,7 @@ RESOURCE_ATTRIBUTE_MAP = {
                'validate': {'type:regex': attr.UUID_PATTERN},
                'is_visible': True},
         'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
                  'is_visible': True, 'default': ''},
         'admin_state_up': {'allow_post': True, 'allow_put': True,
                            'default': True,
@@ -88,19 +103,23 @@ RESOURCE_ATTRIBUTE_MAP = {
                    'is_visible': True},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'required_by_policy': True,
+                      'validate': {'type:string': None},
                       'is_visible': True},
         'external_gateway_info': {'allow_post': True, 'allow_put': True,
                                   'is_visible': True, 'default': None}
     },
     'floatingips': {
         'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
                'is_visible': True},
         'floating_ip_address': {'allow_post': False, 'allow_put': False,
+                                'validate': {'type:ip_address_or_none': None},
                                 'is_visible': True},
         'floating_network_id': {'allow_post': True, 'allow_put': False,
                                 'validate': {'type:regex': attr.UUID_PATTERN},
                                 'is_visible': True},
         'router_id': {'allow_post': False, 'allow_put': False,
+                      'validate': {'type:uuid_or_none': None},
                       'is_visible': True, 'default': None},
         'port_id': {'allow_post': True, 'allow_put': True,
                     'validate': {'type:uuid_or_none': None},
@@ -110,6 +129,7 @@ RESOURCE_ATTRIBUTE_MAP = {
                              'is_visible': True, 'default': None},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'required_by_policy': True,
+                      'validate': {'type:string': None},
                       'is_visible': True}
     },
 }
@@ -245,3 +265,9 @@ class RouterPluginBase(object):
     @abstractmethod
     def get_floatingips(self, context, filters=None, fields=None):
         pass
+
+    def get_routers_count(self, context, filters=None):
+        raise qexception.NotImplementedError()
+
+    def get_floatingips_count(self, context, filters=None):
+        raise qexception.NotImplementedError()

@@ -23,6 +23,7 @@
 
 import logging
 import os
+import signal
 import subprocess
 import uuid
 
@@ -47,6 +48,12 @@ def boolize(subject):
     return subject
 
 
+def _subprocess_setup():
+    # Python installs a SIGPIPE handler by default. This is usually not what
+    # non-Python subprocesses expect.
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+
 def execute(cmd, process_input=None, addl_env=None, check_exit_code=True):
     logging.debug("Running cmd: %s", cmd)
     env = os.environ.copy()
@@ -54,6 +61,7 @@ def execute(cmd, process_input=None, addl_env=None, check_exit_code=True):
         env.update(addl_env)
     obj = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           preexec_fn=_subprocess_setup,
                            env=env)
     result = None
     if process_input is not None:
@@ -144,3 +152,34 @@ def find_config_file(options, config_file):
 def str_uuid():
     """Return a uuid as a string"""
     return str(uuid.uuid4())
+
+
+def parse_mappings(mapping_list, unique_values=True):
+    """Parse a list of of mapping strings into a dictionary.
+
+    :param mapping_list: a list of strings of the form '<key>:<value>'
+    :param unique_values: values must be unique if True
+    :returns: a dict mapping keys to values
+    """
+    mappings = {}
+    for mapping in mapping_list:
+        mapping = mapping.strip()
+        if not mapping:
+            continue
+        split_result = mapping.split(':')
+        if len(split_result) != 2:
+            raise ValueError(_("Invalid mapping: '%s'") % mapping)
+        key = split_result[0].strip()
+        if not key:
+            raise ValueError(_("Missing key in mapping: '%s'") % mapping)
+        value = split_result[1].strip()
+        if not value:
+            raise ValueError(_("Missing value in mapping: '%s'") % mapping)
+        if key in mappings:
+            raise ValueError(_("Key %s in mapping: '%s' not unique") %
+                             (key, mapping))
+        if unique_values and value in mappings.itervalues():
+            raise ValueError(_("Value %s in mapping: '%s' not unique") %
+                             (value, mapping))
+        mappings[key] = value
+    return mappings

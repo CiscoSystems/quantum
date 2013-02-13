@@ -200,7 +200,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                             constants.TYPE_VLAN,
                                             constants.TYPE_GRE,
                                             constants.TYPE_NONE]:
-            LOG.error("Invalid tenant_network_type: %s",
+            LOG.error("Invalid tenant_network_type: %s. "
+                      "Agent terminated!",
                       self.tenant_network_type)
             sys.exit(1)
         self.enable_tunneling = cfg.CONF.OVS.enable_tunneling
@@ -209,7 +210,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._parse_tunnel_id_ranges()
             ovs_db_v2.sync_tunnel_allocations(self.tunnel_id_ranges)
         elif self.tenant_network_type == constants.TYPE_GRE:
-            LOG.error("Tunneling disabled but tenant_network_type is 'gre'")
+            LOG.error("Tunneling disabled but tenant_network_type is 'gre'. "
+                      "Agent terminated!")
             sys.exit(1)
         self.agent_rpc = cfg.CONF.AGENT.rpc
         self.setup_rpc()
@@ -239,7 +241,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                  int(vlan_min),
                                                  int(vlan_max))
                 except ValueError as ex:
-                    LOG.error("Invalid network VLAN range: \'%s\' - %s",
+                    LOG.error("Invalid network VLAN range: '%s' - %s. "
+                              "Agent terminated!",
                               entry, ex)
                     sys.exit(1)
             else:
@@ -261,7 +264,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 tun_min, tun_max = entry.split(':')
                 self.tunnel_id_ranges.append((int(tun_min), int(tun_max)))
             except ValueError as ex:
-                LOG.error("Invalid tunnel ID range: \'%s\' - %s", entry, ex)
+                LOG.error("Invalid tunnel ID range: '%s' - %s. "
+                          "Agent terminated!", entry, ex)
                 sys.exit(1)
         LOG.info("Tunnel ID ranges: %s", self.tunnel_id_ranges)
 
@@ -461,20 +465,26 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.notifier.network_delete(self.rpc_context, id)
 
     def get_network(self, context, id, fields=None):
-        net = super(OVSQuantumPluginV2, self).get_network(context, id, None)
-        self._extend_network_dict_provider(context, net)
-        self._extend_network_dict_l3(context, net)
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(OVSQuantumPluginV2, self).get_network(context,
+                                                              id, None)
+            self._extend_network_dict_provider(context, net)
+            self._extend_network_dict_l3(context, net)
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
-        nets = super(OVSQuantumPluginV2, self).get_networks(context, filters,
-                                                            None)
-        for net in nets:
-            self._extend_network_dict_provider(context, net)
-            self._extend_network_dict_l3(context, net)
+        session = context.session
+        with session.begin(subtransactions=True):
+            nets = super(OVSQuantumPluginV2, self).get_networks(context,
+                                                                filters,
+                                                                None)
+            for net in nets:
+                self._extend_network_dict_provider(context, net)
+                self._extend_network_dict_l3(context, net)
 
-        # TODO(rkukura): Filter on extended provider attributes.
-        nets = self._filter_nets_l3(context, nets, filters)
+            # TODO(rkukura): Filter on extended provider attributes.
+            nets = self._filter_nets_l3(context, nets, filters)
 
         return [self._fields(net, fields) for net in nets]
 
