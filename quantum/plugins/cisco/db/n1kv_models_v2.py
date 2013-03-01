@@ -18,9 +18,21 @@
 # @author: Aruna Kushwaha, Cisco Systems, Inc.
 # @author: Abhishek Raut, Cisco Systems, Inc.
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+import logging
 
-from quantum.db.models_v2 import model_base
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Enum
+
+from quantum.db.models_v2 import model_base, HasId
+from quantum.plugins.cisco.common import cisco_exceptions
+from sqlalchemy.orm import exc
+
+LOG = logging.getLogger(__name__)
+SEGMENT_TYPE_VLAN = 'vlan'
+SEGMENT_TYPE_VXLAN = 'vxlan'
+SEGMENT_TYPE = Enum(SEGMENT_TYPE_VLAN, SEGMENT_TYPE_VXLAN)
+PROFILE_TYPE = Enum('network', 'policy')
+# use this to indicate that tenant_id was not yet set
+TENANT_ID_NOT_SET = '01020304-0506-0708-0901-020304050607'
 
 
 class N1kvVlanAllocation(model_base.BASEV2):
@@ -184,13 +196,118 @@ class N1kVmNetwork(model_base.BASEV2):
     name = Column(String(255), primary_key=True)
     profile_id = Column(String(36))
     network_id = Column(String(36))
+    port_count = Column(Integer)
 
-    def __init__(self, name, profile_id, network_id):
+    def __init__(self, name, profile_id, network_id, port_count):
         self.name = name
         self.profile_id = profile_id
         self.network_id = network_id
+        self.port_count = port_count
 
     def __repr__(self):
-        return "<VmNetwork(%s,%s,%s)>" % (self.name,
+        return "<VmNetwork(%s,%s,%s,%s)>" % (self.name,
                                           self.profile_id,
-                                          self.network_id)
+                                          self.network_id,
+                                          self.port_count)
+
+
+class NetworkProfile(model_base.BASEV2, HasId):
+    """
+    Nexus1000V Network Profiles
+
+        segment_type - VLAN, VXLAN
+        segment_range - '<integer>-<integer>'
+        multicast_ip_index - <integer>
+        multicast_ip_range - '<ip>-<ip>'
+    """
+    __tablename__ = 'network_profiles'
+
+    name = Column(String(255))
+    segment_type = Column(SEGMENT_TYPE, nullable=False)
+    segment_range = Column(String(255))
+    multicast_ip_index = Column(Integer)
+    multicast_ip_range = Column(String(255))
+
+    def get_segment_range(self, session):
+        """Get the segment range min and max for a network profile."""
+        with session.begin(subtransactions=True):
+            # Sort the range to ensure min, max is in order
+            seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
+            LOG.debug("NetworkProfile: seg_min %s seg_max %s", seg_min, seg_max)
+            return (int(seg_min), int(seg_max))
+
+    def get_multicast_ip(self, session):
+        "Returns a multicast ip from the defined pool."
+        # Round robin multicast ip allocation
+        with session.begin(subtransactions=True):
+            try:
+                min_ip, max_ip = self._get_multicast_ip_range()
+                min_addr = int(min_ip.split('.')[3])
+                max_addr = int(max_ip.split('.')[3])
+                addr_list = list(xrange(min_addr, max_addr + 1))
+
+                mul_ip = min_ip.split('.')
+                mul_ip[3] = str(addr_list[self.multicast_ip_index])
+
+                self.multicast_ip_index += 1
+                if self.multicast_ip_index == len(addr_list):
+                    self.multicast_ip_index = 0
+                mul_ip_str = '.'.join(mul_ip)
+                return mul_ip_str
+
+            except exc.NoResultFound:
+                raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=id)
+
+    def _get_multicast_ip_range(self):
+        # Assumption: ip range belongs to the same subnet
+        # Assumption: ip range is already sorted
+        #min_ip, max_ip = sorted(self.multicast_ip_range.split('-'))
+        min_ip, max_ip = self.multicast_ip_range.split('-')
+        return (min_ip, max_ip)
+
+    def __init__(self, name, segment_type, segment_range=None, mcast_ip_index=None, mcast_ip_range=None):
+        self.name = name
+        self.segment_type = segment_type
+        self.segment_range = segment_range
+        self.multicast_ip_index = mcast_ip_index or 0
+        self.multicast_ip_range = mcast_ip_range
+
+    def __repr__(self):
+        return "<NetworkProfile (%s, %s, %s, %d, %s)>" % (self.id, self.name, self.segment_type,
+                                                          self.multicast_ip_index, self.multicast_ip_range)
+
+
+class PolicyProfile(model_base.BASEV2):
+    """
+    Nexus1000V Network Profiles
+
+        Both 'id' and 'name' are coming from Nexus1000V switch
+    """
+    __tablename__ = 'policy_profiles'
+
+    id = Column(String(36), primary_key=True)
+    name = Column(String(255))
+
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+
+    def __repr__(self):
+        return "<PolicyProfile (%s, %s)>" % (self.id, self.name)
+
+
+class ProfileBinding(model_base.BASEV2):
+    """ Represents a binding of Network Profile or Policy Profile to tenant_id"""
+    __tablename__ = 'profile_bindings'
+
+    profile_type = Column(PROFILE_TYPE)
+    tenant_id = Column(String(36), primary_key=True, default=TENANT_ID_NOT_SET)
+    profile_id = Column(String(36), primary_key=True)
+
+    def __init__(self, profile_type, tenant_id, profile_id):
+        self.profile_type = profile_type
+        self.tenant_id = tenant_id
+        self.profile_id = profile_id
+
+    def __repr__(self):
+        return "<ProfileBinding (%s, %s, %s)>" % (self.profile_type, self.tenant_id, self.profile_id)

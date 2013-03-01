@@ -17,6 +17,8 @@
 # @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
 from quantum.api.v2 import attributes
+from quantum.api import extensions
+
 
 PROFILE_ID = 'n1kv:profile_id'
 MULTICAST_IP = 'n1kv:multicast_ip'
@@ -40,7 +42,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
 }
 
 
-class N1kv_profile(object):
+class N1kvProfile(object):
     """Extension class supporting N1kv profiles.
 
     This class is used by quantum's extension framework to make
@@ -86,3 +88,63 @@ class N1kv_profile(object):
             return EXTENDED_ATTRIBUTES_2_0
         else:
             return {}
+
+
+class Nexus1000vNetworkProfile(extensions.ExtensionDescriptor):
+    @classmethod
+    def get_name(cls):
+        return "Nexus 1000V Network Profile"
+
+    @classmethod
+    def get_alias(cls):
+        return "network_profile"
+
+    @classmethod
+    def get_description(cls):
+        return "Exposes network profile"
+
+    @classmethod
+    def get_namespace(cls):
+        return "http://docs.openstack.org/ext/network_profile/api/v2.0"
+
+    @classmethod
+    def get_updated(cls):
+        return "2013-02-14T10:00:00-00:00"
+
+    def get_extended_resources(self, version):
+        return {}
+        # We might not need them
+        # if version == "2.0":
+        #     return EXTENDED_ATTRIBUTES_2_0
+        # else:
+        #     return {}
+
+
+class Nexus1000vPolicyProfile(extensions.ExtensionDescriptor):
+    @classmethod
+    def get_name(cls):
+        return "Nexus 1000V Policy Profile"
+
+    @classmethod
+    def get_alias(cls):
+        return "policy_profile"
+
+    @classmethod
+    def get_description(cls):
+        return "Exposes policy profile"
+
+    @classmethod
+    def get_namespace(cls):
+        return "http://docs.openstack.org/ext/policy_profile/api/v2.0"
+
+    @classmethod
+    def get_updated(cls):
+        return "2013-02-14T10:00:00-00:00"
+
+    def get_extended_resources(self, version):
+        return {}
+        # We might not need them
+        # if version == "2.0":
+        #     return EXTENDED_ATTRIBUTES_2_0
+        # else:
+        #     return {}

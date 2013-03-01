@@ -16,8 +16,6 @@
 import unittest
 import httplib
 
-from mock import MagicMock, patch
-
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
@@ -31,9 +29,13 @@ from quantum import context
 import quantum.db.api as db
 
 
+#
+# Monkey patch the HTTP library so that interactions with Cisco's VSM
+# can be easily mocked.
+#
 class FakeResponse(object):
     """
-    This object is returned by mocked httplib instead of a normal response.
+    This object is returned instead of a normal HTTP response.
 
     Initialize it with the status code and buffer contents you wish to return.
 
@@ -41,10 +43,77 @@ class FakeResponse(object):
     def __init__(self, status, response_text):
         self.buffer = response_text
         self.status = status
-        self.status_int = status
 
     def read(self, *args, **kwargs):
         return self.buffer
+
+class FakeHTTPConnection(object):
+    """
+    This object is used instead of a normal HTTP connection.
+
+    Returns the fake-response.
+
+    """
+    # After mocking the FakeHTTPConnection class in place of the real
+    # one, you can set these class attributes to the value you need.
+    DEFAULT_RESP_BODY = ""
+    DEFAULT_RESP_CODE = httplib.OK
+
+    def __init__(self, *args, **kwargs):
+        # Not doing anything, but need to be able to accept parameters,
+        # since standard Connection object does.
+        pass
+
+    def __getattr__(self, name):
+        # Return a dummy function that can take any kind of parameters, so
+        # that we can deal with whatever function call may be thrown at us.
+        # We are only interested in providing real implementation of a few
+        # specific functions, so the rest should just be handled quietly
+        # by the dummy function.
+        return self.__dummy
+
+    def __dummy(self, *args, **kwargs):
+        # Stand-in for any function call that we don't explicitly define.
+        return None
+
+    def request(self, *args, **kwargs):
+        # Don't need to do much for now, could be more in the future.
+        print "@@@@ request: ", args, kwargs
+
+    def getresponse(self, *args, **kwargs):
+        # Return an acceptable response as we may have received it from
+        # the VSM.
+        print "@@@@ getresponse: ", args, kwargs
+        return FakeResponse(FakeHTTPConnection.DEFAULT_RESP_CODE,
+                            FakeHTTPConnection.DEFAULT_RESP_BODY)
+
+# Override the ordinary HTTP connection object with our fake.
+n1kv_client.httplib.HTTPConnection = FakeHTTPConnection
+
+
+def _fake_get_vsm_hosts(self, tenant_id):
+    """
+    Replacement for a function in the N1KV client: Return VSM IP addresses.
+
+    This normally requires more complicated interactions with the VSM,
+    so we just shortcut all of this by returning a dummy result.
+
+    """
+    return [ "127.0.0.1" ]
+
+# Override an internal function in the N1KV client.
+n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
+
+
+def _fake_get_credential_name(tenant_id, cred_name):
+    """
+    Replacement for a function in the Db module: Return user credentials.
+
+    """
+    return { "user_name" : "admin", "password" : "admin_password" }
+
+# Override an internal function in the DB module.
+cdb.get_credential_name = _fake_get_credential_name
 
 
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
@@ -53,9 +122,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
                     'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
     _default_tenant = "some_tenant"
-
-    DEFAULT_RESP_BODY = ""
-    DEFAULT_RESP_CODE = httplib.OK
 
     def _make_test_profile(self, tenant_id):
         """
@@ -79,7 +145,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         First step is to define an acceptable response from the VSM to
         our requests. This needs to be done BEFORE the setUp() function
         of the super-class is called.
-
         This default here works for many cases. If you need something
         extra, please define your own setUp() function in your test class,
         and set your DEFAULT_RESPONSE value also BEFORE calling the
@@ -87,8 +152,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         a value already, it will not be overwritten by this code.
 
         """
-        if not self.DEFAULT_RESP_BODY:
-            self.DEFAULT_RESP_BODY = \
+        if not FakeHTTPConnection.DEFAULT_RESP_BODY:
+            FakeHTTPConnection.DEFAULT_RESP_BODY = \
             """<?xml version="1.0" encoding="UTF-8"?>
             <set name="virtual_port_profile_set">
               <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB"
@@ -115,38 +180,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
               </instance>
             </set>
             """
-
-        # Creating a mock HTTP connection object for httplib. The N1KV client
-        # interacts with the VSM via HTTP. Since we don't have a VSM running
-        # in the unit tests, we need to 'fake' it by patching the HTTP library
-        # itself. We install a patch for a fake HTTP connection class.
-        # Using __name__ to avoid having to enter the full module path.
-        http_patcher = patch(n1kv_client.httplib.__name__ + ".HTTPConnection")
-        FakeHttpConnection = http_patcher.start()
-        self.addCleanup(http_patcher.stop)
-        # Now define the return values for a few functions that may be called
-        # on any instance of the fake HTTP connection class.
-        instance = FakeHttpConnection.return_value
-        instance.getresponse.return_value = \
-                                           FakeResponse(self.DEFAULT_RESP_CODE,
-                                                        self.DEFAULT_RESP_BODY)
-        instance.request.return_value = None
-
-        # Patch some internal functions in a few other parts of the system.
-        # These help us move along, without having to mock up even more systems
-        # in the background.
-        get_vsm_hosts_patcher = patch(n1kv_client.__name__ + \
-                                      ".Client._get_vsm_hosts")
-        fake_get_vsm_hosts = get_vsm_hosts_patcher.start()
-        self.addCleanup(get_vsm_hosts_patcher.stop)
-        fake_get_vsm_hosts.return_value = [ "127.0.0.1" ]
-
-        get_cred_name_patcher = patch(cdb.__name__ + ".get_credential_name")
-        fake_get_cred_name = get_cred_name_patcher.start()
-        self.addCleanup(get_cred_name_patcher.stop)
-        fake_get_cred_name.return_value = \
-                       { "user_name" : "admin", "password" : "admin_password" }
-
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
