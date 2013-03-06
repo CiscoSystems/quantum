@@ -1,4 +1,7 @@
-# Copyright 2013 Nicira Networks, Inc.
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+# Copyright 2013 OpenStack LLC.
+# All Rights Reserved
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -11,17 +14,3 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-#
-
-from oslo.config import cfg
-
-from quantum.plugins.nicira.nicira_nvp_plugin.common import config
-from quantum.tests import base
-
-
-class ConfigurationTest(base.BaseTestCase):
-
-    def test_defaults(self):
-        self.assertEqual(64, cfg.CONF.NVP.max_lp_per_bridged_ls)
-        self.assertEqual(256, cfg.CONF.NVP.max_lp_per_overlay_ls)
-        self.assertEqual(5, cfg.CONF.NVP.concurrent_connections)

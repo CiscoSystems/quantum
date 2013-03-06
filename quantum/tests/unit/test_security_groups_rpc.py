@@ -21,7 +21,6 @@ import mock
 from mock import call
 import mox
 from oslo.config import cfg
-import testtools
 
 from quantum.agent import firewall as firewall_base
 from quantum.agent.linux import iptables_manager
@@ -31,6 +30,7 @@ from quantum import context
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common.rpc import proxy
+from quantum.tests import base
 from quantum.tests.unit import test_extension_security_group as test_sg
 from quantum.tests.unit import test_iptables_firewall as test_fw
 
@@ -84,7 +84,11 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': 'ingress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'ingress',
                              'protocol': 'tcp', 'ethertype': 'IPv4',
                              'port_range_max': 22,
                              'security_group_id': sg1_id,
@@ -94,7 +98,6 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                              'port_range_max': 23, 'security_group_id': sg1_id,
                              'port_range_min': 23,
                              'source_ip_prefix': fake_prefix},
-                            {'ethertype': 'IPv4', 'direction': 'egress'},
                             ]
                 self.assertEqual(port_rpc['security_group_rules'],
                                  expected)
@@ -133,7 +136,11 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': 'egress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress',
                              'protocol': 'tcp', 'ethertype': 'IPv4',
                              'port_range_max': 22,
                              'security_group_id': sg1_id,
@@ -161,7 +168,7 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 rule1 = self._build_security_group_rule(
                     sg1_id,
                     'ingress', 'tcp', '24',
-                    '25', source_group_id=sg2['security_group']['id'])
+                    '25', remote_group_id=sg2['security_group']['id'])
                 rules = {
                     'security_group_rules': [rule1['security_group_rule']]}
                 res = self._create_security_group_rule(self.fmt, rules)
@@ -186,13 +193,20 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': u'ingress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg2_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg2_id},
+                            {'direction': u'ingress',
                              'source_ip_prefix': u'10.0.0.3/32',
                              'protocol': u'tcp', 'ethertype': u'IPv4',
                              'port_range_max': 25, 'port_range_min': 24,
-                             'source_group_id': sg2_id,
+                             'remote_group_id': sg2_id,
                              'security_group_id': sg1_id},
-                            {'ethertype': 'IPv4', 'direction': 'egress'},
                             ]
                 self.assertEqual(port_rpc['security_group_rules'],
                                  expected)
@@ -237,7 +251,11 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': 'ingress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'ingress',
                              'protocol': 'tcp', 'ethertype': 'IPv6',
                              'port_range_max': 22,
                              'security_group_id': sg1_id,
@@ -247,7 +265,6 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                              'port_range_max': 23, 'security_group_id': sg1_id,
                              'port_range_min': 23,
                              'source_ip_prefix': fake_prefix},
-                            {'ethertype': 'IPv6', 'direction': 'egress'},
                             ]
                 self.assertEqual(port_rpc['security_group_rules'],
                                  expected)
@@ -292,7 +309,11 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': 'egress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress',
                              'protocol': 'tcp', 'ethertype': 'IPv6',
                              'port_range_max': 22,
                              'security_group_id': sg1_id,
@@ -324,7 +345,7 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                     'ingress', 'tcp', '24',
                     '25',
                     ethertype='IPv6',
-                    source_group_id=sg2['security_group']['id'])
+                    remote_group_id=sg2['security_group']['id'])
                 rules = {
                     'security_group_rules': [rule1['security_group_rule']]}
                 res = self._create_security_group_rule(self.fmt, rules)
@@ -352,13 +373,20 @@ class SGServerRpcCallBackMixinTestCase(test_sg.SecurityGroupDBTestCase):
                 ports_rpc = self.rpc.security_group_rules_for_devices(
                     ctx, devices=devices)
                 port_rpc = ports_rpc[port_id1]
-                expected = [{'direction': 'ingress',
+                expected = [{'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg1_id},
+                            {'direction': 'egress', 'ethertype': 'IPv4',
+                             'security_group_id': sg2_id},
+                            {'direction': 'egress', 'ethertype': 'IPv6',
+                             'security_group_id': sg2_id},
+                            {'direction': 'ingress',
                              'source_ip_prefix': 'fe80::3/128',
                              'protocol': 'tcp', 'ethertype': 'IPv6',
                              'port_range_max': 25, 'port_range_min': 24,
-                             'source_group_id': sg2_id,
+                             'remote_group_id': sg2_id,
                              'security_group_id': sg1_id},
-                            {'ethertype': 'IPv6', 'direction': 'egress'},
                             ]
                 self.assertEqual(port_rpc['security_group_rules'],
                                  expected)
@@ -370,7 +398,7 @@ class SGServerRpcCallBackMixinTestCaseXML(SGServerRpcCallBackMixinTestCase):
     fmt = 'xml'
 
 
-class SGAgentRpcCallBackMixinTestCase(testtools.TestCase):
+class SGAgentRpcCallBackMixinTestCase(base.BaseTestCase):
     def setUp(self):
         super(SGAgentRpcCallBackMixinTestCase, self).setUp()
         self.rpc = sg_rpc.SecurityGroupAgentRpcCallbackMixin()
@@ -394,7 +422,7 @@ class SGAgentRpcCallBackMixinTestCase(testtools.TestCase):
             [call.security_groups_provider_updated()])
 
 
-class SecurityGroupAgentRpcTestCase(testtools.TestCase):
+class SecurityGroupAgentRpcTestCase(base.BaseTestCase):
     def setUp(self):
         super(SecurityGroupAgentRpcTestCase, self).setUp()
         self.agent = sg_rpc.SecurityGroupAgentRpcMixin()
@@ -414,7 +442,7 @@ class SecurityGroupAgentRpcTestCase(testtools.TestCase):
                             'security_group_source_groups': ['fake_sgid2'],
                             'security_group_rules': [{'security_group_id':
                                                       'fake_sgid1',
-                                                      'source_group_id':
+                                                      'remote_group_id':
                                                       'fake_sgid2'}]}
         fake_devices = {'fake_device': self.fake_device}
         self.firewall.ports = fake_devices
@@ -479,7 +507,7 @@ class FakeSGRpcApi(agent_rpc.PluginApi,
     pass
 
 
-class SecurityGroupServerRpcApiTestCase(testtools.TestCase):
+class SecurityGroupServerRpcApiTestCase(base.BaseTestCase):
     def setUp(self):
         super(SecurityGroupServerRpcApiTestCase, self).setUp()
         self.rpc = FakeSGRpcApi('fake_topic')
@@ -502,7 +530,7 @@ class FakeSGNotifierAPI(proxy.RpcProxy,
     pass
 
 
-class SecurityGroupAgentRpcApiTestCase(testtools.TestCase):
+class SecurityGroupAgentRpcApiTestCase(base.BaseTestCase):
     def setUp(self):
         super(SecurityGroupAgentRpcApiTestCase, self).setUp()
         self.notifier = FakeSGNotifierAPI(topic='fake',
@@ -945,7 +973,7 @@ IPTABLES_FILTER_V6_EMPTY = """:%(bn)s-(%(chains)s) - [0:0]
 FIREWALL_BASE_PACKAGE = 'quantum.agent.linux.iptables_firewall.'
 
 
-class TestSecurityGroupAgentWithIptables(testtools.TestCase):
+class TestSecurityGroupAgentWithIptables(base.BaseTestCase):
     FIREWALL_DRIVER = FIREWALL_BASE_PACKAGE + 'IptablesFirewallDriver'
     PHYSDEV_INGRESS = 'physdev-out'
     PHYSDEV_EGRESS = 'physdev-in'
@@ -1126,14 +1154,14 @@ class SGNotificationTestMixin():
             with self.security_group(name, description) as sg2:
                 security_group_id = sg['security_group']['id']
                 direction = "ingress"
-                source_group_id = sg2['security_group']['id']
+                remote_group_id = sg2['security_group']['id']
                 protocol = 'tcp'
                 port_range_min = 88
                 port_range_max = 88
                 with self.security_group_rule(security_group_id, direction,
                                               protocol, port_range_min,
                                               port_range_max,
-                                              source_group_id=source_group_id
+                                              remote_group_id=remote_group_id
                                               ):
                     pass
             self.notifier.assert_has_calls(
