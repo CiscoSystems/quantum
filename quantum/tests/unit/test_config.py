@@ -14,14 +14,14 @@
 # limitations under the License.
 
 import os
-import testtools
 
 from oslo.config import cfg
 
 from quantum.common import config
+from quantum.tests import base
 
 
-class ConfigurationTest(testtools.TestCase):
+class ConfigurationTest(base.BaseTestCase):
 
     def test_defaults(self):
         self.assertEqual('0.0.0.0', cfg.CONF.bind_host)
@@ -37,8 +37,10 @@ class ConfigurationTest(testtools.TestCase):
         self.assertTrue(cfg.CONF.allow_bulk)
         self.assertEqual(5, cfg.CONF.max_dns_nameservers)
         self.assertEqual(20, cfg.CONF.max_subnet_host_routes)
-        self.assertEqual(os.path.abspath('../../..'),
-                         cfg.CONF.state_path)
+        relative_dir = os.path.join(os.path.dirname(__file__),
+                                    '..', '..', '..')
+        absolute_dir = os.path.abspath(relative_dir)
+        self.assertEqual(absolute_dir, cfg.CONF.state_path)
         self.assertEqual(120, cfg.CONF.dhcp_lease_duration)
         self.assertFalse(cfg.CONF.allow_overlapping_ips)
         self.assertEqual('quantum', cfg.CONF.control_exchange)

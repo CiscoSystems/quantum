@@ -42,7 +42,20 @@ OPTS = [
     cfg.StrOpt('network_device_mtu',
                help=_('MTU setting for device.')),
     cfg.StrOpt('meta_flavor_driver_mappings',
-               help=_('Mapping between flavor and LinuxInterfaceDriver'))
+               help=_('Mapping between flavor and LinuxInterfaceDriver')),
+    cfg.StrOpt('admin_user',
+               help=_("Admin username")),
+    cfg.StrOpt('admin_password',
+               help=_("Admin password"),
+               secret=True),
+    cfg.StrOpt('admin_tenant_name',
+               help=_("Admin tenant name")),
+    cfg.StrOpt('auth_url',
+               help=_("Authentication URL")),
+    cfg.StrOpt('auth_strategy', default='keystone',
+               help=_("The type of authentication to use")),
+    cfg.StrOpt('auth_region',
+               help=_("Authentication region")),
 ]
 
 
@@ -265,18 +278,22 @@ class MetaInterfaceDriver(LinuxInterfaceDriver):
                 self.conf.meta_flavor_driver_mappings.split(',')]:
             self.flavor_driver_map[flavor] = self._load_driver(driver_name)
 
-    def _get_driver_by_network_id(self, network_id):
+    def _get_flavor_by_network_id(self, network_id):
         network = self.quantum.show_network(network_id)
-        flavor = network['network'][FLAVOR_NETWORK]
+        return network['network'][FLAVOR_NETWORK]
+
+    def _get_driver_by_network_id(self, network_id):
+        flavor = self._get_flavor_by_network_id(network_id)
         return self.flavor_driver_map[flavor]
 
-    def _get_driver_by_device_name(self, device_name, namespace=None):
-        device = ip_lib.IPDevice(device_name, self.root_helper, namespace)
-        mac_address = device.link.address
-        ports = self.quantum.list_ports(mac_address=mac_address)
-        if not ports.get('ports'):
-            raise Exception(_('No port for this device %s') % device_name)
-        return self._get_driver_by_network_id(ports['ports'][0]['network_id'])
+    def _set_device_plugin_tag(self, network_id, device_name, namespace=None):
+        plugin_tag = self._get_flavor_by_network_id(network_id)
+        device = ip_lib.IPDevice(device_name, self.conf.root_helper, namespace)
+        device.link.set_alias(plugin_tag)
+
+    def _get_device_plugin_tag(self, device_name, namespace=None):
+        device = ip_lib.IPDevice(device_name, self.conf.root_helper, namespace)
+        return device.link.alias
 
     def get_device_name(self, port):
         driver = self._get_driver_by_network_id(port.network_id)
@@ -285,11 +302,14 @@ class MetaInterfaceDriver(LinuxInterfaceDriver):
     def plug(self, network_id, port_id, device_name, mac_address,
              bridge=None, namespace=None, prefix=None):
         driver = self._get_driver_by_network_id(network_id)
-        return driver.plug(network_id, port_id, device_name, mac_address,
-                           bridge=bridge, namespace=namespace, prefix=prefix)
+        ret = driver.plug(network_id, port_id, device_name, mac_address,
+                          bridge=bridge, namespace=namespace, prefix=prefix)
+        self._set_device_plugin_tag(network_id, device_name, namespace)
+        return ret
 
     def unplug(self, device_name, bridge=None, namespace=None, prefix=None):
-        driver = self._get_driver_by_device_name(device_name, namespace=None)
+        plugin_tag = self._get_device_plugin_tag(device_name, namespace)
+        driver = self.flavor_driver_map[plugin_tag]
         return driver.unplug(device_name, bridge, namespace, prefix)
 
     def _load_driver(self, driver_provider):

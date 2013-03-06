@@ -16,10 +16,10 @@
 #    under the License.
 
 import mock
-import testtools
 
 from quantum.agent.linux import ip_lib
 from quantum.common import exceptions
+from quantum.tests import base
 
 NETNS_SAMPLE = [
     '12345678-1234-5678-abcd-1234567890ab',
@@ -30,7 +30,8 @@ LINK_SAMPLE = [
     '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue state UNKNOWN \\'
     'link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00',
     '2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP '
-    'qlen 1000\    link/ether cc:dd:ee:ff:ab:cd brd ff:ff:ff:ff:ff:ff',
+    'qlen 1000\    link/ether cc:dd:ee:ff:ab:cd brd ff:ff:ff:ff:ff:ff'
+    '\    alias openvswitch',
     '3: br-int: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN '
     '\    link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff',
     '4: gw-ddc717df-49: <BROADCAST,MULTICAST> mtu 1500 qdisc noop '
@@ -97,7 +98,7 @@ SUBNET_SAMPLE2 = ("10.0.0.0/24 dev tap1d7888a7-10  scope link  src 10.0.0.2\n"
                   "10.0.0.0/24 dev qr-23380d11-d2  scope link  src 10.0.0.1")
 
 
-class TestSubProcessBase(testtools.TestCase):
+class TestSubProcessBase(base.BaseTestCase):
     def setUp(self):
         super(TestSubProcessBase, self).setUp()
         self.execute_p = mock.patch('quantum.agent.linux.utils.execute')
@@ -149,7 +150,7 @@ class TestSubProcessBase(testtools.TestCase):
                           [], 'link', ('list',))
 
 
-class TestIpWrapper(testtools.TestCase):
+class TestIpWrapper(base.BaseTestCase):
     def setUp(self):
         super(TestIpWrapper, self).setUp()
         self.execute_p = mock.patch.object(ip_lib.IPWrapper, '_execute')
@@ -305,7 +306,7 @@ class TestIpWrapper(testtools.TestCase):
         self.assertEqual(dev.mock_calls, [])
 
 
-class TestIPDevice(testtools.TestCase):
+class TestIPDevice(base.BaseTestCase):
     def test_eq_same_name(self):
         dev1 = ip_lib.IPDevice('tap0')
         dev2 = ip_lib.IPDevice('tap0')
@@ -334,7 +335,7 @@ class TestIPDevice(testtools.TestCase):
         self.assertEqual(str(ip_lib.IPDevice('tap0')), 'tap0')
 
 
-class TestIPCommandBase(testtools.TestCase):
+class TestIPCommandBase(base.BaseTestCase):
     def setUp(self):
         super(TestIPCommandBase, self).setUp()
         self.ip = mock.Mock()
@@ -362,7 +363,7 @@ class TestIPCommandBase(testtools.TestCase):
             [mock.call._as_root('o', 'foo', ('link', ), False)])
 
 
-class TestIPDeviceCommandBase(testtools.TestCase):
+class TestIPDeviceCommandBase(base.BaseTestCase):
     def setUp(self):
         super(TestIPDeviceCommandBase, self).setUp()
         self.ip_dev = mock.Mock()
@@ -376,7 +377,7 @@ class TestIPDeviceCommandBase(testtools.TestCase):
         self.assertEqual(self.ip_cmd.name, 'eth0')
 
 
-class TestIPCmdBase(testtools.TestCase):
+class TestIPCmdBase(base.BaseTestCase):
     def setUp(self):
         super(TestIPCmdBase, self).setUp()
         self.parent = mock.Mock()
@@ -426,6 +427,10 @@ class TestIpLinkCommand(TestIPCmdBase):
         self._assert_sudo([], ('set', 'eth0', 'name', 'tap1'))
         self.assertEqual(self.parent.name, 'tap1')
 
+    def test_set_alias(self):
+        self.link_cmd.set_alias('openvswitch')
+        self._assert_sudo([], ('set', 'eth0', 'alias', 'openvswitch'))
+
     def test_delete(self):
         self.link_cmd.delete()
         self._assert_sudo([], ('delete', 'eth0'))
@@ -446,6 +451,10 @@ class TestIpLinkCommand(TestIPCmdBase):
         self.parent._execute = mock.Mock(return_value=LINK_SAMPLE[1])
         self.assertEqual(self.link_cmd.qlen, 1000)
 
+    def test_alias_property(self):
+        self.parent._execute = mock.Mock(return_value=LINK_SAMPLE[1])
+        self.assertEqual(self.link_cmd.alias, 'openvswitch')
+
     def test_state_property(self):
         self.parent._execute = mock.Mock(return_value=LINK_SAMPLE[1])
         self.assertEqual(self.link_cmd.state, 'UP')
@@ -456,7 +465,8 @@ class TestIpLinkCommand(TestIPCmdBase):
                     'state': 'UP',
                     'qdisc': 'mq',
                     'brd': 'ff:ff:ff:ff:ff:ff',
-                    'link/ether': 'cc:dd:ee:ff:ab:cd'}
+                    'link/ether': 'cc:dd:ee:ff:ab:cd',
+                    'alias': 'openvswitch'}
         self.parent._execute = mock.Mock(return_value=LINK_SAMPLE[1])
         self.assertEqual(self.link_cmd.attributes, expected)
         self._assert_call('o', ('show', 'eth0'))
@@ -654,7 +664,7 @@ class TestIpNetnsCommand(TestIPCmdBase):
                 root_helper='sudo', check_exit_code=True)
 
 
-class TestDeviceExists(testtools.TestCase):
+class TestDeviceExists(base.BaseTestCase):
     def test_device_exists(self):
         with mock.patch.object(ip_lib.IPDevice, '_execute') as _execute:
             _execute.return_value = LINK_SAMPLE[1]

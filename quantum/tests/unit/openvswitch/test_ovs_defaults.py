@@ -13,22 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import testtools
-
 from oslo.config import cfg
 
 #NOTE this import loads tests required options
 from quantum.plugins.openvswitch.common import config
+from quantum.tests import base
 
 
-class ConfigurationTest(testtools.TestCase):
+class ConfigurationTest(base.BaseTestCase):
 
     def test_defaults(self):
         self.assertEqual('br-int', cfg.CONF.OVS.integration_bridge)
         self.assertFalse(cfg.CONF.OVS.enable_tunneling)
         self.assertEqual('br-tun', cfg.CONF.OVS.tunnel_bridge)
-        self.assertEqual(-1, cfg.CONF.DATABASE.sql_max_retries)
-        self.assertEqual(2, cfg.CONF.DATABASE.reconnect_interval)
         self.assertEqual(2, cfg.CONF.AGENT.polling_interval)
         self.assertEqual('sudo', cfg.CONF.AGENT.root_helper)
         self.assertEqual('local', cfg.CONF.OVS.tenant_network_type)

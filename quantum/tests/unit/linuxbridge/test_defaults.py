@@ -14,19 +14,15 @@
 # limitations under the License.
 
 from oslo.config import cfg
-import testtools
 
 #NOTE this import loads tests required options
 from quantum.plugins.linuxbridge.common import config
+from quantum.tests import base
 
 
-class ConfigurationTest(testtools.TestCase):
+class ConfigurationTest(base.BaseTestCase):
 
     def test_defaults(self):
-        self.assertEqual(-1,
-                         cfg.CONF.DATABASE.sql_max_retries)
-        self.assertEqual(2,
-                         cfg.CONF.DATABASE.reconnect_interval)
         self.assertEqual(2,
                          cfg.CONF.AGENT.polling_interval)
         self.assertEqual('sudo',

@@ -41,6 +41,7 @@ from quantum.db import models_v2
 from quantum.manager import QuantumManager
 from quantum.openstack.common import cfg
 from quantum.openstack.common import timeutils
+from quantum.tests import base
 from quantum.tests.unit import test_extensions
 from quantum.tests.unit.testlib_api import create_request
 from quantum.wsgi import Serializer, JSONDeserializer
@@ -64,6 +65,7 @@ class QuantumDbPluginV2TestCase(unittest2.TestCase):
 
     def setUp(self, plugin=None):
         super(QuantumDbPluginV2TestCase, self).setUp()
+
         # NOTE(jkoelker) for a 'pluggable' framework, Quantum sure
         #                doesn't like when the plugin changes ;)
         db._ENGINE = None
