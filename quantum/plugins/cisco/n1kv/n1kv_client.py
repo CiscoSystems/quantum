@@ -21,12 +21,12 @@ import logging
 import base64
 
 from quantum.wsgi import Serializer
+from quantum.extensions import providernet as provider
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.common import cisco_exceptions as exc
-from quantum.extensions import providernet as provider
-from quantum.extensions import n1kv_profile
+from quantum.plugins.cisco.extensions import n1kv_profile
 
 LOG = logging.getLogger(__name__)
 
