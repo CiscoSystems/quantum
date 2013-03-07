@@ -15,7 +15,8 @@
 
 import unittest
 
-from quantum.openstack.common import cfg
+from oslo.config import cfg
+
 from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 
 

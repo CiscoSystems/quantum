@@ -27,6 +27,7 @@ import itertools
 
 from keystoneclient.v2_0 import client as keystone_client
 from novaclient.v1_1 import client as nova_client
+from oslo.config import cfg as quantum_cfg
 
 from quantum import policy
 
@@ -44,7 +45,6 @@ from quantum.db import l3_rpc_base
 from quantum.extensions import providernet as provider
 
 from quantum.openstack.common import context
-from quantum.openstack.common import cfg as quantum_cfg
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
