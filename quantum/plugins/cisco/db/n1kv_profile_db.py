@@ -29,7 +29,7 @@ from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.db.models_v2 import model_base
 from quantum.common import exceptions as q_exc
-from quantum.extensions import profile
+from quantum.plugins.cisco.extensions import profile
 from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
 

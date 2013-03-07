@@ -42,7 +42,6 @@ from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 
 from quantum.extensions import providernet as provider
-from quantum.extensions import n1kv_profile as n1kv_profile
 
 from quantum.openstack.common import context
 from quantum.openstack.common import cfg as quantum_cfg
@@ -50,6 +49,7 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 
+from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import n1kv_db_v2

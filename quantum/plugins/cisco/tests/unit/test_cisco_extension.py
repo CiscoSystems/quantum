@@ -32,12 +32,10 @@ from quantum.api.extensions import (
     PluginAwareExtensionManager,
 )
 from quantum.common import config
-from quantum.extensions import (
-    credential,
-    qos,
-)
 from quantum.manager import QuantumManager
 from quantum.openstack.common import jsonutils
+from quantum.plugins.cisco.extensions import credential
+from quantum.plugins.cisco.extensions import qos
 from quantum.plugins.cisco.db import api as db
 from quantum.plugins.cisco import l2network_plugin
 from quantum.plugins.cisco.l2network_plugin import L2Network
