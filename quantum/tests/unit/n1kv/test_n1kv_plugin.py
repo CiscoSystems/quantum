@@ -34,18 +34,22 @@ class FakeResponse(object):
     """
     This object is returned by mocked httplib instead of a normal response.
 
-    Initialize it with the status code and buffer contents you wish to return.
+    Initialize it with the status code, content type and buffer contents 
+    you wish to return.
 
     """
-    def __init__(self, status, response_text):
+    def __init__(self, status, response_text, content_type):
         self.buffer = response_text
         self.status = status
         self.status_int = status
+        self.content_type = content_type
 
     def read(self, *args, **kwargs):
         return self.buffer
 
-
+    def getheader(self, *args, **kwargs):
+        return self.content_type
+        
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
@@ -55,6 +59,17 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     DEFAULT_RESP_BODY = ""
     DEFAULT_RESP_CODE = httplib.OK
+    DEFAULT_CONTENT_TYPE = ""
+
+    def _make_test_policy_profile(self):
+        """
+        Creates a policy profile record for testing purpose.
+
+        """
+        profile = {'id': '41548d21-7f89-4da0-9131-3d4fd4e8BBB8',
+                   'name': 'TestGrizzlyPP'}
+        profile_obj = n1kv_db_v2.create_policy_profile(profile)
+        return profile_obj
 
     def _make_test_profile(self, tenant_id):
         """
@@ -63,11 +78,14 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
         alloc_obj.allocated = False
-        profile_obj = n1kv_profile_db.N1kvProfile_db()
-        profile_obj.tenant_id = tenant_id
-        profile_obj.segment_range = "100-900"
-        profile_obj.segment_type = 'vlan'
-        profile_obj.tunnel_id = 200
+        #profile_obj = n1kv_profile_db.N1kvProfile_db()
+        #profile_obj.tenant_id = tenant_id
+        segment_range = "100-900"
+        segment_type = 'vlan'
+        tunnel_id = 200
+        profile_obj = n1kv_models_v2.NetworkProfile("test_np",
+                                                    segment_type,
+                                                    segment_range)
         session = db.get_session()
         session.add(profile_obj)
         session.flush()
@@ -128,7 +146,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         instance = FakeHttpConnection.return_value
         instance.getresponse.return_value = \
                                            FakeResponse(self.DEFAULT_RESP_CODE,
-                                                        self.DEFAULT_RESP_BODY)
+                                                        self.DEFAULT_RESP_BODY,
+                                                        'application/xml')
         instance.request.return_value = None
 
         # Patch some internal functions in a few other parts of the system.
@@ -150,10 +169,11 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
         profile_obj = self._make_test_profile(self.tenant_id)
+        policy_profile_obj = self._make_test_policy_profile()
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
 
     def test_plugin(self):
