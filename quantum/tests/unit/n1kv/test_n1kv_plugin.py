@@ -287,9 +287,10 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
     def test_update_network_set_not_shared_single_tenant(self):
         # The underlying test function needs a profile for a different tenant.
         profile_obj = self._make_test_profile("test-tenant")
+        policy_profile_obj = self._make_test_policy_profile()
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
         super(TestN1kvNetworks,
               self).test_update_network_set_not_shared_single_tenant()
@@ -312,9 +313,10 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
                                      tenant_id='somebody_else',
                                      set_context=True)
             profile_obj = self._make_test_profile("test-tenant")
+            policy_profile_obj = self._make_test_policy_profile()
             self.more_args = {
                 "network" : { "n1kv:profile_id" : profile_obj.id },
-                "port" : { "n1kv:profile_id" : profile_obj.id }
+                "port" : { "n1kv:profile_id" : policy_profile_obj.id }
             }
             res2 = self._create_port('json',
                                      network['network']['id'],

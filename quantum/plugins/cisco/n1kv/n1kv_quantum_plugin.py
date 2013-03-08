@@ -496,7 +496,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_update_network_request(self, network):
         """ Send Update network request to VSM """
         LOG.debug('_send_update_network_request: %s', network['id'])
-        profile = self.get_profile_by_id(network[n1kv_profile.PROFILE_ID])
+        profile = n1kv_db_v2.get_network_profile(network[n1kv_profile.PROFILE_ID])
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': profile['name'],
