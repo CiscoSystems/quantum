@@ -20,9 +20,10 @@ import hashlib
 import logging
 import os
 
+from oslo.config import cfg
+
 from quantum.common.utils import find_config_file as q_find_config_file
 from quantum.plugins.cisco.common import cisco_constants as const
-from quantum.openstack.common import cfg
 
 LOG = logging.getLogger(__name__)
 
