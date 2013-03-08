@@ -61,12 +61,12 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
     DEFAULT_RESP_CODE = httplib.OK
     DEFAULT_CONTENT_TYPE = ""
 
-    def _make_test_policy_profile(self):
+    def _make_test_policy_profile(self, id):
         """
         Creates a policy profile record for testing purpose.
 
         """
-        profile = {'id': '41548d21-7f89-4da0-9131-3d4fd4e8BBB8',
+        profile = {'id': id,
                    'name': 'TestGrizzlyPP'}
         profile_obj = n1kv_db_v2.create_policy_profile(profile)
         return profile_obj
@@ -169,7 +169,7 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
         profile_obj = self._make_test_profile(self.tenant_id)
-        policy_profile_obj = self._make_test_policy_profile()
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
@@ -236,9 +236,10 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
 
         """
         profile_obj = self._make_test_profile(tenant_id)
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')    
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
 
     def test_create_port_public_network(self):
@@ -287,7 +288,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
     def test_update_network_set_not_shared_single_tenant(self):
         # The underlying test function needs a profile for a different tenant.
         profile_obj = self._make_test_profile("test-tenant")
-        policy_profile_obj = self._make_test_policy_profile()
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
             "port" : { "n1kv:profile_id" : policy_profile_obj.id }
@@ -313,7 +314,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
                                      tenant_id='somebody_else',
                                      set_context=True)
             profile_obj = self._make_test_profile("test-tenant")
-            policy_profile_obj = self._make_test_policy_profile()
+            policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BB99')
             self.more_args = {
                 "network" : { "n1kv:profile_id" : profile_obj.id },
                 "port" : { "n1kv:profile_id" : policy_profile_obj.id }
