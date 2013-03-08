@@ -19,8 +19,10 @@ from oslo.config import cfg
 import webob
 
 from quantum.api import extensions
+from quantum.api.v2.attributes import convert_to_int
 from quantum.api.v2 import base
-from quantum.common import exceptions
+from quantum.api.v2 import resource
+from quantum.common import exceptions as q_exc
 from quantum.manager import QuantumManager
 from quantum.openstack.common import importutils
 from quantum import quota
@@ -35,40 +37,34 @@ EXTENDED_ATTRIBUTES_2_0 = {
     RESOURCE_COLLECTION: {}
 }
 
-for quota_resource in QUOTAS.resources.iterkeys():
-    attr_dict = EXTENDED_ATTRIBUTES_2_0[RESOURCE_COLLECTION]
-    attr_dict[quota_resource] = {'allow_post': False,
-                                 'allow_put': True,
-                                 'convert_to': int,
-                                 'is_visible': True}
-
 
 class QuotaSetsController(wsgi.Controller):
 
     def __init__(self, plugin):
         self._resource_name = RESOURCE_NAME
         self._plugin = plugin
-        self._driver = importutils.import_class(DB_QUOTA_DRIVER)
+        self._driver = importutils.import_class(cfg.CONF.QUOTAS.quota_driver)
+        self._update_extended_attributes = True
 
-    def _get_body(self, request):
-        body = self._deserialize(request.body,
-                                 request.best_match_content_type())
-        attr_info = EXTENDED_ATTRIBUTES_2_0[RESOURCE_COLLECTION]
-        req_body = base.Controller.prepare_request_body(
-            request.context, body, False, self._resource_name, attr_info)
-        return req_body
+    def _update_attributes(self):
+        for quota_resource in QUOTAS.resources.iterkeys():
+            attr_dict = EXTENDED_ATTRIBUTES_2_0[RESOURCE_COLLECTION]
+            attr_dict[quota_resource] = {'allow_post': False,
+                                         'allow_put': True,
+                                         'convert_to': convert_to_int,
+                                         'is_visible': True}
+        self._update_extended_attributes = False
 
     def _get_quotas(self, request, tenant_id):
         return self._driver.get_tenant_quotas(
             request.context, QUOTAS.resources, tenant_id)
 
     def create(self, request, body=None):
-        raise NotImplementedError()
+        raise webob.exc.HTTPNotImplemented()
 
     def index(self, request):
         context = request.context
-        if not context.is_admin:
-            raise webob.exc.HTTPForbidden()
+        self._check_admin(context)
         return {self._resource_name + "s":
                 self._driver.get_all_quotas(context, QUOTAS.resources)}
 
@@ -76,44 +72,35 @@ class QuotaSetsController(wsgi.Controller):
         """Retrieve the tenant info in context."""
         context = request.context
         if not context.tenant_id:
-            raise webob.exc.HTTPBadRequest('invalid tenant')
+            raise q_exc.QuotaMissingTenant()
         return {'tenant': {'tenant_id': context.tenant_id}}
 
     def show(self, request, id):
-        context = request.context
-        tenant_id = id
-        if not tenant_id:
-            raise webob.exc.HTTPBadRequest('invalid tenant')
-        if (tenant_id != context.tenant_id and
-            not context.is_admin):
-            raise webob.exc.HTTPForbidden()
-        return {self._resource_name:
-                self._get_quotas(request, tenant_id)}
+        if id != request.context.tenant_id:
+            self._check_admin(request.context,
+                              reason=_("Non-admin is not authorised "
+                                       "to access quotas for another tenant"))
+        return {self._resource_name: self._get_quotas(request, id)}
 
-    def _check_modification_delete_privilege(self, context, tenant_id):
-        if not tenant_id:
-            raise webob.exc.HTTPBadRequest('invalid tenant')
+    def _check_admin(self, context,
+                     reason=_("Only admin can view or configure quota")):
         if not context.is_admin:
-            raise webob.exc.HTTPForbidden()
-        return tenant_id
+            raise q_exc.AdminRequired(reason=reason)
 
     def delete(self, request, id):
-        tenant_id = self._check_modification_delete_privilege(request.context,
-                                                              id)
-        self._driver.delete_tenant_quota(request.context, tenant_id)
+        self._check_admin(request.context)
+        self._driver.delete_tenant_quota(request.context, id)
 
-    def update(self, request, id):
-        tenant_id = self._check_modification_delete_privilege(request.context,
-                                                              id)
-        req_body = self._get_body(request)
-        for key in req_body[self._resource_name].keys():
-            if key in QUOTAS.resources:
-                value = int(req_body[self._resource_name][key])
-                self._driver.update_quota_limit(request.context,
-                                                tenant_id,
-                                                key,
-                                                value)
-        return {self._resource_name: self._get_quotas(request, tenant_id)}
+    def update(self, request, id, body=None):
+        self._check_admin(request.context)
+        if self._update_extended_attributes:
+            self._update_attributes()
+        body = base.Controller.prepare_request_body(
+            request.context, body, False, self._resource_name,
+            EXTENDED_ATTRIBUTES_2_0[RESOURCE_COLLECTION])
+        for key, value in body[self._resource_name].iteritems():
+            self._driver.update_quota_limit(request.context, id, key, value)
+        return {self._resource_name: self._get_quotas(request, id)}
 
 
 class Quotasv2(extensions.ExtensionDescriptor):
@@ -121,7 +108,7 @@ class Quotasv2(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):
-        return "Quotas for each tenant"
+        return "Quota management support"
 
     @classmethod
     def get_alias(cls):
@@ -129,8 +116,10 @@ class Quotasv2(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_description(cls):
-        return ("Expose functions for cloud admin to update quotas"
-                "for each tenant")
+        description = 'Expose functions for quotas management'
+        if cfg.CONF.QUOTAS.quota_driver == DB_QUOTA_DRIVER:
+            description += ' per tenant'
+        return description
 
     @classmethod
     def get_namespace(cls):
@@ -143,7 +132,9 @@ class Quotasv2(extensions.ExtensionDescriptor):
     @classmethod
     def get_resources(cls):
         """ Returns Ext Resources """
-        controller = QuotaSetsController(QuantumManager.get_plugin())
+        controller = resource.Resource(
+            QuotaSetsController(QuantumManager.get_plugin()),
+            faults=base.FAULT_MAP)
         return [extensions.ResourceExtension(
             Quotasv2.get_alias(),
             controller,
@@ -154,8 +145,3 @@ class Quotasv2(extensions.ExtensionDescriptor):
             return EXTENDED_ATTRIBUTES_2_0
         else:
             return {}
-
-    def check_env(self):
-        if cfg.CONF.QUOTAS.quota_driver != DB_QUOTA_DRIVER:
-            msg = _('Quota driver %s is needed.') % DB_QUOTA_DRIVER
-            raise exceptions.InvalidExtenstionEnv(reason=msg)
