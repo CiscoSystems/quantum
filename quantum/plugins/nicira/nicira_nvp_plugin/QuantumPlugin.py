@@ -1593,6 +1593,11 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def delete_router(self, context, id):
         with context.session.begin(subtransactions=True):
+            # Ensure metadata access network is detached and destroyed
+            # This will also destroy relevant objects on NVP platform.
+            # NOTE(salvatore-orlando): A failure in this operation will
+            # cause the router delete operation to fail too.
+            self._handle_metadata_access_network(context, id, do_create=False)
             super(NvpPluginV2, self).delete_router(context, id)
             # If removal is successful in Quantum it should be so on
             # the NVP platform too - otherwise the transaction should
@@ -1764,6 +1769,10 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             port = self._get_port(context, port_id)
             if port.get('fixed_ips'):
                 subnet_id = port['fixed_ips'][0]['subnet_id']
+            if not (port['device_owner'] == l3_db.DEVICE_OWNER_ROUTER_INTF and
+                    port['device_id'] == router_id):
+                raise l3.RouterInterfaceNotFound(router_id=router_id,
+                                                 port_id=port_id)
         elif 'subnet_id' in interface_info:
             subnet_id = interface_info['subnet_id']
             subnet = self._get_subnet(context, subnet_id)
@@ -1776,9 +1785,13 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 if p['fixed_ips'][0]['subnet_id'] == subnet_id:
                     port_id = p['id']
                     break
+            else:
+                raise l3.RouterInterfaceNotFoundForSubnet(router_id=router_id,
+                                                          subnet_id=subnet_id)
         results = nvplib.query_lswitch_lports(
             cluster, '*', relations="LogicalPortAttachment",
             filters={'tag': port_id, 'tag_scope': 'q_port_id'})
+        lrouter_port_id = None
         if len(results):
             lport = results[0]
             attachment_data = lport['_relations'].get('LogicalPortAttachment')
@@ -1799,11 +1812,8 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # to leverage validation performed in the base class
         if not lrouter_port_id:
             LOG.warning(_("Unable to find NVP logical router port for "
-                          "Quantum port id:%(q_port_id)s (NVP id: "
-                          "%(nvp_port_id)s). Was this port "
-                          "ever paired with a logical router?"),
-                        {'q_port_id': port_id,
-                         'nvp_port_id': lport['uuid']})
+                          "Quantum port id:%s. Was this port ever paired "
+                          "with a logical router?"), port_id)
             return
 
         # Ensure the connection to the 'metadata access network'
