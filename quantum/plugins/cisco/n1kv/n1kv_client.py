@@ -216,9 +216,15 @@ class Client(object):
         else:
             netmask = ''
 
+        if subnet['allocation_pools']:
+            address_range_start = subnet['allocation_pools'][0]['start']
+            address_range_end   = subnet['allocation_pools'][0]['end']
+        else:
+            address_range_start = None
+            address_range_end   = None
         body = {'dhcp': subnet['enable_dhcp'],
-                'addressRangeStart': subnet['allocation_pools'][0]['start'],
-                'addressRangeEnd': subnet['allocation_pools'][0]['end'],
+                'addressRangeStart': address_range_start,
+                'addressRangeEnd': address_range_end,
                 'ipAddressSubnet': netmask,
                 'name': subnet['name'],
                 'gateway': subnet['gateway_ip'], }
