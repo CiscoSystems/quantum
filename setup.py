@@ -1,4 +1,4 @@
-# Copyright 2011 OpenStack, LLC
+# Copyright 2011 OpenStack Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ if sys.platform == 'win32':
 
 Name = 'quantum'
 Url = "https://launchpad.net/quantum"
-Version = setup.get_version(Name, '2013.1')
+Version = setup.get_version(Name, '2013.2')
 License = 'Apache License 2.0'
-Author = 'Netstack'
-AuthorEmail = 'netstack@lists.launchpad.net'
+Author = 'OpenStack'
+AuthorEmail = 'openstack-dev@lists.openstack.org'
 Maintainer = ''
 Summary = 'Quantum (virtual network service)'
 ShortDescription = Summary

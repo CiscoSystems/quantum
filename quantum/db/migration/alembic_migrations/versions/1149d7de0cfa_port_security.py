@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright 2013 OpenStack LLC
+# Copyright 2013 OpenStack Foundation
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -61,6 +61,14 @@ def upgrade(active_plugin=None, options=None):
                     ondelete='CASCADE'),
                     sa.PrimaryKeyConstraint('port_id'))
     ### end Alembic commands ###
+
+    # Copy network and port ids over to network|port(securitybindings) table
+    # and set port_security_enabled to false as ip address pairs were not
+    # configured in NVP originally.
+    op.execute("INSERT INTO networksecuritybindings SELECT id as "
+               "network_id, False as port_security_enabled from networks")
+    op.execute("INSERT INTO portsecuritybindings SELECT id as port_id, "
+               "False as port_security_enabled from ports")
 
 
 def downgrade(active_plugin=None, options=None):
