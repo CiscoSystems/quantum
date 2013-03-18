@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright (c) 2012 OpenStack LLC.
+# Copyright (c) 2012 OpenStack Foundation.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -145,10 +145,10 @@ class Subnet(model_base.BASEV2, HasId, HasTenant):
     enable_dhcp = sa.Column(sa.Boolean())
     dns_nameservers = orm.relationship(DNSNameServer,
                                        backref='subnet',
-                                       cascade='delete')
+                                       cascade='all, delete, delete-orphan')
     routes = orm.relationship(SubnetRoute,
                               backref='subnet',
-                              cascade='delete')
+                              cascade='all, delete, delete-orphan')
     shared = sa.Column(sa.Boolean)
 
 

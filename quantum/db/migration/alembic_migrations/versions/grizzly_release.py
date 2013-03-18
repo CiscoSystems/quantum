@@ -15,23 +15,21 @@
 #    under the License.
 #
 
-"""ryu plugin update
+"""grizzly
 
-Revision ID: 49332180ca96
-Revises: 1149d7de0cfa
-Create Date: 2013-01-30 07:52:58.472885
+Revision ID: grizzly
+Revises: 1341ed32cc1e
+Create Date: 2013-03-12 23:59:59.000000
 
 """
 
 # revision identifiers, used by Alembic.
-revision = '49332180ca96'
-down_revision = '1149d7de0cfa'
+revision = 'grizzly'
+down_revision = '1341ed32cc1e'
 
 # Change to ['*'] if this migration applies to all plugins
 
-migration_for_plugins = [
-    'quantum.plugins.ryu.ryu_quantum_plugin.RyuQuantumPluginV2'
-]
+migration_for_plugins = ['*']
 
 from alembic import op
 import sqlalchemy as sa
@@ -40,20 +38,10 @@ from quantum.db import migration
 
 
 def upgrade(active_plugin=None, options=None):
-    if not migration.should_run(active_plugin, migration_for_plugins):
-        return
-
-    op.drop_table('ofp_server')
+    """A no-op migration for marking the Grizzly release."""
+    pass
 
 
 def downgrade(active_plugin=None, options=None):
-    if not migration.should_run(active_plugin, migration_for_plugins):
-        return
-
-    op.create_table(
-        'ofp_server',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('address', sa.String(length=255)),
-        sa.Column('host_type', sa.String(length=255)),
-        sa.PrimaryKeyConstraint(u'id')
-    )
+    """A no-op migration for marking the Grizzly release."""
+    pass

@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright (c) 2012 OpenStack, LLC.
+# Copyright (c) 2012 OpenStack Foundation.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -61,6 +61,8 @@ class TestLinuxBridgeAgent(base.BaseTestCase):
 
     def setUp(self):
         super(TestLinuxBridgeAgent, self).setUp()
+        cfg.CONF.set_override('rpc_backend',
+                              'quantum.openstack.common.rpc.impl_fake')
         self.lbmgr_patcher = mock.patch('quantum.plugins.linuxbridge.agent.'
                                         'linuxbridge_quantum_agent.'
                                         'LinuxBridgeManager')

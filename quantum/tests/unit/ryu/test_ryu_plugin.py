@@ -1,4 +1,4 @@
-# Copyright (c) 2012 OpenStack, LLC.
+# Copyright (c) 2012 OpenStack Foundation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 
 import mock
 
+# NOTE: this import is needed for correct plugin code work
+from quantum.plugins.ryu.db import models_v2 as ryu_models_v2
 from quantum.tests.unit.ryu import fake_ryu
 from quantum.tests.unit import test_db_plugin as test_plugin
 
