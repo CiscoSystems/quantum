@@ -91,11 +91,12 @@ class Client(object):
                 "network": ["id", "name"],
                 "port": ["id", "mac_address"],
                 "subnet": ["id", "prefix"]},
-                "plurals": {
+            },
+            "plurals": {
                 "networks": "network",
                 "ports": "port",
                 "set": "instance",
-                "subnets": "subnet", }, }, }
+                "subnets": "subnet", }, }
 
     # Define paths here
     profiles_path = "/virtual-port-profile"

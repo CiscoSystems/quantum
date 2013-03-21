@@ -215,7 +215,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         3. Retrieve port-profiles
         """
         n1kv_db_v2.initialize()
-        #cred.Store.initialize()
+        cred.Store.initialize()
         # TBD Begin : To be removed. No need for this parameters
         self._parse_network_vlan_ranges()
         n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
@@ -257,7 +257,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_poll_policies')
         client = n1kv_client.Client()
         policy_profiles = client.list_profiles()
-        for profile in policy_profiles[const.SET]:
+        for profile in policy_profiles['body'][const.SET]:
             if const.ID and const.NAME in profile:
                 profile_id = profile[const.PROPERTIES][const.ID]
                 profile_name = profile[const.PROPERTIES][const.NAME]
