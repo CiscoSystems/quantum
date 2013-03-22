@@ -54,7 +54,8 @@ class N1kvProfile_db(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
         with session.begin(subtransactions=True):
             # Sort the range to ensure min, max is in order
             seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
-            LOG.debug("N1kvProfile_db: seg_min %s seg_max %s", seg_min,seg_max)
+            LOG.debug("N1kvProfile_db: seg_min %s seg_max %s",
+                      seg_min, seg_max)
             return (int(seg_min), int(seg_max))
 
     def get_multicast_ip(self, session):

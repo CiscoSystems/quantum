@@ -50,6 +50,33 @@ class FakeResponse(object):
     def getheader(self, *args, **kwargs):
         return self.content_type
         
+
+def _fake_get_vsm_hosts(self, tenant_id):
+    """
+    Replacement for a function in the N1KV client: Return VSM IP addresses.
+
+    This normally requires more complicated interactions with the VSM,
+    so we just shortcut all of this by returning a dummy result.
+
+    """
+    return ["127.0.0.1"]
+
+# Override an internal function in the N1KV client.
+n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
+
+
+def _fake_get_credential_name(tenant_id, cred_name):
+    """
+    Replacement for a function in the Db module: Return user credentials.
+
+    """
+    return {"user_name": "admin", "password": "admin_password"}
+
+# Override an internal function in the DB module.
+cdb.get_credential_name = _fake_get_credential_name
+
+
+>>>>>>> 3632c83... PEP8 changes.
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
@@ -204,7 +231,6 @@ class TestN1kvBasicGet(test_plugin.TestBasicGet,
         super(TestN1kvBasicGet, self).setUp()
 
 
-
 class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
                            N1kvPluginTestCase):
     def setUp(self):
@@ -268,12 +294,13 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_delete_port_public_network()
 
+
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
 
-    _default_tenant = "somebody_else" # Tenant-id determined by underlying
-                                      # DB-plugin test cases. Need to use this
-                                      # one for profile creation
+    _default_tenant = "somebody_else"  # Tenant-id determined by underlying
+                                       # DB-plugin test cases. Need to use this
+                                       # one for profile creation
 
     def setUp(self):
         """
@@ -334,6 +361,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
             self._delete('ports', port1['port']['id'])
             self._delete('ports', port2['port']['id'])
 
+
 class TestN1kvNonDbTest(unittest.TestCase):
     """
     This test class here can be used to test the plugin directly,
@@ -350,5 +378,3 @@ class TestN1kvNonDbTest(unittest.TestCase):
 
     def test_db(self):
         n1kv_db_v2.initialize()
-
-

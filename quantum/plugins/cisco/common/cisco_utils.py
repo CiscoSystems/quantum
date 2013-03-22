@@ -50,6 +50,7 @@ def make_port_dict(port_id, port_state, net_id, attachment):
     res[const.ATTACHMENT] = attachment
     return res
 
+
 def find_config_file(options, config_file):
     if hasattr(cfg.CONF, "config_dir"):
         # Grab the config dir
@@ -65,5 +66,5 @@ def find_config_file(options, config_file):
 
         if path:
             return path
-    
+
     return q_find_config_file(options, config_file)

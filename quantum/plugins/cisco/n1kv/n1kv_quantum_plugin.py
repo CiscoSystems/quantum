@@ -20,7 +20,6 @@
 # @author: Sergey Sudakovich, Cisco Systems, Inc.
 
 
-
 import logging
 import sys
 import itertools
@@ -271,8 +270,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 self._add_policy_profile(profile_name, profile_id, tenant_id)
         self._remove_all_fake_policy_profiles()
 
-
-# def _add_policy_profiles(self, n1kvclient, tenant_id):
+    # def _add_policy_profiles(self, n1kvclient, tenant_id):
     #     """Populate Profiles of type Policy on init."""
     #     profiles = n1kvclient.list_profiles()
     #     for profile in profiles[const.SET]:
@@ -280,7 +278,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     #         profile_name = profile[const.PROPERTIES][const.NAME]
     #         self.add_profile(tenant_id,
     #                          profile_id, profile_name, const.POLICY)
-
     # TBD Begin : To be removed. Needs some change in logic before removal
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
@@ -525,7 +522,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         :return:
         """
         LOG.debug('_send_create_network_request: %s', network['id'])
-        profile = self.get_network_profile(context, network[n1kv_profile.PROFILE_ID])
+        profile = self.get_network_profile(context,
+                    network[n1kv_profile.PROFILE_ID])
         n1kvclient = n1kv_client.Client()
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             n1kvclient.create_bridge_domain(network)
@@ -586,7 +584,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                                action='increment')
             n1kv_db_v2.update_vm_network(vm_network_name, vm_network['port_count'])
         else:
-            policy_profile = n1kv_db_v2.get_policy_profile(port[n1kv_profile.PROFILE_ID])
+            policy_profile = n1kv_db_v2.get_policy_profile(\
+                                port[n1kv_profile.PROFILE_ID])
             profile_name = policy_profile['name']
             network = self.get_network(context, port['network_id'])
             network_name = network['name']
@@ -748,11 +747,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         """
         if n1kv_profile.PROFILE_ID in port['port']:
-            #If it is a dhcp port, profile id is populated with network profile id.
+            # If it is a dhcp port, profile id is
+            # populated with network profile id.
             if port['port']['device_id'].startswith('dhcp'):
-                profile_id = self._process_network_profile(context, port['port'])
+                profile_id = self._process_network_profile(context,
+                                                           port['port'])
             else:
-                profile_id = self._process_policy_profile(context, port['port'])
+                profile_id = self._process_policy_profile(context,
+                                                          port['port'])
             LOG.debug('create port: profile_id=%s', profile_id)
             session = context.session
             with session.begin(subtransactions=True):
@@ -888,8 +890,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def get_subnets(self, context, filters=None, fields=None):
         """ Read all the Subnets """
         LOG.debug("Get subnets")
-        subnets = super(N1kvQuantumPluginV2, self).get_subnets(context, filters,
-            fields)
+        subnets = super(N1kvQuantumPluginV2, self).get_subnets(context,
+                                                               filters,
+                                                               fields)
         return [self._fields(subnet, fields) for subnet in subnets]
 
     def create_network_profile(self, context, network_profile):

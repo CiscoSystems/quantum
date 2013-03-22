@@ -233,7 +233,8 @@ class NetworkProfile(model_base.BASEV2, HasId):
         with session.begin(subtransactions=True):
             # Sort the range to ensure min, max is in order
             seg_min, seg_max = sorted(map(int, self.segment_range.split('-')))
-            LOG.debug("NetworkProfile: seg_min %s seg_max %s", seg_min, seg_max)
+            LOG.debug("NetworkProfile: seg_min %s seg_max %s",
+                      seg_min, seg_max)
             return (int(seg_min), int(seg_max))
 
     def get_multicast_ip(self, session):
@@ -265,7 +266,9 @@ class NetworkProfile(model_base.BASEV2, HasId):
         min_ip, max_ip = self.multicast_ip_range.split('-')
         return (min_ip, max_ip)
 
-    def __init__(self, name, segment_type, segment_range=None, mcast_ip_index=None, mcast_ip_range=None):
+    def __init__(self, name, segment_type,
+                 segment_range=None, mcast_ip_index=None,
+                 mcast_ip_range=None):
         self.name = name
         self.segment_type = segment_type
         self.segment_range = segment_range
@@ -273,8 +276,9 @@ class NetworkProfile(model_base.BASEV2, HasId):
         self.multicast_ip_range = mcast_ip_range
 
     def __repr__(self):
-        return "<NetworkProfile (%s, %s, %s, %d, %s)>" % (self.id, self.name, self.segment_type,
-                                                          self.multicast_ip_index, self.multicast_ip_range)
+        return "<NetworkProfile (%s, %s, %s, %d, %s)>" % (self.id,
+               self.name, self.segment_type, self.multicast_ip_index,
+               self.multicast_ip_range)
 
 
 class PolicyProfile(model_base.BASEV2):
@@ -297,7 +301,8 @@ class PolicyProfile(model_base.BASEV2):
 
 
 class ProfileBinding(model_base.BASEV2):
-    """ Represents a binding of Network Profile or Policy Profile to tenant_id"""
+    """Represents a binding of Network Profile
+    or Policy Profile to tenant_id"""
     __tablename__ = 'profile_bindings'
 
     profile_type = Column(PROFILE_TYPE)
@@ -310,4 +315,5 @@ class ProfileBinding(model_base.BASEV2):
         self.profile_id = profile_id
 
     def __repr__(self):
-        return "<ProfileBinding (%s, %s, %s)>" % (self.profile_type, self.tenant_id, self.profile_id)
+        return "<ProfileBinding (%s, %s, %s)>" % (self.profile_type,
+               self.tenant_id, self.profile_id)
