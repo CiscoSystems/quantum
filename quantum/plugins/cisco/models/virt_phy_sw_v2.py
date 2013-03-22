@@ -49,7 +49,8 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     MANAGE_STATE = True
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "profile", "n1kv_profile", "router"]
+    supported_extension_aliases = ["provider", "profile",
+                                   "n1kv_profile", "router"]
     _plugins = {}
     _inventory = {}
     _methods_to_delegate = ['create_network_bulk',

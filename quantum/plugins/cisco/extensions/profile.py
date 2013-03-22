@@ -98,6 +98,8 @@ class Profile(object):
         return [extensions.ResourceExtension(collection_name,
                                              controller,
                                              member_actions=member_actions)]
+
+
 class ProfileBase(object):
 
     @abstractmethod

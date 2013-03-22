@@ -47,6 +47,7 @@ class FakeResponse(object):
     def read(self, *args, **kwargs):
         return self.buffer
 
+
 class FakeHTTPConnection(object):
     """
     This object is used instead of a normal HTTP connection.
@@ -99,7 +100,7 @@ def _fake_get_vsm_hosts(self, tenant_id):
     so we just shortcut all of this by returning a dummy result.
 
     """
-    return [ "127.0.0.1" ]
+    return ["127.0.0.1"]
 
 # Override an internal function in the N1KV client.
 n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
@@ -110,7 +111,7 @@ def _fake_get_credential_name(tenant_id, cred_name):
     Replacement for a function in the Db module: Return user credentials.
 
     """
-    return { "user_name" : "admin", "password" : "admin_password" }
+    return {"user_name": "admin", "password": "admin_password"}
 
 # Override an internal function in the DB module.
 cdb.get_credential_name = _fake_get_credential_name
@@ -186,8 +187,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         profile_obj = self._make_test_profile(self.tenant_id)
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
-            "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "network": {"n1kv:profile_id": profile_obj.id},
+            "port": {"n1kv:profile_id": profile_obj.id}
         }
 
     def test_plugin(self):
@@ -216,7 +217,6 @@ class TestN1kvBasicGet(test_plugin.TestBasicGet,
 
         """
         super(TestN1kvBasicGet, self).setUp()
-
 
 
 class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
@@ -251,8 +251,8 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         """
         profile_obj = self._make_test_profile(tenant_id)
         self.more_args = {
-            "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "network": {"n1kv:profile_id": profile_obj.id},
+            "port": {"n1kv:profile_id": profile_obj.id}
         }
 
     def test_create_port_public_network(self):
@@ -281,12 +281,13 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_delete_port_public_network()
 
+
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
 
-    _default_tenant = "somebody_else" # Tenant-id determined by underlying
-                                      # DB-plugin test cases. Need to use this
-                                      # one for profile creation
+    _default_tenant = "somebody_else"  # Tenant-id determined by underlying
+                                       # DB-plugin test cases. Need to use this
+                                       # one for profile creation
 
     def setUp(self):
         """
@@ -302,8 +303,8 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
         # The underlying test function needs a profile for a different tenant.
         profile_obj = self._make_test_profile("test-tenant")
         self.more_args = {
-            "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "network": {"n1kv:profile_id": profile_obj.id},
+            "port": {"n1kv:profile_id": profile_obj.id}
         }
         super(TestN1kvNetworks,
               self).test_update_network_set_not_shared_single_tenant()
@@ -327,8 +328,8 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
                                      set_context=True)
             profile_obj = self._make_test_profile("test-tenant")
             self.more_args = {
-                "network" : { "n1kv:profile_id" : profile_obj.id },
-                "port" : { "n1kv:profile_id" : profile_obj.id }
+                "network": {"n1kv:profile_id": profile_obj.id},
+                "port": {"n1kv:profile_id": profile_obj.id}
             }
             res2 = self._create_port('json',
                                      network['network']['id'],
@@ -344,6 +345,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
             port2 = self.deserialize('json', res2)
             self._delete('ports', port1['port']['id'])
             self._delete('ports', port2['port']['id'])
+
 
 class TestN1kvNonDbTest(unittest.TestCase):
     """
@@ -361,5 +363,3 @@ class TestN1kvNonDbTest(unittest.TestCase):
 
     def test_db(self):
         n1kv_db_v2.initialize()
-
-

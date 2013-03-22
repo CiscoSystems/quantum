@@ -138,13 +138,15 @@ class Client(object):
             body.update({'vlan': network[provider.SEGMENTATION_ID]})
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             body.update({'bridgeDomain': network['name'] + '_bd'})
-        return self._post(self.network_segments_path, body=body, params=_params)
+        return self._post(self.network_segments_path, body=body,
+                          params=_params)
 
     def update_network_segment(self, network_segment, body):
         """
         Updates a Nework Segment on the VSM
         """
-        return self._post(self.network_segment_path % (network_segment), body=body)
+        return self._post(self.network_segment_path % (network_segment),
+                          body=body)
 
     def delete_network_segment(self, network_segment, **_params):
         """
@@ -160,19 +162,22 @@ class Client(object):
         body = {'name': profile['name'],
                 'id': profile['id'],
                 'fabricNetworkName': 'test'}
-        return self._post(self.network_segment_pools_path, body=body, params=_params)
+        return self._post(self.network_segment_pools_path, body=body,
+                          params=_params)
 
     def update_network_segment_pool(self, network_segment_pool, body):
         """
         Updates a Network Segment Pool on the VSM
         """
-        return self._post(self.network_segment_pool_path % (network_segment_pool), body=body)
+        return self._post(self.network_segment_pool_path %\
+                          (network_segment_pool), body=body)
 
     def delete_network_segment_pool(self, network_segment_pool, **_params):
         """
         Deletes a Network Segment Pool on the VSM
         """
-        return self._delete(self.network_segment_pool_path % (network_segment_pool))
+        return self._delete(self.network_segment_pool_path %\
+                            (network_segment_pool))
 
     def create_ip_pool(self, subnet, **_params):
         """
@@ -241,7 +246,8 @@ class Client(object):
         elif status_code == httplib.SERVICE_UNAVAILABLE:
             raise exc.VSMConnectionFailed
 
-    def _do_request(self, method, action, body=None, headers=None, params=None):
+    def _do_request(self, method, action, body=None,
+                    headers=None, params=None):
         """
         Perform the HTTP request
         """
