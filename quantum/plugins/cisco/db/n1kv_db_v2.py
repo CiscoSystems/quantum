@@ -423,6 +423,15 @@ def update_vm_network(name, port_count):
     except exc.NoResultFound:
         raise c_exc.VMNetworkNotFound(name=name)
 
+def delete_vm_network(profile_id, network_id):
+    """Deletes a vm network"""
+    session = db.get_session()
+    vm_network = get_vm_network(profile_id, network_id)
+    with session.begin(subtransactions=True):
+        session.delete(vm_network)
+        session.query(n1kv_models_v2.N1kVmNetwork).filter_by(name=vm_network['name']).delete()
+    return vm_network
+
 def create_network_profile(profile):
     """
      Create Network Profile
@@ -438,7 +447,9 @@ def create_network_profile(profile):
                                                         segment_range=profile['segment_range'])
         elif profile['segment_type'] == 'vxlan':
             net_profile = n1kv_models_v2.NetworkProfile(name=profile['name'], segment_type=profile['segment_type'],
-                                                        mcast_ip_index=0, mcast_ip_range=profile['multicast_ip_range'])
+                                                        segment_range=profile['segment_range'], mcast_ip_index=0,
+                                                        mcast_ip_range=profile['multicast_ip_range'])
+        
         session.add(net_profile)
         return net_profile
 
@@ -456,7 +467,7 @@ def delete_network_profile(id):
     with session.begin(subtransactions=True):
         session.delete(profile)
         session.query(n1kv_models_v2.ProfileBinding).filter(n1kv_models_v2.ProfileBinding.profile_id==id).delete()
-
+    return profile
 
 def update_network_profile(id, profile):
     """
@@ -490,6 +501,17 @@ def get_network_profile(id, fields=None):
     except exc.NoResultFound:
         raise c_exc.NetworkProfileIdNotFound(profile_id=id)
 
+def get_network_profile_by_name(name):
+    """
+    Get Network Profile by name.
+    """
+    LOG.debug("get_network_profile_by_name")
+    session = db.get_session()
+    try:
+        profile = session.query(n1kv_models_v2.NetworkProfile).filter_by(name=name).one()
+        return profile
+    except exc.NoResultFound:
+        return None
 
 def _get_network_profiles():
     """
@@ -672,15 +694,16 @@ class NetworkProfile_db_mixin(object):
         return self._make_network_profile_dict(net_profile)
 
     def delete_network_profile(self, context, id):
-        delete_network_profile(id)
+        _profile = delete_network_profile(id)
+        return self._make_network_profile_dict(_profile)
 
     def update_network_profile(self, context, id, network_profile):
         p = network_profile['network_profile']
         if context.is_admin and 'add_tenant' in p:
-            self.add_network_profile_tenant(p.id, p.add_tenant)
+            self.add_network_profile_tenant(id, p['add_tenant'])
             return self._make_network_profile_dict(get_network_profile(id))
         elif context.is_admin and 'remove_tenant' in p:
-            delete_profile_binding(p.add_tenant, p.id)
+            delete_profile_binding(p['remove_tenant'], id)
             return self._make_network_profile_dict(get_network_profile(id))
         else:
             return self._make_network_profile_dict(update_network_profile(id, p))
@@ -696,14 +719,12 @@ class NetworkProfile_db_mixin(object):
         return self._make_network_profile_dict(profile, fields)
 
     def get_network_profiles(self, context, filters=None, fields=None):
-        """if context.is_admin:
-            p = self._get_collection(context, n1kv_models_v2.NetworkProfile,
+        if context.is_admin:
+            return self._get_collection(context, n1kv_models_v2.NetworkProfile,
                                     self._make_network_profile_dict,
                                     filters=filters, fields=fields)
-            return p
-        else:"""
-        p = self._get_network_collection_for_tenant(n1kv_models_v2.NetworkProfile, context.tenant_id)
-        return p
+        else:
+            return self._get_network_collection_for_tenant(n1kv_models_v2.NetworkProfile, context.tenant_id)
 
     def add_network_profile_tenant(self, profile_id, tenant_id):
         """
@@ -885,12 +906,12 @@ class PolicyProfile_db_mixin(object):
         return self._make_policy_profile_dict(profile, fields)
 
     def get_policy_profiles(self, context, filters=None, fields=None):
-        """if  context.is_admin:
+        if  context.is_admin:
             return self._get_collection(context, n1kv_models_v2.PolicyProfile,
                                     self._make_policy_profile_dict,
                                     filters=filters, fields=fields)
-        else:"""
-        return self._get_policy_collection_for_tenant(n1kv_models_v2.PolicyProfile, context.tenant_id)
+        else:
+            return self._get_policy_collection_for_tenant(n1kv_models_v2.PolicyProfile, context.tenant_id)
 
     def update_policy_profile(self, context, id, policy_profile):
         p = policy_profile['policy_profile']
@@ -960,7 +981,7 @@ class PolicyProfile_db_mixin(object):
                             n1kv_models_v2.ProfileBinding.tenant_id == n1kv_models_v2.TENANT_ID_NOT_SET)).\
                 delete(synchronize_session='fetch')
 
-    def _replace_fake_tanant_id_with_real(self, context):
+    def _replace_fake_tenant_id_with_real(self, context):
         """
         Replace fake tenant id for all Policy Profile binding with real admin tenant ID
         :param context:
