@@ -173,6 +173,7 @@ class PolicyProfileIdNotFound(exceptions.QuantumException):
     """Policy Profile cannot be found"""
     message = _("Policy Profile %(profile_id)s could not be found ")
 
+
 class NetworkProfileAlreadyExists(exceptions.QuantumException):
     """Network Profile cannot be created since it already exists"""
     message = _("Network Profile %(profile_id)s "
@@ -188,6 +189,7 @@ class VMNetworkNotFound(exceptions.QuantumException):
     """VM Network cannot be found"""
     message = _("VM Network %(name)s could not be found ")
 
+
 class VxlanIdInUse(exceptions.QuantumException):
     """
     VXLAN Id is in use
@@ -195,11 +197,12 @@ class VxlanIdInUse(exceptions.QuantumException):
     message = _("Unable to create the network. "
                 "The VXLAN ID %(vxlan_id)s is in use.")
 
+
 class VSMConnectionFailed(exceptions.QuantumException):
     """Connection to VSM failed"""
     message = _("Connection to VSM failed: %(reason)s")
 
+
 class VSMError(exceptions.QuantumException):
     """Internal VSM error"""
     message = _("Internal VSM Error: %(reason)s")
-

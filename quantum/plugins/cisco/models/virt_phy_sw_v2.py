@@ -35,6 +35,7 @@ from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum import quantum_plugin_base_v2
+from quantum.db import api as db_api
 
 
 LOG = logging.getLogger(__name__)
@@ -48,10 +49,12 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     MANAGE_STATE = True
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "profile", "n1kv_profile", "router"]
+    supported_extension_aliases = ["provider", "profile",
+                                   "n1kv_profile", "router"]
     _plugins = {}
     _inventory = {}
-    _methods_to_delegate = ['get_network', 'get_networks',
+    _methods_to_delegate = ['create_network_bulk',
+                            'get_network', 'get_networks',
                             'create_port_bulk',
                             'get_port', 'get_ports',
                             'create_subnet', 'create_subnet_bulk',
@@ -64,8 +67,6 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         configured, and load the inventories those device plugins for which the
         inventory is configured
         """
-        cdb.initialize()
-        cred.Store.initialize()
         for key in conf.PLUGINS[const.PLUGINS].keys():
             plugin_obj = conf.PLUGINS[const.PLUGINS][key]
             self._plugins[key] = importutils.import_object(plugin_obj)
@@ -77,12 +78,21 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                 LOG.debug(_("Loaded device inventory %s\n"),
                           conf.PLUGINS[const.INVENTORY][key])
 
-        if hasattr(self._plugins[const.VSWITCH_PLUGIN],
-                   "supported_extension_aliases"):
+        if ((const.VSWITCH_PLUGIN in self._plugins) and
+            hasattr(self._plugins[const.VSWITCH_PLUGIN],
+                    "supported_extension_aliases")):
             self.supported_extension_aliases.extend(
                 self._plugins[const.VSWITCH_PLUGIN].
                 supported_extension_aliases)
 
+        # At this point, all the database models should have been loaded. It's
+        # possible that configure_db() may have been called by one of the
+        # plugins loaded in above. Otherwise, this call is to make sure that
+        # the database is initialized
+        db_api.configure_db()
+
+        # Initialize credential store after database initialization
+        cred.Store.initialize()
         LOG.debug(_("%(module)s.%(name)s init done"),
                   {'module': __name__,
                    'name': self.__class__.__name__})
@@ -90,20 +100,23 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     def __getattribute__(self, name):
         """
         This delegates the calls to the methods implemented only by the OVS
-        sub-plugin.
+        sub-plugin. Note: Currently, bulking is handled by the caller
+        (PluginV2), and this model class expects to receive only non-bulking
+        calls. If, however, a bulking call is made, this will method will
+        delegate the call to the OVS plugin.
         """
-        super_getattr = super(VirtualPhysicalSwitchModelV2,
-                              self).__getattribute__
-        methods = super_getattr('_methods_to_delegate')
+        super_getattribute = super(VirtualPhysicalSwitchModelV2,
+                                   self).__getattribute__
+        methods = super_getattribute('_methods_to_delegate')
 
         if name in methods:
-            plugin = super_getattr('_plugins')[const.VSWITCH_PLUGIN]
+            plugin = super_getattribute('_plugins')[const.VSWITCH_PLUGIN]
             return getattr(plugin, name)
 
         try:
-            return super_getattr(name)
+            return super_getattribute(name)
         except AttributeError:
-            plugin = super_getattr('_plugins')[const.VSWITCH_PLUGIN]
+            plugin = super_getattribute('_plugins')[const.VSWITCH_PLUGIN]
             return getattr(plugin, name)
 
     def _func_name(self, offset=0):
@@ -232,24 +245,6 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     ovs_output[0]['id'], vlan_name, vlan_id,
                     {'vlan_ids': vlanids}]
             return ovs_output[0]
-        except:
-            # TODO (Sumit): Check if we need to perform any rollback here
-            raise
-
-    def create_network_bulk(self, context, networks):
-        """
-        Perform this operation in the context of the configured device
-        plugins.
-        """
-        LOG.debug(_("create_network_bulk() called"))
-        try:
-            args = [context, networks]
-            ovs_output = self._plugins[
-                const.VSWITCH_PLUGIN].create_network_bulk(context, networks)
-            LOG.debug(_("ovs_output: %s"), ovs_output)
-            vlanids = self._get_all_segmentation_ids()
-            ovs_networks = ovs_output
-            return ovs_output
         except:
             # TODO (Sumit): Check if we need to perform any rollback here
             raise

@@ -204,7 +204,6 @@ class TestN1kvBasicGet(test_plugin.TestBasicGet,
         super(TestN1kvBasicGet, self).setUp()
 
 
-
 class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
                            N1kvPluginTestCase):
     def setUp(self):
@@ -268,12 +267,13 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_delete_port_public_network()
 
+
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
 
-    _default_tenant = "somebody_else" # Tenant-id determined by underlying
-                                      # DB-plugin test cases. Need to use this
-                                      # one for profile creation
+    _default_tenant = "somebody_else"  # Tenant-id determined by underlying
+                                       # DB-plugin test cases. Need to use this
+                                       # one for profile creation
 
     def setUp(self):
         """
@@ -334,6 +334,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
             self._delete('ports', port1['port']['id'])
             self._delete('ports', port2['port']['id'])
 
+
 class TestN1kvNonDbTest(unittest.TestCase):
     """
     This test class here can be used to test the plugin directly,
@@ -350,5 +351,3 @@ class TestN1kvNonDbTest(unittest.TestCase):
 
     def test_db(self):
         n1kv_db_v2.initialize()
-
-

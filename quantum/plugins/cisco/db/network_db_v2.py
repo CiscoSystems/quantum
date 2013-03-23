@@ -29,10 +29,6 @@ from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 
 
-def initialize():
-    db.configure_db()
-
-
 def create_vlanids():
     """Prepopulates the vlan_bindings table"""
     LOG.debug("create_vlanids() called")
