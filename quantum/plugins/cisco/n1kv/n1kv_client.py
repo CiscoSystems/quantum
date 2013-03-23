@@ -105,10 +105,13 @@ class Client(object):
     network_segment_pool_path = "/fabric-network-definition/%s"
     ip_pools_path = "/ip-address-pool"
     ip_pool_path = "/ip-address-pool/%s"
-    ports_path = "/port"
-    port_path = "/port/%s"
+    ports_path = "/vm-network/%s/ports"
+    port_path = "/vm-network/%s/ports/%s"
+    vm_networks_path = "/vm-network"
+    vm_network_path = "/vm-network/%s"
     bridge_domains_path = "/bridge-domain"
     bridge_domain_path = "/bridge-domain/%s"
+    fabric_networks_path = "/fabric-network"
 
     def list_profiles(self, **_params):
         """
@@ -124,6 +127,15 @@ class Client(object):
                 'segmentId': network[provider.SEGMENTATION_ID],
                 'groupIp': network[n1kv_profile.MULTICAST_IP], }
         return self._post(self.bridge_domains_path, body=body, params=_params)
+
+    def delete_bridge_domain(self, name, **_params):
+        """
+        Deletes a Bridge Domain on VSM
+        :param network:
+        :param _params:
+        :return:
+        """
+        return self._delete(self.bridge_domain_path % (name))
 
     def create_network_segment(self, network, profile, **_params):
         """
@@ -150,6 +162,14 @@ class Client(object):
         Deletes a Nework Segment on the VSM
         """
         return self._delete(self.network_segment_path % (network_segment))
+
+    def create_fabric_network(self, profile, **_params):
+        """
+        Creates a Fabric Network on the VSM
+        """
+        LOG.debug("fabric network")
+        body = {'name': profile['name']}
+        return self._post(self.fabric_networks_path, body=body, params=_params)
 
     def create_network_segment_pool(self, profile, **_params):
         """
@@ -178,15 +198,50 @@ class Client(object):
         Creates an ip-pool on the VSM
         """
         cidr = {'0': '0.0.0.0',
+                '1': '128.0.0.0',
+                '2': '192.0.0.0',
+                '3': '224.0.0.0',
+                '4': '240.0.0.0',
+                '5': '248.0.0.0',
+                '6': '252.0.0.0',
+                '7': '254.0.0.0',
                 '8': '255.0.0.0',
+                '9': '255.128.0.0',
+                '10': '255.192.0.0',
+                '11': '255.224.0.0',
+                '12': '255.240.0.0',
+                '13': '255.248.0.0',
+                '14': '255.252.0.0',
+                '15': '255.254.0.0',
                 '16': '255.255.0.0',
+                '17': '255.255.128.0',
+                '18': '255.255.192.0',
+                '19': '255.255.224.0',
+                '20': '255.255.240.0',
+                '21': '255.255.248.0',
+                '22': '255.255.252.0',
+                '23': '255.255.254.0',
                 '24': '255.255.255.0',
-                '32': '255.255.255.255'}
+                '25': '255.255.255.128',
+                '26': '255.255.255.192',
+                '27': '255.255.255.224',
+                '28': '255.255.255.240',
+                '29': '255.255.255.248',
+                '30': '255.255.255.252',
+                '31': '255.255.255.254',
+                '32': '255.255.255.255',}
 
         if subnet['cidr']:
             netmask = cidr[subnet['cidr'].split('/')[1]]
         else:
             netmask = ''
+
+        if subnet['allocation_pools']:
+            address_range_start = subnet['allocation_pools'][0]['start']
+            address_range_end   = subnet['allocation_pools'][0]['end']
+        else:
+            address_range_start = None
+            address_range_end   = None
 
         body = {'dhcp': subnet['enable_dhcp'],
                 'addressRangeStart': subnet['allocation_pools'][0]['start'],
@@ -202,19 +257,37 @@ class Client(object):
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
-    def create_n1kv_port(self, port, name, policy_profile, **_params):
+    def create_vm_network(self, port, name, policy_profile, **_params):
         """
-        Creates a Port on the VSM
+        Creates a VM Network on the VSM
+        :param port:
+        :param name:
+        :param policy_profile:
+        :return:
         """
         body = {'name': name,
-                'id': port['id'],
                 'tenantId': port['tenant_id'],
                 'vmNetworkDefinition': port['network_id'],
                 'portProfile': policy_profile['name'],
-                'portProfileId': port[n1kv_profile.PROFILE_ID],
-                'portId': port['id'],
+                'portProfileId': policy_profile['id'],
+                }
+        return self._post(self.vm_networks_path, body=body, params=_params)
+
+    def delete_vm_network(self, vm_network_name):
+        """
+        Deletes a VM Network on the VSM
+        :param vm_network_name:
+        :return:
+        """
+        return self._delete(self.vm_network_path % (vm_network_name))
+
+    def create_n1kv_port(self, port, name, **_params):
+        """
+        Creates a Port on the VSM
+        """
+        body = {'id': port['id'],
                 'macAddress': port['mac_address']}
-        return self._post(self.ports_path, body=body, params=_params)
+        return self._post(self.ports_path % (name), body=body, params=_params)
 
     def update_n1kv_port(self, port, body):
         """
@@ -222,11 +295,11 @@ class Client(object):
         """
         return self._post(self.port_path % (port), body=body)
 
-    def delete_n1kv_port(self, port, **_params):
+    def delete_n1kv_port(self, vm_network_name, port_id, **_params):
         """
         Deletes a Port on the VSM
         """
-        return self._delete(self.port_path % (port))
+        return self._delete(self.port_path % ((vm_network_name), (port_id)))
 
     def __init__(self, **kwargs):
         """ Initialize a new client for the Plugin v2.0. """
