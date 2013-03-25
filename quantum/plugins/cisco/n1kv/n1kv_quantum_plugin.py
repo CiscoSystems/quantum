@@ -50,6 +50,8 @@ from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 
 from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
+from quantum.plugins.cisco.extensions import network_profile
+from quantum.plugins.cisco.extensions import policy_profile
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.db import n1kv_db_v2
@@ -204,7 +206,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "profile", "n1kv_profile", "network_profile", "policy_profile", "router"]
+    supported_extension_aliases = ["provider", "n1kv_profile", "network_profile", "policy_profile", "router"]
 
     def __init__(self, configfile=None):
         """
@@ -224,6 +226,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if self.enable_tunneling:
             self._parse_vxlan_id_ranges()
             n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
+        # If no api_extensions_path is provided set the following
+        if not quantum_cfg.CONF.api_extensions_path:
+            quantum_cfg.CONF.set_override(
+                'api_extensions_path',
+                'quantum/plugins/cisco/extensions')
         # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed

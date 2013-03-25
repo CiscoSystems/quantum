@@ -21,7 +21,7 @@ RESOURCE_ATTRIBUTE_MAP = {
 }
 
 
-class Policyprofile(extensions.ExtensionDescriptor):
+class Policy_profile(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_name(cls):
