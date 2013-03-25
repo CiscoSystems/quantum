@@ -16,11 +16,12 @@
 import unittest
 import httplib
 
+from mock import patch
+
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.tests.unit import test_db_plugin as test_plugin
-from quantum.plugins.cisco.n1kv import n1kv_quantum_plugin
 
 from quantum.plugins.cisco.n1kv import n1kv_client
 from quantum.plugins.cisco.db import network_db_v2 as cdb
@@ -29,99 +30,46 @@ from quantum import context
 import quantum.db.api as db
 
 
-#
-# Monkey patch the HTTP library so that interactions with Cisco's VSM
-# can be easily mocked.
-#
 class FakeResponse(object):
     """
-    This object is returned instead of a normal HTTP response.
+    This object is returned by mocked httplib instead of a normal response.
 
-    Initialize it with the status code and buffer contents you wish to return.
+    Initialize it with the status code, content type and buffer contents 
+    you wish to return.
 
     """
-    def __init__(self, status, response_text):
+    def __init__(self, status, response_text, content_type):
         self.buffer = response_text
         self.status = status
+        self.status_int = status
+        self.content_type = content_type
 
     def read(self, *args, **kwargs):
         return self.buffer
 
-class FakeHTTPConnection(object):
-    """
-    This object is used instead of a normal HTTP connection.
-
-    Returns the fake-response.
-
-    """
-    # After mocking the FakeHTTPConnection class in place of the real
-    # one, you can set these class attributes to the value you need.
-    DEFAULT_RESP_BODY = ""
-    DEFAULT_RESP_CODE = httplib.OK
-
-    def __init__(self, *args, **kwargs):
-        # Not doing anything, but need to be able to accept parameters,
-        # since standard Connection object does.
-        pass
-
-    def __getattr__(self, name):
-        # Return a dummy function that can take any kind of parameters, so
-        # that we can deal with whatever function call may be thrown at us.
-        # We are only interested in providing real implementation of a few
-        # specific functions, so the rest should just be handled quietly
-        # by the dummy function.
-        return self.__dummy
-
-    def __dummy(self, *args, **kwargs):
-        # Stand-in for any function call that we don't explicitly define.
-        return None
-
-    def request(self, *args, **kwargs):
-        # Don't need to do much for now, could be more in the future.
-        print "@@@@ request: ", args, kwargs
-
-    def getresponse(self, *args, **kwargs):
-        # Return an acceptable response as we may have received it from
-        # the VSM.
-        print "@@@@ getresponse: ", args, kwargs
-        return FakeResponse(FakeHTTPConnection.DEFAULT_RESP_CODE,
-                            FakeHTTPConnection.DEFAULT_RESP_BODY)
-
-# Override the ordinary HTTP connection object with our fake.
-n1kv_client.httplib.HTTPConnection = FakeHTTPConnection
-
-
-def _fake_get_vsm_hosts(self, tenant_id):
-    """
-    Replacement for a function in the N1KV client: Return VSM IP addresses.
-
-    This normally requires more complicated interactions with the VSM,
-    so we just shortcut all of this by returning a dummy result.
-
-    """
-    return [ "127.0.0.1" ]
-
-# Override an internal function in the N1KV client.
-n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
-
-
-def _fake_get_credential_name(tenant_id, cred_name):
-    """
-    Replacement for a function in the Db module: Return user credentials.
-
-    """
-    return { "user_name" : "admin", "password" : "admin_password" }
-
-# Override an internal function in the DB module.
-cdb.get_credential_name = _fake_get_credential_name
-
-
+    def getheader(self, *args, **kwargs):
+        return self.content_type
+        
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
                     'n1kv_quantum_plugin.N1kvQuantumPluginV2')
 
     _default_tenant = "some_tenant"
+
+    DEFAULT_RESP_BODY = ""
+    DEFAULT_RESP_CODE = httplib.OK
+    DEFAULT_CONTENT_TYPE = ""
+
+    def _make_test_policy_profile(self, id):
+        """
+        Creates a policy profile record for testing purpose.
+
+        """
+        profile = {'id': id,
+                   'name': 'TestGrizzlyPP'}
+        profile_obj = n1kv_db_v2.create_policy_profile(profile)
+        return profile_obj
 
     def _make_test_profile(self, tenant_id):
         """
@@ -130,11 +78,14 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
         alloc_obj.allocated = False
-        profile_obj = n1kv_profile_db.N1kvProfile_db()
-        profile_obj.tenant_id = tenant_id
-        profile_obj.segment_range = "100-900"
-        profile_obj.segment_type = 'vlan'
-        profile_obj.tunnel_id = 200
+        #profile_obj = n1kv_profile_db.N1kvProfile_db()
+        #profile_obj.tenant_id = tenant_id
+        segment_range = "100-900"
+        segment_type = 'vlan'
+        tunnel_id = 200
+        profile_obj = n1kv_models_v2.NetworkProfile("test_np",
+                                                    segment_type,
+                                                    segment_range)
         session = db.get_session()
         session.add(profile_obj)
         session.flush()
@@ -145,6 +96,7 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         First step is to define an acceptable response from the VSM to
         our requests. This needs to be done BEFORE the setUp() function
         of the super-class is called.
+
         This default here works for many cases. If you need something
         extra, please define your own setUp() function in your test class,
         and set your DEFAULT_RESPONSE value also BEFORE calling the
@@ -152,8 +104,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         a value already, it will not be overwritten by this code.
 
         """
-        if not FakeHTTPConnection.DEFAULT_RESP_BODY:
-            FakeHTTPConnection.DEFAULT_RESP_BODY = \
+        if not self.DEFAULT_RESP_BODY:
+            self.DEFAULT_RESP_BODY = \
             """<?xml version="1.0" encoding="UTF-8"?>
             <set name="virtual_port_profile_set">
               <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB"
@@ -180,14 +132,48 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
               </instance>
             </set>
             """
+
+        # Creating a mock HTTP connection object for httplib. The N1KV client
+        # interacts with the VSM via HTTP. Since we don't have a VSM running
+        # in the unit tests, we need to 'fake' it by patching the HTTP library
+        # itself. We install a patch for a fake HTTP connection class.
+        # Using __name__ to avoid having to enter the full module path.
+        http_patcher = patch(n1kv_client.httplib.__name__ + ".HTTPConnection")
+        FakeHttpConnection = http_patcher.start()
+        self.addCleanup(http_patcher.stop)
+        # Now define the return values for a few functions that may be called
+        # on any instance of the fake HTTP connection class.
+        instance = FakeHttpConnection.return_value
+        instance.getresponse.return_value = \
+                                           FakeResponse(self.DEFAULT_RESP_CODE,
+                                                        self.DEFAULT_RESP_BODY,
+                                                        'application/xml')
+        instance.request.return_value = None
+
+        # Patch some internal functions in a few other parts of the system.
+        # These help us move along, without having to mock up even more systems
+        # in the background.
+        get_vsm_hosts_patcher = patch(n1kv_client.__name__ + \
+                                      ".Client._get_vsm_hosts")
+        fake_get_vsm_hosts = get_vsm_hosts_patcher.start()
+        self.addCleanup(get_vsm_hosts_patcher.stop)
+        fake_get_vsm_hosts.return_value = [ "127.0.0.1" ]
+
+        get_cred_name_patcher = patch(cdb.__name__ + ".get_credential_name")
+        fake_get_cred_name = get_cred_name_patcher.start()
+        self.addCleanup(get_cred_name_patcher.stop)
+        fake_get_cred_name.return_value = \
+                       { "user_name" : "admin", "password" : "admin_password" }
+
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
         profile_obj = self._make_test_profile(self.tenant_id)
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
 
     def test_plugin(self):
@@ -216,7 +202,6 @@ class TestN1kvBasicGet(test_plugin.TestBasicGet,
 
         """
         super(TestN1kvBasicGet, self).setUp()
-
 
 
 class TestN1kvHTTPResponse(test_plugin.TestV2HTTPResponse,
@@ -250,9 +235,10 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
 
         """
         profile_obj = self._make_test_profile(tenant_id)
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')    
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
 
     def test_create_port_public_network(self):
@@ -281,12 +267,13 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
         self._make_other_tenant_profile("another_tenant")
         super(TestN1kvPorts, self).test_delete_port_public_network()
 
+
 class TestN1kvNetworks(test_plugin.TestNetworksV2,
                        N1kvPluginTestCase):
 
-    _default_tenant = "somebody_else" # Tenant-id determined by underlying
-                                      # DB-plugin test cases. Need to use this
-                                      # one for profile creation
+    _default_tenant = "somebody_else"  # Tenant-id determined by underlying
+                                       # DB-plugin test cases. Need to use this
+                                       # one for profile creation
 
     def setUp(self):
         """
@@ -301,9 +288,10 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
     def test_update_network_set_not_shared_single_tenant(self):
         # The underlying test function needs a profile for a different tenant.
         profile_obj = self._make_test_profile("test-tenant")
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
-            "port" : { "n1kv:profile_id" : profile_obj.id }
+            "port" : { "n1kv:profile_id" : policy_profile_obj.id }
         }
         super(TestN1kvNetworks,
               self).test_update_network_set_not_shared_single_tenant()
@@ -326,9 +314,10 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
                                      tenant_id='somebody_else',
                                      set_context=True)
             profile_obj = self._make_test_profile("test-tenant")
+            policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BB99')
             self.more_args = {
                 "network" : { "n1kv:profile_id" : profile_obj.id },
-                "port" : { "n1kv:profile_id" : profile_obj.id }
+                "port" : { "n1kv:profile_id" : policy_profile_obj.id }
             }
             res2 = self._create_port('json',
                                      network['network']['id'],
@@ -344,6 +333,7 @@ class TestN1kvNetworks(test_plugin.TestNetworksV2,
             port2 = self.deserialize('json', res2)
             self._delete('ports', port1['port']['id'])
             self._delete('ports', port2['port']['id'])
+
 
 class TestN1kvNonDbTest(unittest.TestCase):
     """
@@ -361,5 +351,3 @@ class TestN1kvNonDbTest(unittest.TestCase):
 
     def test_db(self):
         n1kv_db_v2.initialize()
-
-
