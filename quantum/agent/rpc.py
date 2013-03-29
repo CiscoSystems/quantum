@@ -58,11 +58,11 @@ class PluginReportStateAPI(proxy.RpcProxy):
             topic=topic, default_version=self.BASE_RPC_API_VERSION)
 
     def report_state(self, context, agent_state):
-        return self.cast(context,
+        return self.call(context,
                          self.make_msg('report_state',
                                        agent_state={'agent_state':
                                                     agent_state},
-                                       time=timeutils.utcnow()),
+                                       time=timeutils.strtime()),
                          topic=self.topic)
 
 

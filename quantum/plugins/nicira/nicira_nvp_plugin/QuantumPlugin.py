@@ -98,11 +98,6 @@ def parse_config():
         NVPCluster objects, 'plugin_config' is a dictionary with plugin
         parameters (currently only 'max_lp_per_bridged_ls').
     """
-    # Warn if metadata_dhcp_host_route option is specified
-    if cfg.CONF.metadata_dhcp_host_route:
-        LOG.warning(_("The metadata_dhcp_host_route is now obsolete, and "
-                      "will have no effect. Instead, please set the "
-                      "enable_isolated_metadata option in dhcp_agent.ini"))
     nvp_conf = config.ClusterConfigOptions(cfg.CONF)
     cluster_names = config.register_cluster_groups(nvp_conf)
     nvp_conf.log_opt_values(LOG, logging.DEBUG)
@@ -132,7 +127,7 @@ def parse_config():
         cfg.CONF.set_override(
             'api_extensions_path',
             'quantum/plugins/nicira/nicira_nvp_plugin/extensions')
-    if (cfg.CONF.NVP.enable_metadata_access_network and
+    if (cfg.CONF.NVP.metadata_mode == "access_network" and
         not cfg.CONF.allow_overlapping_ips):
         LOG.warn(_("Overlapping IPs must be enabled in order to setup "
                    "the metadata access network. Metadata access in "
@@ -1048,7 +1043,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             except q_exc.NetworkNotFound:
                 continue
             pairs.append((c, lswitches))
-        if len(pairs) == 0:
+        if not pairs:
             raise q_exc.NetworkNotFound(net_id=netw_id)
         LOG.debug(_("Returning pairs for network: %s"), pairs)
         return pairs
@@ -1172,7 +1167,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # do not make the case in which switches are found in NVP
         # but not in Quantum catastrophic.
-        if len(nvp_lswitches):
+        if nvp_lswitches:
             LOG.warning(_("Found %s logical switches not bound "
                         "to Quantum networks. Quantum and NVP are "
                         "potentially out of sync"), len(nvp_lswitches))
@@ -1304,7 +1299,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             lports.append(quantum_lport)
         # do not make the case in which ports are found in NVP
         # but not in Quantum catastrophic.
-        if len(nvp_lports):
+        if nvp_lports:
             LOG.warning(_("Found %s logical ports not bound "
                           "to Quantum ports. Quantum and NVP are "
                           "potentially out of sync"), len(nvp_lports))
@@ -1330,11 +1325,19 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._enforce_set_auth(context, port,
                                    self.port_security_enabled_create)
         port_data = port['port']
+        notify_dhcp_agent = False
         with context.session.begin(subtransactions=True):
             # First we allocate port in quantum database
             quantum_db = super(NvpPluginV2, self).create_port(context, port)
             # Update fields obtained from quantum db (eg: MAC address)
             port["port"].update(quantum_db)
+            # metadata_dhcp_host_route
+            if (cfg.CONF.NVP.metadata_mode == "dhcp_host_route" and
+                quantum_db.get('device_owner') == constants.DEVICE_OWNER_DHCP):
+                if (quantum_db.get('fixed_ips') and
+                    len(quantum_db['fixed_ips'])):
+                    notify_dhcp_agent = self._ensure_metadata_host_route(
+                        context, quantum_db['fixed_ips'][0])
             # port security extension checks
             (port_security, has_ip) = self._determine_port_security_and_has_ip(
                 context, port_data)
@@ -1380,6 +1383,9 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._extend_port_qos_queue(context, port_data)
         net = self.get_network(context, port_data['network_id'])
         self.schedule_network(context, net)
+        if notify_dhcp_agent:
+            self._send_subnet_update_end(
+                context, quantum_db['fixed_ips'][0]['subnet_id'])
         return port_data
 
     def update_port(self, context, id, port):
@@ -1477,27 +1483,34 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # a l3 router.  If so, we should prevent deletion here
         if l3_port_check:
             self.prevent_l3_port_deletion(context, id)
-        quantum_db_port = self._get_port(context, id)
+        quantum_db_port = self.get_port(context, id)
         # Perform the same check for ports owned by layer-2 gateways
         if nw_gw_port_check:
             self.prevent_network_gateway_port_deletion(context,
                                                        quantum_db_port)
         port_delete_func = self._port_drivers['delete'].get(
-            quantum_db_port.device_owner,
+            quantum_db_port['device_owner'],
             self._port_drivers['delete']['default'])
 
         port_delete_func(context, quantum_db_port)
         self.disassociate_floatingips(context, id)
+        notify_dhcp_agent = False
         with context.session.begin(subtransactions=True):
             queue = self._get_port_queue_bindings(context, {'port_id': [id]})
-            if (cfg.CONF.metadata_dhcp_host_route and
-                quantum_db_port.device_owner == constants.DEVICE_OWNER_DHCP):
-                    self._ensure_metadata_host_route(
-                        context, quantum_db_port.fixed_ips[0], is_delete=True)
+            # metadata_dhcp_host_route
+            port_device_owner = quantum_db_port['device_owner']
+            if (cfg.CONF.NVP.metadata_mode == "dhcp_host_route" and
+                port_device_owner == constants.DEVICE_OWNER_DHCP):
+                    notify_dhcp_agent = self._ensure_metadata_host_route(
+                        context, quantum_db_port['fixed_ips'][0],
+                        is_delete=True)
             super(NvpPluginV2, self).delete_port(context, id)
             # Delete qos queue if possible
             if queue:
                 self.delete_qos_queue(context, queue[0]['queue_id'], False)
+        if notify_dhcp_agent:
+            self._send_subnet_update_end(
+                context, quantum_db_port['fixed_ips'][0]['subnet_id'])
 
     def get_port(self, context, id, fields=None):
         with context.session.begin(subtransactions=True):
@@ -1561,7 +1574,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                         msg = (_("Network '%s' is not a valid external "
                                  "network") % network_id)
                         raise q_exc.BadRequest(resource='router', msg=msg)
-                    if len(ext_net.subnets):
+                    if ext_net.subnets:
                         ext_subnet = ext_net.subnets[0]
                         nexthop = ext_subnet.gateway_ip
             cluster = self._find_target_cluster(router)
@@ -1610,7 +1623,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                         msg = (_("Network '%s' is not a valid external "
                                  "network") % network_id)
                         raise q_exc.BadRequest(resource='router', msg=msg)
-                    if len(ext_net.subnets):
+                    if ext_net.subnets:
                         ext_subnet = ext_net.subnets[0]
                         nexthop = ext_subnet.gateway_ip
             cluster = self._find_target_cluster(router)
@@ -1721,7 +1734,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # do not make the case in which routers are found in NVP
         # but not in Quantum catastrophic.
-        if len(nvp_lrouters):
+        if nvp_lrouters:
             LOG.warning(_("Found %s logical routers not bound "
                           "to Quantum routers. Quantum and NVP are "
                           "potentially out of sync"), len(nvp_lrouters))
@@ -1748,7 +1761,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         results = nvplib.query_lswitch_lports(
             cluster, '*',
             filters={'tag': port_id, 'tag_scope': 'q_port_id'})
-        if len(results):
+        if results:
             ls_port = results[0]
         else:
             raise nvp_exc.NvpPluginException(
@@ -1825,7 +1838,7 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             cluster, '*', relations="LogicalPortAttachment",
             filters={'tag': port_id, 'tag_scope': 'q_port_id'})
         lrouter_port_id = None
-        if len(results):
+        if results:
             lport = results[0]
             attachment_data = lport['_relations'].get('LogicalPortAttachment')
             lrouter_port_id = (attachment_data and
@@ -1940,7 +1953,11 @@ class NvpPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             try:
                 port_qry.filter_by(fixed_port_id=fip['port_id']).one()
                 raise l3.FloatingIPPortAlreadyAssociated(
-                    port_id=fip['port_id'])
+                    port_id=fip['port_id'],
+                    fip_id=floatingip_db['id'],
+                    floating_ip_address=floatingip_db['floating_ip_address'],
+                    fixed_ip=floatingip_db['fixed_ip_address'],
+                    net_id=floatingip_db['floating_network_id'])
             except sa_exc.NoResultFound:
                 pass
             port_id, internal_ip, router_id = self.get_assoc_data(
