@@ -332,7 +332,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
             raise cexc.CredentialNotFound(tenant_id=tenant_id,
                                           credential_id=credential_id)
         return credential
-
+    '''
     def create_credential(self, tenant_id, credential_name, user_name,
                           password):
         """Create a new credential"""
@@ -351,7 +351,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
                                           credential_id=credential_id)
         credential = cdb.remove_credential(tenant_id, credential_id)
         return credential
-
+    '''
     def rename_credential(self, tenant_id, credential_id, new_name):
         """Rename the particular credential resource"""
         LOG.debug(_("rename_credential() called"))

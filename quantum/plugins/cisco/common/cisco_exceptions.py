@@ -72,20 +72,17 @@ class QosNameAlreadyExists(exceptions.QuantumException):
 
 class CredentialNotFound(exceptions.QuantumException):
     """Credential with this ID cannot be found"""
-    message = _("Credential %(credential_id)s could not be found "
-                "for tenant %(tenant_id)s")
+    message = _("Credential %(credential_id)s could not be found ")
 
 
 class CredentialNameNotFound(exceptions.QuantumException):
     """Credential Name could not be found"""
-    message = _("Credential %(credential_name)s could not be found "
-                "for tenant %(tenant_id)s")
+    message = _("Credential %(credential_name)s could not be found ")
 
 
 class CredentialAlreadyExists(exceptions.QuantumException):
     """Credential ID already exists"""
-    message = _("Credential %(credential_id)s already exists "
-                "for tenant %(tenant_id)s")
+    message = _("Credential %(credential_id)s already exists ")
 
 
 class NexusPortBindingNotFound(exceptions.QuantumException):

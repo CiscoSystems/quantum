@@ -76,7 +76,6 @@ def _fake_get_credential_name(tenant_id, cred_name):
 cdb.get_credential_name = _fake_get_credential_name
 
 
->>>>>>> 3632c83... PEP8 changes.
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'

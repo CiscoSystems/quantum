@@ -51,10 +51,13 @@ from quantum.openstack.common.rpc import proxy
 from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
 from quantum.plugins.cisco.extensions import network_profile
 from quantum.plugins.cisco.extensions import policy_profile
+from quantum.plugins.cisco.extensions import credential
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
+from quantum.plugins.cisco import l2network_plugin_configuration as conf
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
+from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.n1kv import n1kv_configuration as n1kv_conf
 from quantum.plugins.cisco.n1kv import n1kv_client
 
@@ -192,7 +195,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
                          # n1kv_profile_db.N1kvProfile_db_mixin,
                          n1kv_db_v2.NetworkProfile_db_mixin,
-                         n1kv_db_v2.PolicyProfile_db_mixin):
+                         n1kv_db_v2.PolicyProfile_db_mixin,
+                         network_db_v2.Credential_db_mixin):
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
@@ -205,7 +209,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
     __native_bulk_support = True
-    supported_extension_aliases = ["provider", "n1kv_profile", "network_profile", "policy_profile", "router"]
+    supported_extension_aliases = ["provider",
+                                   "n1kv_profile", "network_profile",
+                                   "policy_profile", "router", "credential"]
 
     def __init__(self, configfile=None):
         """
@@ -791,7 +797,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 tenant_id = port['port']['tenant_id']
                 instance_id = port['port']['device_id']
                 device_owner = port['port']['device_owner']
-
                 port_id = self._get_instance_port_id(tenant_id, instance_id)
                 LOG.debug("PORT UUID: %s\n", port_id)
                 pt = self.get_port(context, port_id['port_id'])
