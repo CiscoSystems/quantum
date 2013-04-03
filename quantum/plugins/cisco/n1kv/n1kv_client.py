@@ -411,7 +411,7 @@ class Client(object):
         ip address.
         """
         host_list = []
-        credentials = cdb.get_all_n1kv_credentials(tenant_id)
+        credentials = cdb.get_all_n1kv_credentials()
         for cr in credentials:
             host_list.append(cr[const.CREDENTIAL_NAME])
         return host_list

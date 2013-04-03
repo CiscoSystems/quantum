@@ -44,7 +44,6 @@ class Store(object):
             for id in _creds_dictionary[id_type].keys():
                 try:
                     cdb.add_credential(
-                        TENANT,
                         id,
                         _creds_dictionary[id_type][id][const.USERNAME],
                         _creds_dictionary[id_type][id][const.PASSWORD],
@@ -58,28 +57,28 @@ class Store(object):
     @staticmethod
     def put_credential(cred_name, username, password):
         """Set the username and password"""
-        credential = cdb.add_credential(TENANT, cred_name, username, password)
+        credential = cdb.add_credential(cred_name, username, password)
 
     @staticmethod
     def get_username(cred_name):
         """Get the username"""
-        credential = cdb.get_credential_name(TENANT, cred_name)
+        credential = cdb.get_credential_name(cred_name)
         return credential[const.CREDENTIAL_USERNAME]
 
     @staticmethod
     def get_password(cred_name):
         """Get the password"""
-        credential = cdb.get_credential_name(TENANT, cred_name)
+        credential = cdb.get_credential_name(cred_name)
         return credential[const.CREDENTIAL_PASSWORD]
 
     @staticmethod
     def get_credential(cred_name):
         """Get the username and password"""
-        credential = cdb.get_credential_name(TENANT, cred_name)
+        credential = cdb.get_credential_name(cred_name)
         return {const.USERNAME: const.CREDENTIAL_USERNAME,
                 const.PASSWORD: const.CREDENTIAL_PASSWORD}
 
     @staticmethod
     def delete_credential(cred_name):
         """Delete a credential"""
-        cdb.remove_credential(TENANT, cred_name)
+        cdb.remove_credential(cred_name)

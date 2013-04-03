@@ -1,7 +1,7 @@
+"""
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-# Copyright 2011 Cisco Systems, Inc.
-# All rights reserved.
+#
+# Copyright 2012 Cisco Systems, Inc.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -15,23 +15,43 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
-# @author: Ying Liu, Cisco Systems, Inc.
+# @author: Abhishek Raut, Cisco Systems, Inc
 #
+"""
 
-from webob import exc
+from abc import abstractmethod
 
-from quantum.api import api_common as common
+from oslo.config import cfg
+
+from quantum import manager
+from quantum import quota
+from quantum.common import exceptions as qexception
+from quantum.api.v2 import attributes as attr
+from quantum.api.v2 import base
 from quantum.api import extensions
-from quantum.manager import QuantumManager
-from quantum.plugins.cisco.common import cisco_exceptions as exception
-from quantum.plugins.cisco.common import cisco_faults as faults
-from quantum.plugins.cisco.extensions import (_credential_view as
-                                              credential_view)
-from quantum import wsgi
+
+
+# Attribute Map
+RESOURCE_ATTRIBUTE_MAP = {
+    'credentials': {
+        'credential_id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:regex': attr.UUID_PATTERN},
+               'is_visible': True},
+        'credential_name': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
+        'type': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
+        'user_name': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
+        'password': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'is_visible': False, 'default': ''},
+    },
+}
 
 
 class Credential(extensions.ExtensionDescriptor):
-    """extension class Credential"""
 
     @classmethod
     def get_name(cls):
@@ -41,7 +61,7 @@ class Credential(extensions.ExtensionDescriptor):
     @classmethod
     def get_alias(cls):
         """ Returns Ext Resource Alias """
-        return "Cisco Credential"
+        return "credential"
 
     @classmethod
     def get_description(cls):
@@ -61,101 +81,15 @@ class Credential(extensions.ExtensionDescriptor):
     @classmethod
     def get_resources(cls):
         """ Returns Ext Resources """
-        parent_resource = dict(member_name="tenant",
-                               collection_name="extensions/csco/tenants")
-        controller = CredentialController(QuantumManager.get_plugin())
-        return [extensions.ResourceExtension('credentials', controller,
-                                             parent=parent_resource)]
+        exts = []
+        resource_name = "credential"
+        collection_name = resource_name + "s"
+        plugin = manager.QuantumManager.get_plugin()
+        params = RESOURCE_ATTRIBUTE_MAP.get(collection_name, dict())
+        controller = base.create_resource(collection_name,
+                                          resource_name,
+                                          plugin, params)
+        return [extensions.ResourceExtension(collection_name,
+                                             controller)]
 
 
-class CredentialController(common.QuantumController, wsgi.Controller):
-    """ credential API controller
-        based on QuantumController """
-
-    _credential_ops_param_list = [
-        {'param-name': 'credential_name', 'required': True},
-        {'param-name': 'user_name', 'required': True},
-        {'param-name': 'password', 'required': True},
-    ]
-
-    _serialization_metadata = {
-        "application/xml": {
-            "attributes": {
-                "credential": ["id", "name"],
-            },
-        },
-    }
-
-    def __init__(self, plugin):
-        self._resource_name = 'credential'
-        self._plugin = plugin
-
-    def index(self, request, tenant_id):
-        """ Returns a list of credential ids """
-        return self._items(request, tenant_id, is_detail=False)
-
-    def _items(self, request, tenant_id, is_detail):
-        """ Returns a list of credentials. """
-        credentials = self._plugin.get_all_credentials(tenant_id)
-        builder = credential_view.get_view_builder(request)
-        result = [builder.build(credential, is_detail)['credential']
-                  for credential in credentials]
-        return dict(credentials=result)
-
-    # pylint: disable-msg=E1101,W0613
-    def show(self, request, tenant_id, id):
-        """ Returns credential details for the given credential id """
-        try:
-            credential = self._plugin.get_credential_details(tenant_id, id)
-            builder = credential_view.get_view_builder(request)
-            #build response with details
-            result = builder.build(credential, True)
-            return dict(credentials=result)
-        except exception.CredentialNotFound as exp:
-            return faults.Fault(faults.CredentialNotFound(exp))
-
-    def create(self, request, tenant_id):
-        """ Creates a new credential for a given tenant """
-        try:
-            body = self._deserialize(request.body, request.get_content_type())
-            req_body = self._prepare_request_body(
-                body, self._credential_ops_param_list)
-            req_params = req_body[self._resource_name]
-
-        except exc.HTTPError as exp:
-            return faults.Fault(exp)
-        credential = self._plugin.create_credential(
-            tenant_id,
-            req_params['credential_name'],
-            req_params['user_name'],
-            req_params['password'])
-        builder = credential_view.get_view_builder(request)
-        result = builder.build(credential)
-        return dict(credentials=result)
-
-    def update(self, request, tenant_id, id):
-        """ Updates the name for the credential with the given id """
-        try:
-            body = self._deserialize(request.body, request.get_content_type())
-            req_body = self._prepare_request_body(
-                body, self._credential_ops_param_list)
-            req_params = req_body[self._resource_name]
-        except exc.HTTPError as exp:
-            return faults.Fault(exp)
-        try:
-            credential = self._plugin.rename_credential(
-                tenant_id, id, req_params['credential_name'])
-
-            builder = credential_view.get_view_builder(request)
-            result = builder.build(credential, True)
-            return dict(credentials=result)
-        except exception.CredentialNotFound as exp:
-            return faults.Fault(faults.CredentialNotFound(exp))
-
-    def delete(self, request, tenant_id, id):
-        """ Destroys the credential with the given id """
-        try:
-            self._plugin.delete_credential(tenant_id, id)
-            return exc.HTTPOk()
-        except exception.CredentialNotFound as exp:
-            return faults.Fault(faults.CredentialNotFound(exp))

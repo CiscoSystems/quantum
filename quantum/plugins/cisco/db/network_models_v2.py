@@ -125,23 +125,20 @@ class Credential(model_base.BASEV2, L2NetworkBase):
     __tablename__ = 'credentials'
 
     credential_id = Column(String(255))
-    tenant_id = Column(String(255), primary_key=True)
     credential_name = Column(String(255), primary_key=True)
     user_name = Column(String(255))
     password = Column(String(255))
     type = Column(String(255))
 
-    def __init__(self, tenant_id, credential_name, user_name, password, type):
+    def __init__(self, credential_name, user_name, password, type):
         self.credential_id = uuidutils.generate_uuid()
-        self.tenant_id = tenant_id
         self.credential_name = credential_name
         self.user_name = user_name
         self.password = password
         self.type = type
 
     def __repr__(self):
-        return "<Credentials(%s,%s,%s,%s,%s, %s)>" % (self.credential_id,
-                                                  self.tenant_id,
+        return "<Credentials(%s,%s,%s,%s, %s)>" % (self.credential_id,
                                                   self.credential_name,
                                                   self.user_name,
                                                   self.password,
