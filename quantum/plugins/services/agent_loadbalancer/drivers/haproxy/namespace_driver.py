@@ -77,7 +77,6 @@ class HaproxyNSDriver(object):
         namespace = get_ns_name(pool_id)
         ns = ip_lib.IPWrapper(self.root_helper, namespace)
         pid_path = self._get_state_file_path(pool_id, 'pid')
-        sock_path = self._get_state_file_path(pool_id, 'sock')
 
         # kill the process
         kill_pids_in_file(self.root_helper, pid_path)
@@ -178,6 +177,13 @@ class HaproxyNSDriver(object):
             for ip in port['fixed_ips']
         ]
         self.vif_driver.init_l3(interface_name, cidrs, namespace=namespace)
+
+        gw_ip = port['fixed_ips'][0]['subnet'].get('gateway_ip')
+        if gw_ip:
+            cmd = ['route', 'add', 'default', 'gw', gw_ip]
+            ip_wrapper = ip_lib.IPWrapper(self.root_helper,
+                                          namespace=namespace)
+            ip_wrapper.netns.execute(cmd, check_exit_code=False)
 
     def _unplug(self, namespace, port_id):
         port_stub = {'id': port_id}

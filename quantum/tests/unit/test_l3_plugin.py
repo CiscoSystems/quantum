@@ -45,7 +45,6 @@ from quantum.openstack.common import log as logging
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common.notifier import test_notifier
 from quantum.openstack.common import uuidutils
-from quantum.tests import base
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_db_plugin
 from quantum.tests.unit import test_extensions
@@ -668,6 +667,18 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                 self.assertEqual(
                     set(n['event_type'] for n in test_notifier.NOTIFICATIONS),
                     set(exp_notifications))
+
+                for n in test_notifier.NOTIFICATIONS:
+                    if n['event_type'].startswith('router.interface.'):
+                        payload = n['payload']['router.interface']
+                        self.assertIn('id', payload)
+                        self.assertEquals(payload['id'], r['router']['id'])
+                        self.assertIn('tenant_id', payload)
+                        stid = s['subnet']['tenant_id']
+                        # tolerate subnet tenant deliberately to '' in the
+                        # nicira metadata access case
+                        self.assertTrue(payload['tenant_id'] == stid or
+                                        payload['tenant_id'] == '')
 
     def test_router_add_interface_subnet_with_bad_tenant_returns_404(self):
         with mock.patch('quantum.context.Context.to_dict') as tdict:

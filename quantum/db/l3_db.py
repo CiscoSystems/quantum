@@ -310,18 +310,9 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             pass
 
     def add_router_interface(self, context, router_id, interface_info):
-        # make sure router exists
-        router = self._get_router(context, router_id)
         if not interface_info:
             msg = _("Either subnet_id or port_id must be specified")
             raise q_exc.BadRequest(resource='router', msg=msg)
-
-        try:
-            policy.enforce(context,
-                           "extension:router:add_router_interface",
-                           self._make_router_dict(router))
-        except q_exc.PolicyNotAuthorized:
-            raise l3.RouterNotFound(router_id=router_id)
 
         if 'port_id' in interface_info:
             if 'subnet_id' in interface_info:
@@ -374,7 +365,9 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             context, routers, 'add_router_interface',
             {'network_id': port['network_id'],
              'subnet_id': subnet_id})
-        info = {'port_id': port['id'],
+        info = {'id': router_id,
+                'tenant_id': subnet['tenant_id'],
+                'port_id': port['id'],
                 'subnet_id': port['fixed_ips'][0]['subnet_id']}
         notifier_api.notify(context,
                             notifier_api.publisher_id('network'),
@@ -394,15 +387,6 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                     router_id=router_id, subnet_id=subnet_id)
 
     def remove_router_interface(self, context, router_id, interface_info):
-        # make sure router exists
-        router = self._get_router(context, router_id)
-        try:
-            policy.enforce(context,
-                           "extension:router:remove_router_interface",
-                           self._make_router_dict(router))
-        except q_exc.PolicyNotAuthorized:
-            raise l3.RouterNotFound(router_id=router_id)
-
         if not interface_info:
             msg = _("Either subnet_id or port_id must be specified")
             raise q_exc.BadRequest(resource='router', msg=msg)
@@ -420,6 +404,7 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                         port_id=port_id,
                         subnet_id=interface_info['subnet_id'])
             subnet_id = port_db['fixed_ips'][0]['subnet_id']
+            subnet = self._get_subnet(context, subnet_id)
             self._confirm_router_interface_not_in_use(
                 context, router_id, subnet_id)
             _network_id = port_db['network_id']
@@ -457,13 +442,15 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             context, routers, 'remove_router_interface',
             {'network_id': _network_id,
              'subnet_id': subnet_id})
+        info = {'id': router_id,
+                'tenant_id': subnet['tenant_id'],
+                'port_id': port_id,
+                'subnet_id': subnet_id}
         notifier_api.notify(context,
                             notifier_api.publisher_id('network'),
                             'router.interface.delete',
                             notifier_api.CONF.default_notification_level,
-                            {'router.interface':
-                             {'port_id': port_id,
-                              'subnet_id': subnet_id}})
+                            {'router.interface': info})
 
     def _get_floatingip(self, context, id):
         try:
