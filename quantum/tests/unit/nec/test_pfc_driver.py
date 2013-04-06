@@ -15,6 +15,9 @@
 #    under the License.
 # @author: Ryota MIBU
 
+import random
+import string
+
 import mox
 import unittest
 
@@ -33,9 +36,16 @@ class TestConfig(object):
     cert_file = None
 
 
-def _ofc(id):
+def _ofc(val):
     """OFC ID converter"""
-    return "ofc-%s" % id
+    vals = val.split('-')
+    vals[2] = vals[2][1:]
+    return ''.join(vals)
+
+
+def _ofc_desc(val):
+    """OFC description converter (replace hyphen and space to underscore)"""
+    return val.replace('-', '_').replace(' ', '_')[:127]
 
 
 class PFCDriverTestBase(unittest.TestCase):
@@ -63,26 +73,14 @@ class PFCDriverTestBase(unittest.TestCase):
         description = "desc of %s" % t
 
         path = "/tenants"
-        body = {'id': t, 'description': description}
-        tenant = {'id': _ofc(t)}
+        body = {'id': _ofc(t)}
+        tenant = {}
         ofc.OFCClient.do_request("POST", path, body=body).AndReturn(tenant)
         self.mox.ReplayAll()
 
         ret = self.driver.create_tenant(description, t)
         self.mox.VerifyAll()
         self.assertEqual(ret, _ofc(t))
-
-    def testb_update_tenant(self):
-        t, n, p = self.get_ofc_item_random_params()
-        description = "new desc of %s" % t
-
-        path = "/tenants/%s" % _ofc(t)
-        body = {'description': description}
-        ofc.OFCClient.do_request("PUT", path, body=body)
-        self.mox.ReplayAll()
-
-        self.driver.update_tenant(_ofc(t), description)
-        self.mox.VerifyAll()
 
     def testc_delete_tenant(self):
         t, n, p = self.get_ofc_item_random_params()
@@ -99,8 +97,8 @@ class PFCDriverTestBase(unittest.TestCase):
         description = "desc of %s" % n
 
         path = "/tenants/%s/networks" % _ofc(t)
-        body = {'id': n, 'description': description}
-        network = {'id': _ofc(n)}
+        body = {'id': _ofc(n), 'description': _ofc_desc(description)}
+        network = {}
         ofc.OFCClient.do_request("POST", path, body=body).AndReturn(network)
         self.mox.ReplayAll()
 
@@ -113,7 +111,7 @@ class PFCDriverTestBase(unittest.TestCase):
         description = "desc of %s" % n
 
         path = "/tenants/%s/networks/%s" % (_ofc(t), _ofc(n))
-        body = {'description': description}
+        body = {'description': _ofc_desc(description)}
         ofc.OFCClient.do_request("PUT", path, body=body)
         self.mox.ReplayAll()
 
@@ -134,11 +132,11 @@ class PFCDriverTestBase(unittest.TestCase):
         t, n, p = self.get_ofc_item_random_params()
 
         path = "/tenants/%s/networks/%s/ports" % (_ofc(t), _ofc(n))
-        body = {'id': p.id,
+        body = {'id': _ofc(p.id),
                 'datapath_id': p.datapath_id,
                 'port': str(p.port_no),
                 'vid': str(p.vlan_id)}
-        port = {'id': _ofc(p.id)}
+        port = {}
         ofc.OFCClient.do_request("POST", path, body=body).AndReturn(port)
         self.mox.ReplayAll()
 
@@ -156,3 +154,46 @@ class PFCDriverTestBase(unittest.TestCase):
 
         self.driver.delete_port(_ofc(t), _ofc(n), _ofc(p.id))
         self.mox.VerifyAll()
+
+
+class PFCDriverStringTest(unittest.TestCase):
+
+    driver = 'quantum.plugins.nec.drivers.pfc.PFCDriverBase'
+
+    def setUp(self):
+        super(PFCDriverStringTest, self).setUp()
+        self.driver = drivers.get_driver("pfc")(TestConfig)
+
+    def test_generate_pfc_id_uuid(self):
+        id_str = utils.str_uuid()
+        exp_str = (id_str[:14] + id_str[15:]).replace('-', '')[:31]
+
+        ret_str = self.driver._generate_pfc_id(id_str)
+        self.assertEqual(exp_str, ret_str)
+
+    def test_generate_pfc_id_uuid_no_hyphen(self):
+        # Keystone tenant_id style uuid
+        id_str = utils.str_uuid()
+        id_no_hyphen = id_str.replace('-', '')
+        exp_str = (id_str[:14] + id_str[15:]).replace('-', '')[:31]
+
+        ret_str = self.driver._generate_pfc_id(id_no_hyphen)
+        self.assertEqual(exp_str, ret_str)
+
+    def test_generate_pfc_id_string(self):
+        id_str = utils.str_uuid() + 'x'
+        exp_str = id_str[:31].replace('-', '_')
+
+        ret_str = self.driver._generate_pfc_id(id_str)
+        self.assertEqual(exp_str, ret_str)
+
+    def test_generate_pfc_desc(self):
+        random_list = [random.choice(string.printable) for x in range(128)]
+        random_str = ''.join(random_list)
+
+        accept_letters = string.letters + string.digits
+        exp_list = [x if x in accept_letters else '_' for x in random_list]
+        exp_str = ''.join(exp_list)[:127]
+
+        ret_str = self.driver._generate_pfc_description(random_str)
+        self.assertEqual(exp_str, ret_str)
