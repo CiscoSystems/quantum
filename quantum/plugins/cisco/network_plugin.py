@@ -27,9 +27,8 @@ from quantum.db import models_v2
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as cexc
-from quantum.plugins.cisco.common import cisco_utils as cutil
+from quantum.plugins.cisco.common import config  # noqa
 from quantum.plugins.cisco.db import network_db_v2 as cdb
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
 
 LOG = logging.getLogger(__name__)
 
@@ -39,12 +38,12 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
     Meta-Plugin with v2 API support for multiple sub-plugins.
     """
     supported_extension_aliases = ["Cisco Credential", "Cisco qos"]
-    _methods_to_delegate = ['create_network', 'create_network_bulk',
+    _methods_to_delegate = ['create_network',
                             'delete_network', 'update_network', 'get_network',
                             'get_networks',
-                            'create_port', 'create_port_bulk', 'delete_port',
+                            'create_port', 'delete_port',
                             'update_port', 'get_port', 'get_ports',
-                            'create_subnet', 'create_subnet_bulk',
+                            'create_subnet',
                             'delete_subnet', 'update_subnet',
                             'get_subnet', 'get_subnets', ]
     _master = True
@@ -53,10 +52,10 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         """
         Loads the model class.
         """
-        self._model = importutils.import_object(conf.MODEL_CLASS)
+        self._model = importutils.import_object(config.CISCO.model_class)
         if hasattr(self._model, "MANAGE_STATE") and self._model.MANAGE_STATE:
             self._master = False
-            LOG.debug(_("Model %s manages state"), conf.MODEL_CLASS)
+            LOG.debug(_("Model %s manages state"), config.CISCO.model_class)
             native_bulk_attr_name = ("_%s__native_bulk_support"
                                      % self._model.__class__.__name__)
             self.__native_bulk_support = getattr(self._model,
@@ -72,6 +71,8 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         """
         When the configured model class offers to manage the state of the
         logical resources, we delegate the core API calls directly to it.
+        Note: Bulking calls will be handled by this class, and turned into
+        non-bulking calls to be considered for delegation.
         """
         master = object.__getattribute__(self, "_master")
         methods = object.__getattribute__(self, "_methods_to_delegate")
@@ -298,7 +299,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         """Delete a QoS level"""
         LOG.debug(_("delete_qos() called"))
         try:
-            qos_level = cdb.get_qos(tenant_id, qos_id)
+            cdb.get_qos(tenant_id, qos_id)
         except Exception:
             raise cexc.QosNotFound(tenant_id=tenant_id,
                                    qos_id=qos_id)
@@ -308,7 +309,7 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         """Rename QoS level"""
         LOG.debug(_("rename_qos() called"))
         try:
-            qos_level = cdb.get_qos(tenant_id, qos_id)
+            cdb.get_qos(tenant_id, qos_id)
         except Exception:
             raise cexc.QosNotFound(tenant_id=tenant_id,
                                    qos_id=qos_id)

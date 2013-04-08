@@ -18,7 +18,6 @@ import mock
 from quantum.db import api as db
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
-from quantum.plugins.cisco.db import network_models_v2
 from quantum.plugins.cisco.nexus import cisco_nexus_plugin_v2
 from quantum.tests import base
 
@@ -30,8 +29,8 @@ HOSTNAME = 'testhost'
 INSTANCE = 'testvm'
 NEXUS_PORTS = '1/10'
 NEXUS_SSH_PORT = '22'
-NEXUS_DRIVER = ('quantum.plugins.cisco.tests.unit.v2.nexus.'
-                'fake_nexus_driver.CiscoNEXUSFakeDriver')
+NEXUS_DRIVER = ('quantum.plugins.cisco.nexus.'
+                'cisco_nexus_network_driver_v2.CiscoNEXUSDriver')
 
 
 class TestCiscoNexusPlugin(base.BaseTestCase):
@@ -51,14 +50,8 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
         self.second_vlan_name = "q-" + str(self.second_net_id) + "vlan"
         self.second_vlan_id = 265
         self._nexus_switches = {
-            NEXUS_IP_ADDRESS: {
-                HOSTNAME: {
-                    'ports': NEXUS_PORTS,
-                },
-                'ssh_port': {
-                    'ssh_port': NEXUS_SSH_PORT
-                }
-            }
+            (NEXUS_IP_ADDRESS, HOSTNAME): NEXUS_PORTS,
+            (NEXUS_IP_ADDRESS, 'ssh_port'): NEXUS_SSH_PORT,
         }
         self._hostname = HOSTNAME
 
@@ -77,10 +70,18 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
             }
             db.configure_db()
 
+        # Use a mock netconf client
+        mock_ncclient = mock.Mock()
+        self.patch_obj = mock.patch.dict('sys.modules',
+                                         {'ncclient': mock_ncclient})
+        self.patch_obj.start()
+
         with mock.patch.object(cisco_nexus_plugin_v2.NexusPlugin,
                                '__init__', new=new_nexus_init):
             self._cisco_nexus_plugin = cisco_nexus_plugin_v2.NexusPlugin()
             self._cisco_nexus_plugin._nexus_switches = self._nexus_switches
+
+        self.addCleanup(self.patch_obj.stop)
 
     def test_a_create_network(self):
         """

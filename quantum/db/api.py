@@ -42,7 +42,8 @@ SQL_CONNECTION_DEFAULT = 'sqlite://'
 database_opts = [
     cfg.StrOpt('sql_connection',
                help=_('The SQLAlchemy connection string used to connect to '
-                      'the database')),
+                      'the database'),
+               secret=True),
     cfg.IntOpt('sql_max_retries', default=-1,
                help=_('Database reconnection retry times')),
     cfg.IntOpt('reconnect_interval', default=2,
@@ -62,6 +63,10 @@ database_opts = [
     cfg.BoolOpt('sql_dbpool_enable',
                 default=False,
                 help=_("Enable the use of eventlet's db_pool for MySQL")),
+    cfg.IntOpt('sqlalchemy_pool_size',
+               default=5,
+               help=_("Maximum number of SQL connections to keep open in a "
+                      "QueuePool in SQLAlchemy")),
 ]
 
 cfg.CONF.register_opts(database_opts, "DATABASE")
@@ -122,6 +127,7 @@ def configure_db():
             'pool_recycle': 3600,
             'echo': False,
             'convert_unicode': True,
+            'pool_size': cfg.CONF.DATABASE.sqlalchemy_pool_size,
         }
 
         if 'mysql' in connection_dict.drivername:
@@ -137,8 +143,16 @@ def configure_db():
                     'max_size': cfg.CONF.DATABASE.sql_max_pool_size,
                     'max_idle': cfg.CONF.DATABASE.sql_idle_timeout
                 }
-                creator = db_pool.ConnectionPool(MySQLdb, **pool_args)
-                engine_args['creator'] = creator.create
+                pool = db_pool.ConnectionPool(MySQLdb, **pool_args)
+
+                def creator():
+                    conn = pool.create()
+                    # NOTE(belliott) eventlet >= 0.10 returns a tuple
+                    if isinstance(conn, tuple):
+                        _1, _2, conn = conn
+                    return conn
+
+                engine_args['creator'] = creator
             if (MySQLdb is None and cfg.CONF.DATABASE.sql_dbpool_enable):
                 LOG.warn(_("Eventlet connection pooling will not work without "
                            "python-mysqldb!"))

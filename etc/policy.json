@@ -12,8 +12,6 @@
 
     "extension:router:view": "rule:regular_user",
     "extension:router:set": "rule:admin_only",
-    "extension:router:add_router_interface": "rule:admin_or_owner",
-    "extension:router:remove_router_interface": "rule:admin_or_owner",
 
     "extension:port_binding:view": "rule:admin_only",
     "extension:port_binding:set": "rule:admin_only",
@@ -51,9 +49,9 @@
     "delete_service_type": "rule:admin_only",
     "get_service_type": "rule:regular_user",
 
-    "create_qos_queue:": "rule:admin_only",
-    "get_qos_queue:": "rule:admin_only",
-    "get_qos_queues:": "rule:admin_only",
+    "create_qos_queue": "rule:admin_only",
+    "get_qos_queue": "rule:admin_only",
+    "get_qos_queues": "rule:admin_only",
 
     "update_agent": "rule:admin_only",
     "delete_agent": "rule:admin_only",

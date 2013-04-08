@@ -24,8 +24,6 @@
 import inspect
 import os
 
-from oslo.config import cfg
-
 from quantum.agent.linux import utils
 from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
@@ -40,8 +38,6 @@ binary_name = os.path.basename(inspect.stack()[-1][1])[:16]
 # <max length of iptables chain name> - (<binary_name> + '-') = 28-(16+1) = 11
 MAX_CHAIN_LEN_WRAP = 11
 MAX_CHAIN_LEN_NOWRAP = 28
-
-cfg.CONF.set_default('lock_path', '$state_path/lock')
 
 
 def get_chain_name(chain_name, wrap=True):

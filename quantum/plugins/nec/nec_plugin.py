@@ -19,21 +19,16 @@
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
-from quantum.common import constants as q_const
-from quantum.common import exceptions as q_exc
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
-from quantum import context
 from quantum.db import agents_db
 from quantum.db import agentschedulers_db
 from quantum.db import dhcp_rpc_base
 from quantum.db import extraroute_db
 from quantum.db import l3_rpc_base
-#NOTE(amotoki): quota_db cannot be removed, it is for db model
-from quantum.db import quota_db
+from quantum.db import quota_db  # noqa
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.extensions import portbindings
-from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
@@ -354,7 +349,7 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         # delete unnessary ofc_tenant
         filters = dict(tenant_id=[tenant_id])
         nets = super(NECPluginV2, self).get_networks(context, filters=filters)
-        if len(nets) == 0:
+        if not nets:
             try:
                 self.ofc.delete_ofc_tenant(context, tenant_id)
             except (nexc.OFCException, nexc.OFCConsistencyBroken) as exc:
@@ -670,7 +665,6 @@ class NECPluginV2RPCCallbacks(object):
         """
         LOG.debug(_("NECPluginV2RPCCallbacks.update_ports() called, "
                     "kwargs=%s ."), kwargs)
-        topic = kwargs['topic']
         datapath_id = kwargs['datapath_id']
         session = rpc_context.session
         for p in kwargs.get('port_added', []):
@@ -683,7 +677,21 @@ class NECPluginV2RPCCallbacks(object):
                              mac=p.get('mac', ''))
             self.plugin.activate_port_if_ready(rpc_context, port)
         for id in kwargs.get('port_removed', []):
+            portinfo = ndb.get_portinfo(session, id)
+            if not portinfo:
+                LOG.debug(_("update_ports(): ignore port_removed message "
+                            "due to portinfo for port_id=%s was not "
+                            "registered"), id)
+                continue
+            if portinfo.datapath_id is not datapath_id:
+                LOG.debug(_("update_ports(): ignore port_removed message "
+                            "received from different host "
+                            "(registered_datapath_id=%(registered)s, "
+                            "received_datapath_id=%(received)s)."),
+                          {'registered': portinfo.datapath_id,
+                           'received': datapath_id})
+                continue
             port = self.plugin.get_port(rpc_context, id)
-            if port and ndb.get_portinfo(session, id):
+            if port:
                 ndb.del_portinfo(session, id)
                 self.plugin.deactivate_port(rpc_context, port)
