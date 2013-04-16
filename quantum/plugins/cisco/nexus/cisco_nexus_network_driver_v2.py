@@ -124,6 +124,7 @@ class CiscoNEXUSDriver():
             vlan_ids = self.build_vlans_cmd()
         LOG.debug(_("NexusDriver VLAN IDs: %s"), vlan_ids)
         for ports in nexus_ports:
+            self.enable_port_trunk(man, ports)
             self.enable_vlan_on_trunk_int(man, ports, vlan_ids)
 
     def delete_vlan(self, vlan_id, nexus_host, nexus_user, nexus_password,
@@ -171,3 +172,13 @@ class CiscoNEXUSDriver():
                                 nexus_user, nexus_password)
         for ports in nexus_ports:
             self.disable_vlan_on_trunk_int(man, ports, vlan_id)
+
+    def create_vlan_svi(self, vlan_id, nexus_host, nexus_user, nexus_password,
+                        nexus_ports, nexus_ssh_port, gateway_addr):
+        man = self.nxos_connect(nexus_host, int(nexus_ssh_port),
+                                nexus_user, nexus_password)
+
+        confstr = snipp.CMD_VLAN_SVI_SNIPPET % (vlan_id, gateway_addr)
+        confstr = self.create_xml_snippet(confstr)
+        LOG.debug(_("NexusDriver: %s"), confstr)
+        man.edit_config(target='running', config=confstr) 

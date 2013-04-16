@@ -75,7 +75,7 @@ class NexusPlugin(L2DevicePluginBase):
         return self._networks.values()
 
     def create_network(self, tenant_id, net_name, net_id, vlan_name, vlan_id,
-                       host, instance):
+                       host, instance, gateway_addr):
         """
         Create a VLAN in the appropriate switch/port,
         and configure the appropriate interfaces
@@ -109,6 +109,11 @@ class NexusPlugin(L2DevicePluginBase):
                     vlan_name, str(vlan_id), _nexus_ip,
                     _nexus_username, _nexus_password,
                     _nexus_ports, _nexus_ssh_port, vlan_id)
+                # Create SVI on the switch
+                self._client.create_vlan_svi(
+                    vlan_id, _nexus_ip,
+                    _nexus_username, _nexus_password,
+                    _nexus_ports, _nexus_ssh_port, gateway_addr)
             else:
                 # Only trunk vlan on the port
                 man = self._client.nxos_connect(_nexus_ip,

@@ -299,7 +299,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         pass
 
     def _invoke_nexus_for_net_create(self, context, tenant_id, net_id,
-                                     instance_id):
+                                     instance_id, gateway_addr):
         net_dict = self.get_network(context, net_id)
         net_name = net_dict['name']
 
@@ -309,7 +309,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         # Trunk segmentation id for only this host
         vlan_name = conf.VLAN_NAME_PREFIX + str(vlan_id)
         n_args = [tenant_id, net_name, net_id,
-                  vlan_name, vlan_id, host, instance_id]
+                  vlan_name, vlan_id, host, instance_id, gateway_addr]
         nexus_output = self._invoke_plugin_per_device(
             const.NEXUS_PLUGIN,
             'create_network',
@@ -337,10 +337,23 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             elif device_owner == 'network:dhcp':
                 return ovs_output[0]
             elif instance_id:
+                # Get network for this port
+                network = self.get_network(context, port['port']['network_id'])
+                # Grab subnet from network
+                subnets = network['subnets']
+                subnet_id = subnets[0]
+                subnet = self.get_subnet(context, subnet_id)
+                # Get gateway ip from subnet
+                gateway = subnet['gateway_ip']
+                # Get cidr
+                cidr = subnet['cidr']
+                netmask = cidr.split('/')[1]
+                gateway = gateway + '/' + netmask
+                LOG.debug("\n\n\n\n\n%s\n\n\n\n" % gateway)
                 net_id = port['port']['network_id']
                 tenant_id = port['port']['tenant_id']
                 self._invoke_nexus_for_net_create(
-                    context, tenant_id, net_id, instance_id)
+                    context, tenant_id, net_id, instance_id, gateway)
 
             return ovs_output[0]
         except:
