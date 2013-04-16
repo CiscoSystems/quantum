@@ -170,3 +170,13 @@ class CiscoNEXUSDriver():
                                 nexus_user, nexus_password)
         for ports in nexus_ports:
             self.disable_vlan_on_trunk_int(man, ports, vlan_id)
+
+    def create_vlan_svi(self, vlan_id, nexus_host, nexus_user, nexus_password,
+                        nexus_ports, nexus_ssh_port, gateway_ip):
+        man = self.nxos_connect(nexus_host, int(nexus_ssh_port),
+                                nexus_user, nexus_password)
+
+        confstr = snipp.CMD_VLAN_SVI_SNIPPET % (vlanid, gateway_ip)
+        confstr = self.create_xml_snippet(confstr)
+        LOG.debug(_("NexusDriver: %s"), confstr)
+        mgr.edit_config(target='running', config=confstr)

@@ -302,10 +302,20 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                           device_owner != 'network:dhcp' and
                           instance_id)
             if create_net:
+                # Get network for this port
+                network = self.get_network(port['port']['network_id']
+                # Grab subnet from network
+                subnets = network['subnets']
+                subnet = subnets[0]
+                # Get gateway ip from subnet
+                gateway = subnet.gateway_ip
                 net_id = port['port']['network_id']
                 tenant_id = port['port']['tenant_id']
                 self._invoke_nexus_for_net_create(
-                    context, tenant_id, net_id, instance_id)
+                    context, tenant_id, net_id, instance_id, gateway)
+ 
+                self._invoke_nexus_for_net_create(
+                    context, tenant_id, net_id, instance_id, gateway)
 
             return ovs_output[0]
         except Exception:
