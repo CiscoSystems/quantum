@@ -526,7 +526,7 @@ class ExtensionManager(object):
                     self.add_extension(new_ext)
             except Exception as exception:
                 LOG.warn(_("Extension file %(f)s wasn't loaded due to "
-                           "%(exception)s"), locals())
+                           "%(exception)s"), {'f': f, 'exception': exception})
 
     def add_extension(self, ext):
         # Do nothing if the extension doesn't check out
@@ -552,7 +552,8 @@ class PluginAwareExtensionManager(ExtensionManager):
 
     def _check_extension(self, extension):
         """Checks if any of plugins supports extension and implements the
-        extension contract."""
+        extension contract.
+        """
         extension_is_valid = super(PluginAwareExtensionManager,
                                    self)._check_extension(extension)
         return (extension_is_valid and

@@ -124,7 +124,8 @@ class TunnelTest(base.BaseTestCase):
             'phy-tunnel_bridge_mapping').AndReturn([self.inta, self.intb])
 
         self.mox.StubOutWithMock(utils, 'get_interface_mac')
-        utils.get_interface_mac(self.INT_BRIDGE).AndReturn('000000000001')
+        utils.get_interface_mac(self.INT_BRIDGE).AndReturn(
+            '00:00:00:00:00:01')
 
     def testConstruct(self):
         self.mox.ReplayAll()
@@ -296,12 +297,23 @@ class TunnelTest(base.BaseTestCase):
         self.mox.VerifyAll()
 
     def testPortUnbound(self):
+        self.mock_int_bridge.set_db_attribute('Port', VIF_PORT.port_name,
+                                              'tag', str(LVM.vlan))
+        self.mock_int_bridge.delete_flows(in_port=VIF_PORT.ofport)
+
+        action_string = 'mod_vlan_vid:%s,normal' % LV_ID
+        self.mock_tun_bridge.add_flow(priority=3, tun_id=LS_ID,
+                                      dl_dst=VIF_PORT.vif_mac,
+                                      actions=action_string)
         self.mock_tun_bridge.delete_flows(dl_dst=VIF_MAC, tun_id=LS_ID)
         self.mox.ReplayAll()
+
         a = ovs_quantum_agent.OVSQuantumAgent(self.INT_BRIDGE,
                                               self.TUN_BRIDGE,
                                               '10.0.0.1', self.NET_MAPPING,
                                               'sudo', 2, True)
+        a.local_vlan_map[NET_UUID] = LVM
+        a.port_bound(VIF_PORT, NET_UUID, 'gre', None, LS_ID)
         a.available_local_vlans = set([LV_ID])
         a.local_vlan_map[NET_UUID] = LVM
         a.port_unbound(VIF_ID, NET_UUID)
@@ -387,7 +399,7 @@ class TunnelTest(base.BaseTestCase):
         # If something goes wrong, mox.VerifyAll() will catch it
         try:
             q_agent.daemon_loop()
-        except:
+        except Exception:
             pass
 
         self.mox.VerifyAll()

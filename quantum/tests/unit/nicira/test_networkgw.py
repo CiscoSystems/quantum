@@ -28,9 +28,8 @@ from quantum import context
 from quantum.db import api as db_api
 from quantum.db import db_base_plugin_v2
 from quantum import manager
-from quantum.plugins.nicira.nicira_nvp_plugin.extensions import (nvp_networkgw
-                                                                 as networkgw)
-from quantum.plugins.nicira.nicira_nvp_plugin import nicira_networkgw_db
+from quantum.plugins.nicira.extensions import nvp_networkgw as networkgw
+from quantum.plugins.nicira import nicira_networkgw_db
 from quantum.tests import base
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_db_plugin
@@ -210,7 +209,7 @@ class NetworkGatewayExtensionTestCase(base.BaseTestCase):
 
 
 class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
-    """ Unit tests for Network Gateway DB support """
+    """Unit tests for Network Gateway DB support."""
 
     def setUp(self):
         test_config['plugin_name_v2'] = '%s.%s' % (
@@ -512,7 +511,7 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
 
 class TestNetworkGatewayPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                nicira_networkgw_db.NetworkGatewayMixin):
-    """ Simple plugin class for testing db support for network gateway ext """
+    """Simple plugin class for testing db support for network gateway ext."""
 
     supported_extension_aliases = ["network-gateway"]
 

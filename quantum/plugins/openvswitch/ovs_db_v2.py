@@ -56,7 +56,7 @@ def add_network_binding(session, network_id, network_type,
 
 
 def sync_vlan_allocations(network_vlan_ranges):
-    """Synchronize vlan_allocations table with configured VLAN ranges"""
+    """Synchronize vlan_allocations table with configured VLAN ranges."""
 
     session = db.get_session()
     with session.begin():
@@ -156,12 +156,15 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
                     raise q_exc.VlanIdInUse(vlan_id=vlan_id,
                                             physical_network=physical_network)
             LOG.debug(_("Reserving specific vlan %(vlan_id)s on physical "
-                        "network %(physical_network)s from pool"), locals())
+                        "network %(physical_network)s from pool"),
+                      {'vlan_id': vlan_id,
+                       'physical_network': physical_network})
             alloc.allocated = True
         except exc.NoResultFound:
             LOG.debug(_("Reserving specific vlan %(vlan_id)s on physical "
                         "network %(physical_network)s outside pool"),
-                      locals())
+                      {'vlan_id': vlan_id,
+                       'physical_network': physical_network})
             alloc = ovs_models_v2.VlanAllocation(physical_network, vlan_id)
             alloc.allocated = True
             session.add(alloc)
@@ -185,19 +188,22 @@ def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
                 session.delete(alloc)
                 LOG.debug(_("Releasing vlan %(vlan_id)s on physical network "
                             "%(physical_network)s outside pool"),
-                          locals())
+                          {'vlan_id': vlan_id,
+                           'physical_network': physical_network})
             else:
                 LOG.debug(_("Releasing vlan %(vlan_id)s on physical network "
                             "%(physical_network)s to pool"),
-                          locals())
+                          {'vlan_id': vlan_id,
+                           'physical_network': physical_network})
         except exc.NoResultFound:
             LOG.warning(_("vlan_id %(vlan_id)s on physical network "
                           "%(physical_network)s not found"),
-                        locals())
+                        {'vlan_id': vlan_id,
+                         'physical_network': physical_network})
 
 
 def sync_tunnel_allocations(tunnel_id_ranges):
-    """Synchronize tunnel_allocations table with configured tunnel ranges"""
+    """Synchronize tunnel_allocations table with configured tunnel ranges."""
 
     # determine current configured allocatable tunnels
     tunnel_ids = set()
@@ -206,7 +212,7 @@ def sync_tunnel_allocations(tunnel_id_ranges):
         if tun_max + 1 - tun_min > 1000000:
             LOG.error(_("Skipping unreasonable tunnel ID range "
                         "%(tun_min)s:%(tun_max)s"),
-                      locals())
+                      {'tun_min': tun_min, 'tun_max': tun_max})
         else:
             tunnel_ids |= set(xrange(tun_min, tun_max + 1))
 
@@ -310,7 +316,7 @@ def get_port(port_id):
 
 
 def get_port_from_device(port_id):
-    """Get port from database"""
+    """Get port from database."""
     LOG.debug(_("get_port_with_securitygroups() called:port_id=%s"), port_id)
     session = db.get_session()
     sg_binding_port = sg_db.SecurityGroupPortBinding.port_id

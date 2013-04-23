@@ -156,7 +156,7 @@ class L3NATAgent(manager.Manager):
         try:
             self.driver = importutils.import_object(self.conf.interface_driver,
                                                     self.conf)
-        except:
+        except Exception:
             msg = _("Error importing interface driver "
                     "'%s'") % self.conf.interface_driver
             raise SystemExit(msg)
@@ -185,7 +185,7 @@ class L3NATAgent(manager.Manager):
 
                 try:
                     self._destroy_router_namespace(ns)
-                except:
+                except Exception:
                     LOG.exception(_("Failed deleting namespace '%s'"), ns)
 
     def _destroy_router_namespace(self, namespace):
@@ -200,7 +200,7 @@ class L3NATAgent(manager.Manager):
                                    bridge=self.conf.external_network_bridge,
                                    namespace=namespace,
                                    prefix=EXTERNAL_DEV_PREFIX)
-        #(TODO) Address the failure for the deletion of the namespace
+        #TODO(garyk) Address the failure for the deletion of the namespace
 
     def _create_router_namespace(self, ri):
             ip_wrapper_root = ip_lib.IPWrapper(self.root_helper)
@@ -208,7 +208,7 @@ class L3NATAgent(manager.Manager):
             ip_wrapper.netns.execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
 
     def _fetch_external_net_id(self):
-        """Find UUID of single external network for this agent"""
+        """Find UUID of single external network for this agent."""
         if self.conf.gateway_external_network_id:
             return self.conf.gateway_external_network_id
         try:
@@ -466,7 +466,8 @@ class L3NATAgent(manager.Manager):
                                    interface_name):
         rules = [('POSTROUTING', '! -i %(interface_name)s '
                   '! -o %(interface_name)s -m conntrack ! '
-                  '--ctstate DNAT -j ACCEPT' % locals())]
+                  '--ctstate DNAT -j ACCEPT' %
+                  {'interface_name': interface_name})]
         for cidr in internal_cidrs:
             rules.extend(self.internal_network_nat_rules(ex_gw_ip, cidr))
         return rules
@@ -697,7 +698,8 @@ class L3NATAgentWithStateReport(L3NATAgent):
             'agent_type': l3_constants.AGENT_TYPE_L3}
         report_interval = cfg.CONF.AGENT.report_interval
         if report_interval:
-            self.heartbeat = loopingcall.LoopingCall(self._report_state)
+            self.heartbeat = loopingcall.FixedIntervalLoopingCall(
+                self._report_state)
             self.heartbeat.start(interval=report_interval)
 
     def _report_state(self):
