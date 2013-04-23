@@ -34,13 +34,22 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
     def _create_flow(self, context, ingress, egress):
         pass
 
+    def _get_flows(self, context):
+        pass
+
+    def _delete_flow(self, context, name):
+        pass
+
     def _create_gateway(self, context, gateway_ip):
         pass
 
     def _push_switch_config(self, switch_id, switch_type, config):
         pass
 
-    def _create_subnet(self, context, container=DEFAULT_CONTAINER, cidr):
+    def _create_subnet(self, context, cidr, container=DEFAULT_CONTAINER):
+        pass
+
+    def _delete_subnet(self, context, id):
         pass
 
     def create_network(self, context, network):
