@@ -33,6 +33,7 @@ from oslo.config import cfg
 
 from quantum.agent.linux import ovs_lib
 from quantum.agent.linux.ovs_lib import VifPort
+from quantum.agent.linux import utils
 from quantum.agent import rpc as agent_rpc
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.common import config as logging_config
@@ -150,6 +151,18 @@ class ODLPluginApi(agent_rpc.PluginApi,
                          self.make_msg('get_ofp_rest_api'),
                          topic=self.topic)
 
+    def odl_port_create(self, context, **kwargs):
+        LOG.debug(_("Passing create port to plugin"))
+        return self.call(context,
+                         self.make_msg("odl_port_create"),
+                         kwargs)
+
+    def odl_port_delete(self, context, **kwargs):
+        LOG.debug(_("Passing delete port to plugin"))
+        return self.call(context,
+                         self.make_msg("odl_port_delete"),
+                         kwargs)
+
 
 class ODLSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
     def __init__(self, context, plugin_rpc, root_helper):
@@ -210,6 +223,7 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         # Currently ODL supports only tcp methods. (ssl isn't supported yet)
         self.int_br.set_manager('ptcp:%d' % ovsdb_port)
         self.int_br.set_controller(integ_br, 'tcp:%s:6633' % ovsdb_ip)
+        self.integration_bridge = integ_br
         #sc_client.set_key(self.int_br.datapath_id, conf_switch_key.OVSDB_ADDR,
         #                  'tcp:%s:%d' % (ovsdb_ip, ovsdb_port))
 
@@ -219,6 +233,19 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         vif_port = self.int_br.get_vif_port_by_id(port['id'])
         if not vif_port:
             return
+        port["vif_port"] = vif_port
+        port["switch_id"] = utils.get_interface_mac(self.integration_bridge)
+
+        if port['admin_state_up']:
+            # update plugin about port status
+            self.plugin_rpc.odl_port_create(self.context, kwargs)
+        else:
+            # update plugin about port status
+            self.plugin_rpc.odl_port_delete(self.context, kwargs)
+
+        #details = self.plugin_rpc.get_device_details(self.context,
+        #                                             device,
+        #                                             self.agent_id)
 
         if ext_sg.SECURITYGROUPS in port:
             self.sg_agent.refresh_firewall()
