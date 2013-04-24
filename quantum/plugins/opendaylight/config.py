@@ -6,10 +6,14 @@ from quantum import scheduler
 odl_opts = [
     cfg.StrOpt('controllers',
                 help=_("List of controller uri's")),
+    cfg.StrOpt('integration_bridge', default='br-int',
+               help=_("Integration bridge to use")),
     cfg.StrOpt('network_vlan_ranges',
                 help=_("Range of VLAN Ids")),
     cfg.StrOpt('network_tunnel_ranges',
                 help=_("List of tunnel ids")),
+    cfg.IntOpt('ovsdb_port', default=6634,
+               help=_("OVSDB port to connect to")),
     cfg.StrOpt('tenant_network_type',
                 help=_("Type of tenant network: vlan | gre")),
 ]
