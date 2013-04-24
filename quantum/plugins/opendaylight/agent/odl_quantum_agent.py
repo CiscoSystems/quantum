@@ -92,7 +92,7 @@ def _get_tunnel_ip():
 
 
 def _get_ovsdb_ip():
-    return _get_ip('ovsdb_ip', 'ovsdb_interface')
+    return cfg.CONF.ODL.controllers.split(':', 1)[0]
 
 
 class OVSBridge(ovs_lib.OVSBridge):
@@ -105,6 +105,9 @@ class OVSBridge(ovs_lib.OVSBridge):
 
     def set_manager(self, target):
         self.run_vsctl(["set-manager", target])
+
+    def set_controller(self, brname, controller):
+        self.run_vsctl(["set-controller", brname, controller])
 
     def get_ofport(self, name):
         return self.db_get_val("Interface", name, "ofport")
@@ -190,10 +193,10 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.int_br = OVSBridge(integ_br, root_helper)
         self.int_br.find_datapath_id()
 
-        rest_api_addr = self.plugin_rpc.get_ofp_rest_api_addr(self.context)
-        if not rest_api_addr:
-            raise q_exc.Invalid(_("ODL rest API port isn't specified"))
-        LOG.debug(_("Going to ofp controller mode %s"), rest_api_addr)
+        #rest_api_addr = self.plugin_rpc.get_ofp_rest_api_addr(self.context)
+        #if not rest_api_addr:
+        #    raise q_exc.Invalid(_("ODL rest API port isn't specified"))
+        #LOG.debug(_("Going to ofp controller mode %s"), rest_api_addr)
 
         #ryu_rest_client = client.OFPClient(rest_api_addr)
 
@@ -206,6 +209,7 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
         # Currently ODL supports only tcp methods. (ssl isn't supported yet)
         self.int_br.set_manager('ptcp:%d' % ovsdb_port)
+        self.int_br.set_controller(integ_br, 'tcp:%s:6633' % ovsdb_ip)
         #sc_client.set_key(self.int_br.datapath_id, conf_switch_key.OVSDB_ADDR,
         #                  'tcp:%s:%d' % (ovsdb_ip, ovsdb_port))
 
