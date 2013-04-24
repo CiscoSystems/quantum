@@ -19,7 +19,7 @@
 
 import httplib  # basic HTTP library for HTTPS connections
 import logging
-from quantum.plugins.nicira.nicira_nvp_plugin.api_client import (
+from quantum.plugins.nicira.api_client import (
     client_eventlet, request_eventlet)
 
 LOG = logging.getLogger("NVPApiHelper")
@@ -121,7 +121,8 @@ class NVPApiHelper(client_eventlet.NvpApiClientEventlet):
 
         if response is None:
             # Timeout.
-            LOG.error(_('Request timed out: %(method)s to %(url)s'), locals())
+            LOG.error(_('Request timed out: %(method)s to %(url)s'),
+                      {'method': method, 'url': url})
             raise RequestTimeout()
 
         status = response.status

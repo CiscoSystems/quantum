@@ -249,7 +249,7 @@ class QuantumDbPluginV2TestCase(testlib_api.WebTestCase):
         return data
 
     def _create_bulk_from_list(self, fmt, resource, objects, **kwargs):
-        """ Creates a bulk request from a list of objects """
+        """Creates a bulk request from a list of objects."""
         collection = "%ss" % resource
         req_data = {collection: objects}
         req = self.new_create_request(collection, req_data, fmt)
@@ -264,7 +264,7 @@ class QuantumDbPluginV2TestCase(testlib_api.WebTestCase):
         return req.get_response(self.api)
 
     def _create_bulk(self, fmt, number, resource, data, name='test', **kwargs):
-        """ Creates a bulk request for any kind of resource """
+        """Creates a bulk request for any kind of resource."""
         objects = []
         collection = "%ss" % resource
         for i in range(0, number):
@@ -487,7 +487,7 @@ class QuantumDbPluginV2TestCase(testlib_api.WebTestCase):
         return self.deserialize(fmt, res)
 
     def _do_side_effect(self, patched_plugin, orig, *args, **kwargs):
-        """ Invoked by test cases for injecting failures in plugin """
+        """Invoked by test cases for injecting failures in plugin."""
         def second_call(*args, **kwargs):
             raise q_exc.QuantumException
         patched_plugin.side_effect = second_call
@@ -718,7 +718,7 @@ class TestV2HTTPResponse(QuantumDbPluginV2TestCase):
         self._check_list_with_fields(res, 'name')
 
     def test_list_with_fields_noadmin_and_policy_field(self):
-        """ If a field used by policy is selected, do not duplicate it.
+        """If a field used by policy is selected, do not duplicate it.
 
         Verifies that if the field parameter explicitly specifies a field
         which is used by the policy engine, then it is not duplicated
@@ -1254,7 +1254,7 @@ fixed_ips=ip_address%%3D%s&fixed_ips=ip_address%%3D%s&fixed_ips=subnet_id%%3D%s
         cfg.CONF.set_override('base_mac', "bad_mac")
         try:
             self.plugin._check_base_mac_format()
-        except:
+        except Exception:
             return
         self.fail("No exception for illegal base_mac format")
 
@@ -2239,6 +2239,22 @@ class TestNetworksV2(QuantumDbPluginV2TestCase):
                                         params='admin_state_up=fake')
             res = req.get_response(self.api)
             self.assertEqual(400, res.status_int)
+
+    def test_list_shared_networks_with_non_admin_user(self):
+        with contextlib.nested(self.network(shared=False,
+                                            name='net1',
+                                            tenant_id='tenant1'),
+                               self.network(shared=True,
+                                            name='net2',
+                                            tenant_id='another_tenant'),
+                               self.network(shared=False,
+                                            name='net3',
+                                            tenant_id='another_tenant')
+                               ) as (net1, net2, net3):
+            ctx = context.Context(user_id='non_admin',
+                                  tenant_id='tenant1',
+                                  is_admin=False)
+            self._test_list_resources('network', (net1, net2), ctx)
 
     def test_show_network(self):
         with self.network(name='net1') as net:
@@ -3410,9 +3426,9 @@ class TestSubnetsV2(QuantumDbPluginV2TestCase):
 
 
 class DbModelTestCase(base.BaseTestCase):
-    """ DB model tests """
+    """DB model tests."""
     def test_repr(self):
-        """ testing the string representation of 'model' classes """
+        """testing the string representation of 'model' classes."""
         network = models_v2.Network(name="net_net", status="OK",
                                     admin_state_up=True)
         actual_repr_output = repr(network)

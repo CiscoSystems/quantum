@@ -50,7 +50,7 @@ AUTO_DELETE_PORT_OWNERS = ['network:dhcp']
 
 
 class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
-    """ A class that implements the v2 Quantum plugin interface
+    """A class that implements the v2 Quantum plugin interface
         using SQLAlchemy models.  Whenever a non-read call happens
         the plugin will call an event handler class method (e.g.,
         network_created()).  The result is that this class can be
@@ -98,7 +98,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         if not context.is_admin and hasattr(model, 'tenant_id'):
             if hasattr(model, 'shared'):
                 query_filter = ((model.tenant_id == context.tenant_id) |
-                                (model.shared))
+                                (model.shared == True))
             else:
                 query_filter = (model.tenant_id == context.tenant_id)
         # Execute query hooks registered from mixins and plugins
@@ -120,7 +120,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     @classmethod
     def register_model_query_hook(cls, model, name, query_hook, filter_hook,
                                   result_filters=None):
-        """ register an hook to be invoked when a query is executed.
+        """Register a hook to be invoked when a query is executed.
 
         Add the hooks to the _model_query_hooks dict. Models are the keys
         of this dict, whereas the value is another dict mapping hook names to
@@ -259,7 +259,9 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             if QuantumDbPluginV2._check_unique_mac(context, network_id,
                                                    mac_address):
                 LOG.debug(_("Generated mac for network %(network_id)s "
-                            "is %(mac_address)s"), locals())
+                            "is %(mac_address)s"),
+                          {'network_id': network_id,
+                           'mac_address': mac_address})
                 return mac_address
             else:
                 LOG.debug(_("Generated mac %(mac_address)s exists. Remaining "
@@ -298,7 +300,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         else:
             LOG.debug(_("Hold allocated IP %(ip_address)s "
                         "(%(network_id)s/%(subnet_id)s/%(port_id)s)"),
-                      locals())
+                      {'ip_address': ip_address,
+                       'network_id': network_id,
+                       'subnet_id': subnet_id,
+                       'port_id': port_id})
             allocated.port_id = None
 
     @staticmethod
@@ -429,19 +434,23 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         except exc.NoResultFound:
             LOG.debug(_("No fixed IP found that matches the network "
                         "%(network_id)s and ip address %(ip_address)s."),
-                      locals())
+                      {'network_id': network_id,
+                       'ip_address': ip_address})
 
     @staticmethod
     def _delete_ip_allocation(context, network_id, subnet_id, ip_address):
 
         # Delete the IP address from the IPAllocate table
         LOG.debug(_("Delete allocated IP %(ip_address)s "
-                    "(%(network_id)s/%(subnet_id)s)"), locals())
+                    "(%(network_id)s/%(subnet_id)s)"),
+                  {'ip_address': ip_address,
+                   'network_id': network_id,
+                   'subnet_id': subnet_id})
         alloc_qry = context.session.query(
             models_v2.IPAllocation).with_lockmode('update')
-        allocated = alloc_qry.filter_by(network_id=network_id,
-                                        ip_address=ip_address,
-                                        subnet_id=subnet_id).delete()
+        alloc_qry.filter_by(network_id=network_id,
+                            ip_address=ip_address,
+                            subnet_id=subnet_id).delete()
 
     @staticmethod
     def _generate_ip(context, subnets):
@@ -806,7 +815,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     l_range = ip_ranges[l_cursor]
                     r_range = ip_ranges[r_cursor]
                     LOG.error(_("Found overlapping ranges: %(l_range)s and "
-                                "%(r_range)s"), locals())
+                                "%(r_range)s"),
+                              {'l_range': l_range, 'r_range': r_range})
                     raise q_exc.OverlappingAllocationPools(
                         pool_1=l_range,
                         pool_2=r_range,
@@ -934,7 +944,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             context.session.commit()
         except Exception as e:
             LOG.exception(_("An exception occured while creating "
-                            "the %(resource)s:%(item)s"), locals())
+                            "the %(resource)s:%(item)s"),
+                          {'resource': resource, 'item': item})
             context.session.rollback()
             raise e
         return objects
@@ -948,7 +959,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return self._create_bulk('network', context, networks)
 
     def create_network(self, context, network):
-        """ handle creation of a single network """
+        """Handle creation of a single network."""
         # single request processing
         n = network['network']
         # NOTE(jkoelker) Get the tenant_id outside of the session to avoid
@@ -1026,15 +1037,18 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         return self._create_bulk('subnet', context, subnets)
 
     def _validate_ip_version(self, ip_version, addr, name):
-        """Check IP field of a subnet match specified ip version"""
+        """Check IP field of a subnet match specified ip version."""
         ip = netaddr.IPNetwork(addr)
         if ip.version != ip_version:
+            data = {'name': name,
+                    'addr': addr,
+                    'ip_version': ip_version}
             msg = _("%(name)s '%(addr)s' does not match "
-                    "the ip_version '%(ip_version)s'") % locals()
+                    "the ip_version '%(ip_version)s'") % data
             raise q_exc.InvalidInput(error_message=msg)
 
     def _validate_subnet(self, s):
-        """Validate a subnet spec"""
+        """Validate a subnet spec."""
 
         # This method will validate attributes which may change during
         # create_subnet() and update_subnet().
@@ -1155,7 +1169,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     def update_subnet(self, context, id, subnet):
         """Update the subnet with new info. The change however will not be
            realized until the client renew the dns lease or we support
-           gratuitous DHCP offers"""
+           gratuitous DHCP offers
+        """
 
         s = subnet['subnet']
         db_subnet = self._get_subnet(context, id)
@@ -1312,7 +1327,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     subnet_id = ip['subnet_id']
                     LOG.debug(_("Allocated IP %(ip_address)s "
                                 "(%(network_id)s/%(subnet_id)s/%(port_id)s)"),
-                              locals())
+                              {'ip_address': ip_address,
+                               'network_id': network_id,
+                               'subnet_id': subnet_id,
+                               'port_id': port_id})
                     allocated = models_v2.IPAllocation(
                         network_id=network_id,
                         port_id=port_id,
@@ -1383,8 +1401,8 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     QuantumDbPluginV2._delete_ip_allocation(
                         context, a['network_id'],
                         a['subnet_id'], a['ip_address'])
-                    msg_dict = dict(address=a['ip_address'],
-                                    subnet_id=a['subnet_id'])
+                    msg_dict = {'address': a['ip_address'],
+                                'subnet_id': a['subnet_id']}
                     msg = _("%(address)s (%(subnet_id)s) is not "
                             "recycled") % msg_dict
                     LOG.debug(msg)

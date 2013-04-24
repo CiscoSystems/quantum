@@ -58,7 +58,7 @@ UDP = 'udp'
 TCP = 'tcp'
 DNS_PORT = 53
 DHCPV4_PORT = 67
-DHCPV6_PORT = 467
+DHCPV6_PORT = 547
 METADATA_DEFAULT_IP = '169.254.169.254'
 
 
@@ -96,7 +96,7 @@ class DhcpBase(object):
 
     @classmethod
     def existing_dhcp_networks(cls, conf, root_helper):
-        """Return a list of existing networks ids (ones we have configs for)"""
+        """Return a list of existing networks ids that we have configs for."""
 
         raise NotImplementedError
 
@@ -218,7 +218,7 @@ class Dnsmasq(DhcpLocalProcess):
 
     @classmethod
     def existing_dhcp_networks(cls, conf, root_helper):
-        """Return a list of existing networks ids (ones we have configs for)"""
+        """Return a list of existing networks ids that we have configs for."""
 
         confs_dir = os.path.abspath(os.path.normpath(conf.dhcp_confs))
 
@@ -265,7 +265,7 @@ class Dnsmasq(DhcpLocalProcess):
             if subnet.ip_version == 4:
                 mode = 'static'
             else:
-                # TODO (mark): how do we indicate other options
+                # TODO(mark): how do we indicate other options
                 # ra-only, slaac, ra-nameservers, and ra-stateless.
                 mode = 'static'
             cmd.append('--dhcp-range=set:%s,%s,%s,%ss' %

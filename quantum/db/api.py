@@ -120,7 +120,7 @@ def configure_db():
         if not sql_connection:
             LOG.warn(_("Option 'sql_connection' not specified "
                        "in any config file - using default "
-                       "value '%s'" % SQL_CONNECTION_DEFAULT))
+                       "value '%s'") % SQL_CONNECTION_DEFAULT)
             sql_connection = SQL_CONNECTION_DEFAULT
         connection_dict = sql.engine.url.make_url(sql_connection)
         engine_args = {
@@ -185,7 +185,7 @@ def clear_db(base=BASE):
 
 
 def get_session(autocommit=True, expire_on_commit=False):
-    """Helper method to grab session"""
+    """Helper method to grab session."""
     global _MAKER, _ENGINE
     if not _MAKER:
         assert _ENGINE
@@ -206,14 +206,15 @@ def retry_registration(remaining, reconnect_interval, base=BASE):
             remaining -= 1
         LOG.info(_("Unable to connect to database, %(remaining)s attempts "
                    "left. Retrying in %(reconnect_interval)s seconds"),
-                 locals())
+                 {'remaining': remaining,
+                  'reconnect_interval': reconnect_interval})
         time.sleep(reconnect_interval)
         if register_models(base):
             break
 
 
 def register_models(base=BASE):
-    """Register Models and create properties"""
+    """Register Models and create properties."""
     global _ENGINE
     assert _ENGINE
     try:
@@ -225,7 +226,7 @@ def register_models(base=BASE):
 
 
 def unregister_models(base=BASE):
-    """Unregister Models, useful clearing out data before testing"""
+    """Unregister Models, useful clearing out data before testing."""
     global _ENGINE
     assert _ENGINE
     base.metadata.drop_all(_ENGINE)

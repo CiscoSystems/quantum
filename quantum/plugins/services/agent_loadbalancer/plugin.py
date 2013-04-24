@@ -175,7 +175,7 @@ class LoadBalancerCallbacks(object):
             LOG.debug(msg, port_id)
 
     def update_pool_stats(self, context, pool_id=None, stats=None, host=None):
-        # TODO (markmcclain): add stats collection
+        # TODO(markmcclain): add stats collection
         pass
 
 
@@ -341,6 +341,16 @@ class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
         retval = super(LoadBalancerPlugin, self).create_pool_health_monitor(
             context,
             health_monitor,
+            pool_id
+        )
+        self.agent_rpc.modify_pool(context, pool_id)
+
+        return retval
+
+    def delete_pool_health_monitor(self, context, id, pool_id):
+        retval = super(LoadBalancerPlugin, self).delete_pool_health_monitor(
+            context,
+            id,
             pool_id
         )
         self.agent_rpc.modify_pool(context, pool_id)

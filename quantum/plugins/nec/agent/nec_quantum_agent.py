@@ -51,7 +51,7 @@ class NECPluginApi(agent_rpc.PluginApi):
 
     def update_ports(self, context, agent_id, datapath_id,
                      port_added, port_removed):
-        """RPC to update information of ports on Quantum Server"""
+        """RPC to update information of ports on Quantum Server."""
         LOG.info(_("Update ports: added=%(added)s, "
                    "removed=%(removed)s"),
                  {'added': port_added, 'removed': port_removed})
@@ -169,7 +169,8 @@ class NECQuantumAgent(object):
 
         report_interval = config.CONF.AGENT.report_interval
         if report_interval:
-            heartbeat = loopingcall.LoopingCall(self._report_state)
+            heartbeat = loopingcall.FixedIntervalLoopingCall(
+                self._report_state)
             heartbeat.start(interval=report_interval)
 
     def _report_state(self):
