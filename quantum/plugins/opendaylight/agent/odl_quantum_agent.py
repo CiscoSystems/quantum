@@ -143,8 +143,7 @@ class OVSBridge(ovs_lib.OVSBridge):
         return self._get_ports(self._get_external_port)
 
 
-class ODLPluginApi(agent_rpc.PluginApi,
-                   sg_rpc.SecurityGroupServerRpcApiMixin):
+class ODLPluginApi(agent_rpc.PluginApi, object):
     def get_ofp_rest_api_addr(self, context):
         LOG.debug(_("Get Ryu rest API address"))
         return self.call(context,
@@ -170,15 +169,7 @@ class ODLPluginApi(agent_rpc.PluginApi,
                          topic=self.topic)
 
 
-class ODLSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
-    def __init__(self, context, plugin_rpc, root_helper):
-        self.context = context
-        self.plugin_rpc = plugin_rpc
-        self.root_helper = root_helper
-        self.init_firewall()
-
-
-class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
+class OVSQuantumOFPODLAgent(object):
 
     RPC_API_VERSION = '1.1'
 
@@ -187,9 +178,6 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         super(OVSQuantumOFPODLAgent, self).__init__()
         self.polling_interval = polling_interval
         self._setup_rpc()
-        self.sg_agent = ODLSecurityGroupAgent(self.context,
-                                              self.plugin_rpc,
-                                              root_helper)
         self._setup_integration_br(root_helper, integ_br, tunnel_ip,
                                    ovsdb_port, ovsdb_ip)
 
@@ -251,9 +239,6 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         #                                             device,
         #                                             self.agent_id)
 
-        if ext_sg.SECURITYGROUPS in port:
-            self.sg_agent.refresh_firewall()
-
     def _update_ports(self, registered_ports):
         ports = self.int_br.get_vif_port_set()
         if ports == registered_ports:
@@ -265,10 +250,7 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 'removed': removed}
 
     def _process_devices_filter(self, port_info):
-        if 'added' in port_info:
-            self.sg_agent.prepare_devices_filter(port_info['added'])
-        if 'removed' in port_info:
-            self.sg_agent.remove_devices_filter(port_info['removed'])
+        pass
 
     def daemon_loop(self):
         ports = set()
