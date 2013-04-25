@@ -151,17 +151,23 @@ class ODLPluginApi(agent_rpc.PluginApi,
                          self.make_msg('get_ofp_rest_api'),
                          topic=self.topic)
 
-    def odl_port_create(self, context, **kwargs):
-        LOG.debug(_("Passing create port to plugin"))
+    def odl_port_create(self, context, port_id, vif_id, switch_id):
+        LOG.debug(_("\n\n\n\nPassing create port %s to plugin\n\n\n\n" % port_id))
         return self.call(context,
-                         self.make_msg("odl_port_create"),
-                         kwargs)
+                         self.make_msg("odl_port_create",
+                                       port_id=port_id,
+                                       vif_id=vif_id,
+                                       switch_id=switch_id),
+                         topic=self.topic)
 
-    def odl_port_delete(self, context, **kwargs):
+    def odl_port_delete(self, context, port_id, vif_id, switch_id):
         LOG.debug(_("Passing delete port to plugin"))
         return self.call(context,
-                         self.make_msg("odl_port_delete"),
-                         kwargs)
+                         self.make_msg("odl_port_delete",
+                                       port_id=port_id,
+                                       vif_id=vif_id,
+                                       switch_id=switch_id),
+                         topic=self.topic)
 
 
 class ODLSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
@@ -228,20 +234,18 @@ class OVSQuantumOFPODLAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         #                  'tcp:%s:%d' % (ovsdb_ip, ovsdb_port))
 
     def port_update(self, context, **kwargs):
-        LOG.debug(_("port update received"))
         port = kwargs.get('port')
         vif_port = self.int_br.get_vif_port_by_id(port['id'])
-        if not vif_port:
-            return
+        #if not vif_port:
+        #    return
         port["vif_port"] = vif_port
         port["switch_id"] = utils.get_interface_mac(self.integration_bridge)
-
         if port['admin_state_up']:
             # update plugin about port status
-            self.plugin_rpc.odl_port_create(self.context, kwargs)
+            self.plugin_rpc.odl_port_create(self.context, port['id'], vif_port, port['switch_id'])
         else:
             # update plugin about port status
-            self.plugin_rpc.odl_port_delete(self.context, kwargs)
+            self.plugin_rpc.odl_port_delete(self.context, port)
 
         #details = self.plugin_rpc.get_device_details(self.context,
         #                                             device,
