@@ -173,13 +173,17 @@ class OVSQuantumOFPODLAgent(object):
 
     RPC_API_VERSION = '1.1'
 
-    def __init__(self, integ_br, tunnel_ip, ovsdb_ip, ovsdb_port,
-                 polling_interval, root_helper):
+    def __init__(self, integ_br, tun_br, tunnel_ip, ovsdb_ip, ovsdb_port,
+                 polling_interval, enable_tunneling, root_helper):
         super(OVSQuantumOFPODLAgent, self).__init__()
         self.polling_interval = polling_interval
+        self.enable_tunneling = enable_tunneling
+        self.root_helper = root_helper
         self._setup_rpc()
         self._setup_integration_br(root_helper, integ_br, tunnel_ip,
                                    ovsdb_port, ovsdb_ip)
+        if self.enable_tunneling:
+            self._setup_tunnel_br(tun_br)
 
     def _setup_rpc(self):
         self.topic = topics.AGENT
@@ -220,6 +224,29 @@ class OVSQuantumOFPODLAgent(object):
         self.integration_bridge = integ_br
         #sc_client.set_key(self.int_br.datapath_id, conf_switch_key.OVSDB_ADDR,
         #                  'tcp:%s:%d' % (ovsdb_ip, ovsdb_port))
+
+    def _setup_tunnel_br(self, tun_br):
+        '''Setup the tunnel bridge.
+
+        Creates tunnel bridge, and links it to the integration bridge
+        using a patch port.
+
+        :param tun_br: the name of the tunnel bridge.
+        '''
+        self.tun_br = ovs_lib.OVSBridge(tun_br, self.root_helper)
+        self.tun_br.reset_bridge()
+        self.patch_tun_ofport = self.int_br.add_patch_port(
+            cfg.CONF.ODL.int_peer_patch_port, cfg.CONF.ODL.tun_peer_patch_port)
+        self.patch_int_ofport = self.tun_br.add_patch_port(
+            cfg.CONF.ODL.tun_peer_patch_port, cfg.CONF.ODL.int_peer_patch_port)
+        if int(self.patch_tun_ofport) < 0 or int(self.patch_int_ofport) < 0:
+            LOG.error(_("Failed to create OVS patch port. Cannot have "
+                        "tunneling enabled on this agent, since this version "
+                        "of OVS does not support tunnels or patch ports. "
+                        "Agent terminated!"))
+            exit(1)
+        self.tun_br.remove_all_flows()
+        self.tun_br.add_flow(priority=1, actions="drop")
 
     def port_update(self, context, **kwargs):
         port = kwargs.get('port')
@@ -292,10 +319,12 @@ def main():
     LOG.debug(_('ovsdb_port %s'), ovsdb_port)
     ovsdb_ip = _get_ovsdb_ip()
     LOG.debug(_('ovsdb_ip %s'), ovsdb_ip)
+    tun_br = cfg.CONF.ODL.tunnel_bridge
+    enable_tunneling = cfg.CONF.ODL.enable_tunneling
     try:
-        agent = OVSQuantumOFPODLAgent(integ_br, tunnel_ip, ovsdb_ip,
+        agent = OVSQuantumOFPODLAgent(integ_br, tun_br, tunnel_ip, ovsdb_ip,
                                       ovsdb_port, polling_interval,
-                                      root_helper)
+                                      enable_tunneling, root_helper)
     except httplib.HTTPException, e:
         LOG.error(_("Initialization failed: %s"), e)
         sys.exit(1)
