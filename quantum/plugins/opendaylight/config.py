@@ -8,8 +8,6 @@ DEFAULT_TUNNEL_RANGES='5000:10000'
 odl_opts = [
     cfg.StrOpt('controllers',
                 help=_("List of controller uri's")),
-    cfg.BoolOpt('enable_tunneling', default=False,
-                help=_("Enable tunneling support")),
     cfg.StrOpt('integration_bridge', default='br-int',
                help=_("Integration bridge to use")),
     cfg.StrOpt('network_vlan_ranges',
