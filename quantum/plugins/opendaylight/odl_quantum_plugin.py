@@ -2,6 +2,7 @@ import base64
 import httplib
 import json
 import urllib
+import uuid
 
 from oslo.config import cfg
 
@@ -22,14 +23,18 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
 from quantum.plugins.opendaylight import config
 from quantum.plugins.opendaylight import odl_db
+from quantum.plugins.opendaylight import odl_xml_snippets
+
 
 LOG = logging.getLogger(__name__)
 
 
 DEFAULT_CONTAINER = 'default'
+DEFAULT_PRIORITY = 500
 SWITCH_LIST_PATH = '/controller/nb/v2/switch/%s/nodes/'
 HOST_LIST_PATH = '/controller/nb/v2/host/%s/'
-FLOW_LIST_PATH = '/controller/nb/v2//flow/%s/'
+FLOW_LIST_PATH = '/controller/nb/v2/flow/%s/'
+FLOW_CREATE_PATH = '/controller/nb/v2/flow/%s/%s/%s/%s'
 SUBNET_LIST_PATH = '/controller/nb/v2/subnet/%s'
 SUBNET_CREATE_PATH = '/controller/nb/v2/subnet/%s/%s'
 
@@ -58,9 +63,6 @@ class ODLRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                       l3_rpc_base.L3RpcCallbackMixin,
                       sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
 
-    # history
-    #   1.0 Initial version
-    #   1.1 Support Security Group RPC
 
     RPC_API_VERSION = '1.1'
 
@@ -78,10 +80,19 @@ class ODLRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
     def odl_port_create(self, rpc_context, *args, **kwargs):
         LOG.debug("\n\n\n\n\n%s\n\n\n\n" % kwargs)
-        return True
+        obj = ODLQuantumPlugin()
+        obj._create_port_add_flow(rpc_context, kwargs)
 
     def odl_port_delete(self, rpc_context, *args, **kwargs):
-        LOG.debug("\n\n\n\n\n%s\n\n\n\n" % args)
+        LOG.debug("\n\n\n\n\n%s\n\n\n\n" % kwargs)
+        obj = ODLQuantumPlugin()
+        obj._delete_port_del_flow(rpc_context, kwargs)
+
+    def get_segment_id(self, rpc_context, *args, **kwargs):
+        network_id = kwargs['network_id']
+        segmgr = SegmentationManager()
+
+        return segmgr.get_segmentation_id(None, network_id)
 
     def get_port_from_device(cls, device):
         port = odl_db.get_port_from_device(device)
@@ -120,7 +131,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         controllers = cfg.CONF.ODL.controllers.split(',')
         self.controllers.extend(controllers)
         self.conn = False
-
+        self.flows = {}
         self.segmentation_manager = SegmentationManager()
         self.setup_rpc()
 
@@ -139,7 +150,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         self.conn.consume_in_thread()
 
     def _rest_call(self, action, uri, headers, data=None):
-        data = json.dumps(data) or json.dumps({})
+        data = data or {}
         (ip,port,username,password) = self.controllers[0].split(':')
         conn = httplib.HTTPConnection(ip, port)
         # Add auth
@@ -148,16 +159,60 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         conn.request(action, uri, data, headers)
         response = conn.getresponse()
         respstr = response.read()
+        LOG.debug("\n\n\n\n\n%s %s\n\n\n\n" % (uri, respstr))
+        return (response.status, respstr)
 
-    def _create_flow(self, context, ingress, egress):
+    def _create_port_add_flow(self, context, data, container=DEFAULT_CONTAINER):
+        LOG.debug("\n\n\n\n\nCreating flow on controller\n\n\n\n")
+        port_id = data['port_id']
+        if port_id in self.flows:
+            return
+        # Get port info
+        port = self.get_port(context, port_id)
+        # Get segmentation id
+        segmentation_id = self.segmentation_manager.get_segmentation_id(
+            context.session, port['network_id'])
+        switch_id = '00:00:' + data['switch_id']
+        port_name = data['vif_id'].split(',')[2].split('=')[1]
+        of_port_id = data['vif_id'].split(',')[3].split('=')[1]
+        # Generate uuid for this flow
+        fuuid = uuid.uuid4()
+
+        xml = odl_xml_snippets.PORT_VLAN_SET_FLOW_XML % \
+              (switch_id, of_port_id, fuuid, segmentation_id)
+        
+        # Make rest call
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, fuuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        LOG.debug("\n\n\n\n\nStatus = %s\n\n\n\n\n" % status)
+        if status == 201:
+            odl_db.add_port_flow(context.session, fuuid, port_id, 'setVlan')
+        
+    def _delete_port_del_flow(self, context, data, container=DEFAULT_CONTAINER):
+        LOG.debug("\n\n\n\n\nDeleting flows on controller\n\n\n\n")
+        port_id = data['port_id']
+        switch_id = '00:00:' + data['switch_id']
+        flows = odl_db.get_port_flows(context.session, port_id)
+
+        for flow in flows:
+            LOG.debug("\n\n\n\n\n%s\n\n\n\n" % flow)
+            self._delete_flow(context, switch_id, flow['flow_id'])
+
+    def _create_flow(self, context, port, type, vif, switch):
         pass
 
     def _get_flows(self, context):
         pass
 
-    def _delete_flow(self, context, name):
-        pass
-
+    def _delete_flow(self, context, switch_id, flow_name, container=DEFAULT_CONTAINER):
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, flow_name)
+        headers = {"Accept": "application/json"}
+        
+        (status, response) = self._rest_call('DELETE', uri, headers, json.dumps({}))
+        if status == 201:
+            odl_db.del_port_flow(context.session, flow_name)
+    
     def _create_gateway(self, context, gateway_ip):
         pass
 
@@ -177,12 +232,12 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             headers = {"Accept": "application/json"}
             uri = uri + '?' +  'subnet=' + str(subnet['gateway_ip'] + '/' + mask)
 
-            self._rest_call('POST', uri, headers, {})
+            self._rest_call('POST', uri, headers, json.dumps({}))
 
     def _delete_subnet(self, context, id, container=DEFAULT_CONTAINER):
         uri = SUBNET_CREATE_PATH % (container, id)
         headers = {"Accept": "application/json"}
-        self._rest_call('DELETE', uri, headers, {})
+        self._rest_call('DELETE', uri, headers, json.dumps({}))
 
     def create_network(self, context, network):
         # Assign segment id
@@ -210,9 +265,17 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         port = super(ODLQuantumPlugin, self).create_port(context, port)
         segmentation_id = self.segmentation_manager.get_segmentation_id(
             context.session, port['network_id'])
-        self.notifier.port_update(context, port,
-                                  segmentation_id)
         return port
+
+    def update_port(self, context, id, port):
+        session = context.session
+        updated_port = super(ODLQuantumPluginV2, self).update_port(
+            context, id, port)
+        segmentation_id = self.segmentation_manager.get_segmentation_id(
+            context.session, port['network_id'])
+        self.notifier.port_update(context, updated_port, segmentation_id)
+
+        return updated_port
 
     def create_subnet(self, context, subnet):
         subnet = super(ODLQuantumPlugin, self).create_subnet(context, subnet)

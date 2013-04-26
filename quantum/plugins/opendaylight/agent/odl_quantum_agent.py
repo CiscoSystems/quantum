@@ -151,7 +151,7 @@ class ODLPluginApi(agent_rpc.PluginApi, object):
                          topic=self.topic)
 
     def odl_port_create(self, context, port_id, vif_id, switch_id):
-        LOG.debug(_("\n\n\n\nPassing create port %s to plugin\n\n\n\n" % port_id))
+        LOG.debug(_("Passing create port to plugin"))
         return self.call(context,
                          self.make_msg("odl_port_create",
                                        port_id=port_id,
@@ -176,6 +176,7 @@ class OVSQuantumOFPODLAgent(object):
     def __init__(self, integ_br, tunnel_ip, ovsdb_ip, ovsdb_port,
                  polling_interval, root_helper):
         super(OVSQuantumOFPODLAgent, self).__init__()
+        self.ports = {}
         self.polling_interval = polling_interval
         self._setup_rpc()
         self._setup_integration_br(root_helper, integ_br, tunnel_ip,
@@ -224,16 +225,8 @@ class OVSQuantumOFPODLAgent(object):
     def port_update(self, context, **kwargs):
         port = kwargs.get('port')
         vif_port = self.int_br.get_vif_port_by_id(port['id'])
-        #if not vif_port:
-        #    return
-        port["vif_port"] = vif_port
-        port["switch_id"] = utils.get_interface_mac(self.integration_bridge)
-        if port['admin_state_up']:
-            # update plugin about port status
-            self.plugin_rpc.odl_port_create(self.context, port['id'], vif_port, port['switch_id'])
-        else:
-            # update plugin about port status
-            self.plugin_rpc.odl_port_delete(self.context, port)
+        if not vif_port:
+            return
 
         #details = self.plugin_rpc.get_device_details(self.context,
         #                                             device,
@@ -245,12 +238,32 @@ class OVSQuantumOFPODLAgent(object):
             return
         added = ports - registered_ports
         removed = registered_ports - ports
+
         return {'current': ports,
                 'added': added,
                 'removed': removed}
 
     def _process_devices_filter(self, port_info):
-        pass
+        switch_id = utils.get_interface_mac(self.integration_bridge)
+        for port in port_info['added']:
+            vif_port = self.int_br.get_vif_port_by_id(port)
+            self.ports[port] = vif_port
+            # update plugin about port status
+            self.plugin_rpc.odl_port_create(
+                self.context,
+                str(port),
+                str(vif_port),
+                str(switch_id))
+
+        for port in port_info['removed']:
+            vif_port = self.ports[port]
+            # update plugin about port status
+            self.plugin_rpc.odl_port_delete(
+                self.context,
+                str(port),
+                str(vif_port),
+                str(switch_id))    
+            del self.ports[port]
 
     def daemon_loop(self):
         ports = set()

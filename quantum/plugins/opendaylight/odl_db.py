@@ -94,3 +94,32 @@ def get_port_from_device(port_id):
     port_dict['fixed_ips'] = [ip['ip_address']
                               for ip in port['fixed_ips']]
     return port_dict
+
+def add_port_flow(session, flow_id, port_id, flow_type, sec_group_rule=None):
+    session = session or db.get_session()
+
+    with session.begin(subtransactions=True):
+        binding = odl_models.Flow(flow_id, port_id, flow_type, sec_group_rule)
+        session.add(binding)
+    
+def del_port_flow(session, flow_id):
+    session = session or db.get_session()
+
+    try:
+        binding = (session.query(odl_models.Flow).
+                   filter_by(flow_id=flow_id).
+                   one())
+        session.delete(binding)
+    except:
+        raise
+
+def get_port_flows(session, port_id):
+    session = session or db.get_session()
+
+    try:
+        bindings = (session.query(odl_models.Flow).
+                   filter_by(port_id=port_id).
+                   all())
+        return bindings
+    except:
+        raise 
