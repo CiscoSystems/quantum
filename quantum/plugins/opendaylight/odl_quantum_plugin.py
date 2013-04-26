@@ -267,16 +267,6 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             context.session, port['network_id'])
         return port
 
-    def update_port(self, context, id, port):
-        session = context.session
-        updated_port = super(ODLQuantumPluginV2, self).update_port(
-            context, id, port)
-        segmentation_id = self.segmentation_manager.get_segmentation_id(
-            context.session, port['network_id'])
-        self.notifier.port_update(context, updated_port, segmentation_id)
-
-        return updated_port
-
     def create_subnet(self, context, subnet):
         subnet = super(ODLQuantumPlugin, self).create_subnet(context, subnet)
         self._create_subnet(context, subnet)
