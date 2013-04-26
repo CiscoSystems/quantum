@@ -752,6 +752,15 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         to identify the pre created port
 
         """
+        if self._populate_profile_for_test():
+            dummy_p_profile_name = "dummy_pprofile"
+            dummy_p_profile_id = "00000000-1111-1111-1111-000000000000"
+            dummy_tenant_id = "test-tenant"
+            self._add_policy_profile(dummy_p_profile_name,
+                                     dummy_p_profile_id,
+                                     dummy_tenant_id)
+            port['port'][n1kv_profile.PROFILE_ID] = dummy_p_profile_id
+
         if n1kv_profile.PROFILE_ID in port['port']:
             # If it is a dhcp port, profile id is
             # populated with network profile id.
@@ -807,6 +816,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 port['port'] = pt
                 pt = self.update_port(context, pt['id'], port)
                 return pt
+
+    def _populate_profile_for_test(self):
+        """
+        Method to be patched by the test code to inject n1kv:profile_id
+        into the port object. This method will return False value and not
+        affect the plugin code in any way. Method must be patched by 
+        test_n1kv_plugin module to return True so that the port object
+        includes n1kv:profile_id argument, since the plugin tests for 
+        its existence.
+        """
+        return False
 
     def _get_instance_port_id(self, tenant_id, instance_id):
         """ Get the port IDs from the meta data """

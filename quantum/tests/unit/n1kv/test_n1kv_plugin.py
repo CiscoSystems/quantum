@@ -24,6 +24,7 @@ from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.tests.unit import test_db_plugin as test_plugin
 
 from quantum.plugins.cisco.n1kv import n1kv_client
+from quantum.plugins.cisco.n1kv import n1kv_quantum_plugin
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 
 from quantum import context
@@ -190,6 +191,12 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         self.addCleanup(get_cred_name_patcher.stop)
         fake_get_cred_name.return_value = \
                        { "user_name" : "admin", "password" : "admin_password" }
+
+        populate_profile_patcher = patch(n1kv_quantum_plugin.__name__ + \
+                                         ".N1kvQuantumPluginV2._populate_profile_for_test")
+        fake_populate_profile = populate_profile_patcher.start()
+        self.addCleanup(populate_profile_patcher.stop)
+        fake_populate_profile.return_value = True 
 
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
