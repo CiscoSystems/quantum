@@ -295,11 +295,11 @@ class Client(object):
                 'macAddress': port['mac_address']}
         return self._post(self.ports_path % (name), body=body, params=_params)
 
-    def update_n1kv_port(self, port, body):
+    def update_n1kv_port(self, vm_network_name, port_id, body):
         """
         Updates a Port on the VSM
         """
-        return self._post(self.port_path % (port), body=body)
+        return self._post(self.port_path % ((vm_network_name), (port_id)), body=body)
 
     def delete_n1kv_port(self, vm_network_name, port_id, **_params):
         """
