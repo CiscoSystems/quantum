@@ -333,7 +333,11 @@ def main():
     ovsdb_ip = _get_ovsdb_ip()
     LOG.debug(_('ovsdb_ip %s'), ovsdb_ip)
     tun_br = cfg.CONF.ODL.tunnel_bridge
-    enable_tunneling = cfg.CONF.ODL.enable_tunneling
+    tenant_network_type = cfg.CONF.ODL.tenant_network_type
+    enable_tunneling = False
+    if (tenant_network_type != 'vlan'):
+        enable_tunneling = True
+
     try:
         agent = OVSQuantumOFPODLAgent(integ_br, tun_br, tunnel_ip, ovsdb_ip,
                                       ovsdb_port, polling_interval,
