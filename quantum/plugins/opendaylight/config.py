@@ -29,6 +29,9 @@ odl_opts = [
     cfg.ListOpt('tunnel_id_ranges',
                 default=DEFAULT_TUNNEL_RANGES,
                 help=_("List of <tun_min>:<tun_max>")),
+    cfg.StrOpt('physical_bridge',
+                default='int-br-eth1',
+                help=_("Interface Id of the veth interface on the bridge"))
 ]
 
 agent_opts = [

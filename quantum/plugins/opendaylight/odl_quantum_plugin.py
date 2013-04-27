@@ -32,6 +32,7 @@ LOG = logging.getLogger(__name__)
 DEFAULT_CONTAINER = 'default'
 DEFAULT_PRIORITY = 500
 SWITCH_LIST_PATH = '/controller/nb/v2/switch/%s/nodes/'
+SWITCH_GET_PATH = '/controller/nb/v2/switch/%s/node/%s/%s'
 HOST_LIST_PATH = '/controller/nb/v2/host/%s/'
 FLOW_LIST_PATH = '/controller/nb/v2/flow/%s/'
 FLOW_CREATE_PATH = '/controller/nb/v2/flow/%s/%s/%s/%s'
@@ -79,12 +80,12 @@ class ODLRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                                           agents_db.AgentExtRpcCallback()])
 
     def odl_port_create(self, rpc_context, *args, **kwargs):
-        LOG.debug("\n\n\n\n\n%s\n\n\n\n" % kwargs)
+        LOG.debug("\n\n\n\n\nQuantum port created\n\n\n\n")
         obj = ODLQuantumPlugin()
         obj._create_port_add_flow(rpc_context, kwargs)
 
     def odl_port_delete(self, rpc_context, *args, **kwargs):
-        LOG.debug("\n\n\n\n\n%s\n\n\n\n" % kwargs)
+        LOG.debug("\n\n\n\n\nQuantum port deleted\n\n\n\n")
         obj = ODLQuantumPlugin()
         obj._delete_port_del_flow(rpc_context, kwargs)
 
@@ -132,6 +133,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         self.controllers.extend(controllers)
         self.conn = False
         self.flows = {}
+        self.phy_br_port_id = None
         self.segmentation_manager = SegmentationManager()
         self.setup_rpc()
 
@@ -159,44 +161,64 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         conn.request(action, uri, data, headers)
         response = conn.getresponse()
         respstr = response.read()
-        LOG.debug("\n\n\n\n\n%s %s\n\n\n\n" % (uri, respstr))
+        #LOG.debug("\n\n\n\n\n%s %s\n\n\n\n" % (uri, respstr))
         return (response.status, respstr)
 
+    def _get_phy_br_port_id(self, context, switch_id, container=DEFAULT_CONTAINER):
+        if self.phy_br_port_id:
+            return self.phy_br_port_id
+        
+        uri = SWITCH_GET_PATH % (container, 'OF', switch_id)
+        headers = {}
+        (status, response) = self._rest_call('GET', uri, headers, json.dumps({}))
+        response = json.loads(response)
+        if status == 200:
+            for connector in response["nodeConnectorProperties"]:
+                if str(connector['properties']['name']['nameValue']) == str(cfg.CONF.ODL.physical_bridge):
+                    self.phy_br_port_id = connector['nodeconnector']['@id']
+                    return self.phy_br_port_id
+        
+        return False
+
     def _create_port_add_flow(self, context, data, container=DEFAULT_CONTAINER):
-        LOG.debug("\n\n\n\n\nCreating flow on controller\n\n\n\n")
+        #LOG.debug("\n\n\n\n\nCreating flow on controller\n\n\n\n")
         port_id = data['port_id']
         if port_id in self.flows:
             return
         # Get port info
-        port = self.get_port(context, port_id)
+        try:
+            port = self.get_port(context, port_id)
+        except:
+            return True
         # Get segmentation id
         segmentation_id = self.segmentation_manager.get_segmentation_id(
             context.session, port['network_id'])
         switch_id = '00:00:' + data['switch_id']
         port_name = data['vif_id'].split(',')[2].split('=')[1]
         of_port_id = data['vif_id'].split(',')[3].split('=')[1]
+        
+        # Get bridge port id
+        bport = self._get_phy_br_port_id(context, switch_id, container)
+
         # Generate uuid for this flow
         fuuid = uuid.uuid4()
-
+        mac = port['mac_address']
         xml = odl_xml_snippets.PORT_VLAN_SET_FLOW_XML % \
-              (switch_id, of_port_id, fuuid, segmentation_id)
-        
+              (switch_id, of_port_id, fuuid, segmentation_id, bport)
         # Make rest call
         uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, fuuid)
         headers = {"Content-type": "application/xml"}
         (status, response) = self._rest_call('POST', uri, headers, xml)
-        LOG.debug("\n\n\n\n\nStatus = %s\n\n\n\n\n" % status)
         if status == 201:
             odl_db.add_port_flow(context.session, fuuid, port_id, 'setVlan')
         
     def _delete_port_del_flow(self, context, data, container=DEFAULT_CONTAINER):
-        LOG.debug("\n\n\n\n\nDeleting flows on controller\n\n\n\n")
+        #LOG.debug("\n\n\n\n\nDeleting flows on controller\n\n\n\n")
         port_id = data['port_id']
         switch_id = '00:00:' + data['switch_id']
         flows = odl_db.get_port_flows(context.session, port_id)
 
         for flow in flows:
-            LOG.debug("\n\n\n\n\n%s\n\n\n\n" % flow)
             self._delete_flow(context, switch_id, flow['flow_id'])
 
     def _create_flow(self, context, port, type, vif, switch):
@@ -210,7 +232,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         headers = {"Accept": "application/json"}
         
         (status, response) = self._rest_call('DELETE', uri, headers, json.dumps({}))
-        if status == 201:
+        if status == 200:
             odl_db.del_port_flow(context.session, flow_name)
     
     def _create_gateway(self, context, gateway_ip):

@@ -3,6 +3,10 @@ PORT_VLAN_SET_FLOW_XML ="""
     <node id="%s" type="OF" />
     <ingressPort>%s</ingressPort>
     <name>%s</name>
-    <actions>setVlan=%s</actions>
+    <vlanId>1</vlanId>
+    <priority>1</priority>
+    <actions>mod_vlan_vid:%s</actions>
+    <actions>NORMAL</actions>
+    <actions>OUTPUT:%s</actions>
 </flowConfig>
 """
