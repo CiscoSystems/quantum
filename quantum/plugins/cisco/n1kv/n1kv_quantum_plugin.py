@@ -761,7 +761,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                      dummy_tenant_id)
             port['port'][n1kv_profile.PROFILE_ID] = dummy_p_profile_id
 
+        profile_id_set = False
         if n1kv_profile.PROFILE_ID in port['port']:
+            profile_id = port['port'].get(n1kv_profile.PROFILE_ID)
+            profile_id_set = attributes.is_attr_set(profile_id)
+
+        if profile_id_set:
             # If it is a dhcp port, profile id is
             # populated with network profile id.
             if port['port']['device_id'].startswith('dhcp'):
@@ -845,6 +850,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         port_id = serv.__getattr__('metadata')
+        LOG.debug("Got port ID from nova: %s", port_id)
 
         return port_id
 
