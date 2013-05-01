@@ -238,7 +238,11 @@ class Client(object):
                 '32': '255.255.255.255',}
 
         if subnet['cidr']:
-            netmask = cidr[subnet['cidr'].split('/')[1]]
+            cidr_block = subnet['cidr'].split('/')[1]
+            if cidr_block < 33:
+                netmask = cidr[cidr_block]
+            else:
+                netmask = ''
         else:
             netmask = ''
 
@@ -250,8 +254,8 @@ class Client(object):
             address_range_end   = None
 
         body = {'dhcp': subnet['enable_dhcp'],
-                'addressRangeStart': subnet['allocation_pools'][0]['start'],
-                'addressRangeEnd': subnet['allocation_pools'][0]['end'],
+                'addressRangeStart': address_range_start,
+                'addressRangeEnd': address_range_end,
                 'ipAddressSubnet': netmask,
                 'name': subnet['name'],
                 'gateway': subnet['gateway_ip'], }

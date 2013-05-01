@@ -40,6 +40,7 @@ from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
+from quantum.db import agents_db
 
 from quantum.extensions import providernet as provider
 
@@ -47,6 +48,7 @@ from quantum.openstack.common import context
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
+from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 
 from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
 from quantum.plugins.cisco.extensions import network_profile
@@ -81,7 +83,8 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
         '''
-        return q_rpc.PluginRpcDispatcher([self])
+        return q_rpc.PluginRpcDispatcher([self,
+                                          agents_db.AgentExtRpcCallback()])
 
     def get_device_details(self, rpc_context, **kwargs):
         """Agent requests device details"""
@@ -208,8 +211,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # This attribute specifies whether the plugin supports or not
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
-    __native_bulk_support = True
-    supported_extension_aliases = ["provider",
+    __native_bulk_support = False
+    supported_extension_aliases = ["provider", "agent",
                                    "n1kv_profile", "network_profile",
                                    "policy_profile", "router", "credential"]
 
@@ -251,6 +254,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.create_consumer(self.topic, self.dispatcher,
                                   fanout=False)
         # Consume from all consumers in a thread
+        self.dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
         self.conn.consume_in_thread()
 
     def _setup_vsm(self):
@@ -583,7 +587,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                 port['network_id'])
         if vm_network:
             vm_network_name = vm_network['name']
-            #self._send_update_port_request(port, vm_network_name)
             n1kvclient = n1kv_client.Client()
             n1kvclient.create_n1kv_port(port, vm_network_name)
             vm_network['port_count'] = self._update_port_count(vm_network['port_count'],
@@ -592,10 +595,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         else:
             policy_profile = n1kv_db_v2.get_policy_profile(\
                                 port[n1kv_profile.PROFILE_ID])
-            profile_name = policy_profile['name']
-            network = self.get_network(context, port['network_id'])
-            network_name = network['name']
-            vm_network_name = str(profile_name) + '_' + str(network_name)
+            vm_network_name = "vmn_" + str(port[n1kv_profile.PROFILE_ID]) +\
+                              "_" + str(port['network_id'])
             port_count = 1
             n1kv_db_v2.add_vm_network(vm_network_name,
                                      port[n1kv_profile.PROFILE_ID],
@@ -647,7 +648,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_network(self, context, network):
         """ Create network based on Network Profile """
-        # self._poll_policies(network['network']['tenant_id'])
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])
@@ -777,7 +777,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     port)
                 n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
-
             self._send_create_port_request(context, pt)
             LOG.debug("Created port: %s", pt)
             return pt

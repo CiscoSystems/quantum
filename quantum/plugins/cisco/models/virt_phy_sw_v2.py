@@ -58,7 +58,8 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                             'get_port', 'get_ports',
                             'create_subnet', 'create_subnet_bulk',
                             'delete_subnet', 'update_subnet',
-                            'get_subnet', 'get_subnets', ]
+                            'get_subnet', 'get_subnets',
+                            'create_or_update_agent', ]
 
     def __init__(self):
         """

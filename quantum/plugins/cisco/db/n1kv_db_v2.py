@@ -402,13 +402,17 @@ def get_vm_network(profile_id, network_id):
 
 def add_vm_network(name, profile_id, network_id, port_count):
     session = db.get_session()
-    with session.begin(subtransactions=True):
-        vm_network = n1kv_models_v2.N1kVmNetwork(name,
-                                                 profile_id,
-                                                 network_id,
-                                                 port_count)
-        session.add(vm_network)
-
+    try:
+        vm_network = (session.query(n1kv_models_v2.N1kVmNetwork).
+                      filter_by(name=name).one())
+    except exc.NoResultFound:
+        with session.begin(subtransactions=True):
+            vm_network = n1kv_models_v2.N1kVmNetwork(name,
+                                                     profile_id,
+                                                     network_id,
+                                                     port_count)
+            session.add(vm_network)
+            session.flush()
 
 def update_vm_network(name, port_count):
     """Updates a vm network with new port count"""
