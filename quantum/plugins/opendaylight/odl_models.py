@@ -44,3 +44,23 @@ class Flow(model_base.BASEV2):
                                          self.port_id,
                                          self.flow_type,
                                          self.sec_group_rule)
+
+class OvsPort(model_base.BASEV2):
+    """Represents openvswitch port information"""
+    __tablename__ = 'odl_ovs_ports'
+
+    port_id = Column(String(36),
+                     ForeignKey('ports.id', ondelete="CASCADE"),
+                     primary_key=True)
+    of_port_id = Column(Integer)
+    vif_id = Column(String(36), nullable=False)
+
+    def __init__(self, port_id, of_port_id, vif_id):
+        self.port_id = port_id
+        self.of_port_id = of_port_id
+        self.vif_id = vif_id
+
+    def __repr__(self):
+        return "<OvsPort(%s,%d,%s)>" % (self.port_id,
+                                        self.of_port_id,
+                                        self.vif_id)

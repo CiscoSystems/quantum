@@ -110,6 +110,7 @@ def del_port_flow(session, flow_id):
                    filter_by(flow_id=flow_id).
                    one())
         session.delete(binding)
+        session.flush()
     except:
         raise
 
@@ -123,3 +124,29 @@ def get_port_flows(session, port_id):
         return bindings
     except:
         raise 
+
+def add_ovs_port(session, port_id, of_port_id, vif_id):
+    session = session or db.get_session()
+    with session.begin(subtransactions=True):
+        binding = odl_models.OvsPort(port_id, int(of_port_id), vif_id)
+        session.add(binding)
+
+def del_ovs_port(session, port_id):
+    session = session or db.get_session()
+
+    try:
+        binding = (session.query(odl_models.OvsPort).
+                   filter_by(port_id=port_id).
+                   one())
+        session.delete(binding)
+        session.flush()
+    except:
+        raise 
+
+def get_ovs_port(session, port_id):
+    session = session or db.get_session()
+
+    binding = (session.query(odl_models.OvsPort).
+               filter_by(port_id=port_id).
+               one())
+    return binding
