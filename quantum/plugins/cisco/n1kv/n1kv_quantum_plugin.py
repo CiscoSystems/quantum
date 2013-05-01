@@ -24,7 +24,6 @@ import logging
 import sys
 import itertools
 
-from keystoneclient.v2_0 import client as keystone_client
 from novaclient.v1_1 import client as nova_client
 from oslo.config import cfg as quantum_cfg
 
@@ -56,11 +55,10 @@ from quantum.plugins.cisco.extensions import policy_profile
 from quantum.plugins.cisco.extensions import credential
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
+from quantum.plugins.cisco.common import config as conf
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.plugins.cisco.db import network_db_v2
-from quantum.plugins.cisco.n1kv import n1kv_configuration as n1kv_conf
 from quantum.plugins.cisco.n1kv import n1kv_client
 
 
@@ -229,7 +227,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # TBD Begin : To be removed. No need for this parameters
         self._parse_network_vlan_ranges()
         n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
-        self.enable_tunneling = n1kv_conf.N1KV['enable_tunneling']
+        self.enable_tunneling = conf.CISCO_N1K.enable_tunneling
         self.vxlan_id_ranges = []
         if self.enable_tunneling:
             self._parse_vxlan_id_ranges()
@@ -291,7 +289,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # TBD Begin : To be removed. Needs some change in logic before removal
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
-        ranges = n1kv_conf.N1KV['network_vlan_ranges']
+        ranges = conf.CISCO_N1K.network_vlan_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -318,7 +316,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.network_vlan_ranges[physical_network] = []
 
     def _parse_vxlan_id_ranges(self):
-        ranges = n1kv_conf.N1KV['vxlan_id_ranges']
+        ranges = conf.CISCO_N1K.vxlan_id_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -761,7 +759,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                      dummy_tenant_id)
             port['port'][n1kv_profile.PROFILE_ID] = dummy_p_profile_id
 
+        profile_id_set = False
         if n1kv_profile.PROFILE_ID in port['port']:
+            profile_id = port['port'].get(n1kv_profile.PROFILE_ID)
+            profile_id_set = attributes.is_attr_set(profile_id)
+
+        if profile_id_set:
             # If it is a dhcp port, profile id is
             # populated with network profile id.
             if port['port']['device_id'].startswith('dhcp'):
@@ -829,21 +832,18 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _get_instance_port_id(self, tenant_id, instance_id):
         """ Get the port IDs from the meta data """
-        keystone = cred._creds_dictionary['keystone']
-        url = keystone.keys()[0]
-        kc = keystone_client.Client(username=keystone[url]['username'],
-                                    password=keystone[url]['password'],
-                                    tenant_id=tenant_id,
-                                    auth_url=url)
-        tenant = kc.tenants.get(tenant_id)
-        tenant_name = tenant.name
-        nc = nova_client.Client(keystone[url]['username'],
-                                keystone[url]['password'],
-                                tenant_name,
-                                url,
+        keystone_conf = quantum_cfg.CONF.keystone_authtoken
+        keystone_auth_url = '%s://%s:%s/v2.0/' % (keystone_conf.auth_protocol,
+                                                  keystone_conf.auth_host,
+                                                  keystone_conf.auth_port)
+        nc = nova_client.Client(keystone_conf.admin_user,
+                                keystone_conf.admin_password,
+                                keystone_conf.admin_tenant_name,
+                                keystone_auth_url,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         port_id = serv.__getattr__('metadata')
+        LOG.debug("Got port ID from nova: %s", port_id)
 
         return port_id
 

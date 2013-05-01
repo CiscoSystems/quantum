@@ -18,8 +18,9 @@
 
 import logging as LOG
 
-from quantum.plugins.cisco.common.cisco_utils import find_config_file
-from quantum.plugins.cisco.common import cisco_configparser as confp
+from oslo.config import cfg
+
+from quantum.plugins.cisco.common import config
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.db import network_db_v2 as cdb
@@ -27,12 +28,9 @@ from quantum.plugins.cisco.db import network_db_v2 as cdb
 LOG.basicConfig(level=LOG.WARN)
 LOG.getLogger(const.LOGGER_COMPONENT_NAME)
 
-CREDENTIALS_FILE = find_config_file({'plugin': 'cisco'},
-                                    "credentials.ini")
 TENANT = const.NETWORK_ADMIN
 
-cp = confp.CiscoConfigParser(CREDENTIALS_FILE)
-_creds_dictionary = cp.walk(cp.dummy)
+_dev_dict = config.get_device_dictionary()
 
 
 class Store(object):
@@ -40,14 +38,14 @@ class Store(object):
 
     @staticmethod
     def initialize():
-        for id_type in _creds_dictionary.keys():
-            for id in _creds_dictionary[id_type].keys():
+        for dev_id, dev_ip, dev_key in _dev_dict.keys():
+            if dev_key == const.USERNAME:
                 try:
                     cdb.add_credential(
-                        id,
-                        _creds_dictionary[id_type][id][const.USERNAME],
-                        _creds_dictionary[id_type][id][const.PASSWORD],
-                        id_type)
+                        dev_ip,
+                        _dev_dict[dev_id, dev_ip, const.USERNAME],
+                        _dev_dict[dev_id, dev_ip, const.PASSWORD],
+                        dev_id)
                 except cexc.CredentialAlreadyExists:
                     # We are quietly ignoring this, since it only happens
                     # if this class module is loaded more than once, in

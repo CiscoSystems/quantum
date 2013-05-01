@@ -33,7 +33,7 @@ import quantum.db.api as db
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
-from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
+from quantum.plugins.cisco.common import config as conf
 from quantum.api.v2.attributes import _validate_ip_address
 
 LOG = logging.getLogger(__name__)
@@ -777,7 +777,7 @@ class NetworkProfile_db_mixin(object):
         """Validate if vlan falls within segment boundaries."""
 
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['network_vlan_ranges']
+        ranges = conf.CISCO_N1K.network_vlan_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -795,7 +795,7 @@ class NetworkProfile_db_mixin(object):
         :return:
         """
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['vxlan_id_ranges']
+        ranges = conf.CISCO_N1K.vxlan_id_ranges
         ranges = ranges.split(',')
         g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min,
