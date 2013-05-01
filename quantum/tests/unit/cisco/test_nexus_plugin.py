@@ -23,6 +23,7 @@ from quantum.plugins.cisco.nexus import cisco_nexus_plugin_v2
 from quantum.tests import base
 
 
+NEXUS_ID = 'NEXUS_SWITCH'
 NEXUS_IP_ADDRESS = '1.1.1.1'
 NEXUS_USERNAME = 'username'
 NEXUS_PASSWORD = 'password'
@@ -51,14 +52,8 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
         self.second_vlan_name = "q-" + str(self.second_net_id) + "vlan"
         self.second_vlan_id = 265
         self._nexus_switches = {
-            NEXUS_IP_ADDRESS: {
-                HOSTNAME: {
-                    'ports': NEXUS_PORTS,
-                },
-                'ssh_port': {
-                    'ssh_port': NEXUS_SSH_PORT
-                }
-            }
+            (NEXUS_ID, NEXUS_IP_ADDRESS, HOSTNAME): NEXUS_PORTS,
+            (NEXUS_ID, NEXUS_IP_ADDRESS, 'ssh_port'): NEXUS_SSH_PORT,
         }
         self._hostname = HOSTNAME
 

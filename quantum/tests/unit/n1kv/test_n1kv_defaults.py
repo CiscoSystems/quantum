@@ -17,18 +17,17 @@ import unittest
 
 from oslo.config import cfg
 
-from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
-
+from quantum.plugins.cisco.common import config as conf
 
 class ConfigurationTest(unittest.TestCase):
 
     def test_defaults(self):
-        self.assertEqual('br-int', conf.N1KV['integration_bridge'])
-        self.assertEqual('br-tun', conf.N1KV['tunnel_bridge'])
-        self.assertEqual('local', conf.N1KV['tenant_network_type'])
-        self.assertEqual(0, len(conf.N1KV['bridge_mappings']))
-        self.assertEqual(0, len(conf.N1KV['vxlan_id_ranges']))
-        self.assertEqual(0, len(conf.N1KV['network_vlan_ranges']))
+        self.assertEqual('br-int', conf.CISCO_N1K.integration_bridge)
+        self.assertEqual('br-tun', conf.CISCO_N1K.tunnel_bridge)
+        self.assertEqual('local', conf.CISCO_N1K.tenant_network_type)
+        self.assertEqual(0, len(conf.CISCO_N1K.bridge_mappings))
+        self.assertEqual(0, len(conf.CISCO_N1K.vxlan_id_ranges))
+        self.assertEqual(0, len(conf.CISCO_N1K.network_vlan_ranges))
         """
         These are some of the OVS config checks. Change them to
         test the N1KV config, as shown above.

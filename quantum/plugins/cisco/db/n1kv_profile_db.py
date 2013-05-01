@@ -31,7 +31,7 @@ from quantum.db.models_v2 import model_base
 from quantum.common import exceptions as q_exc
 from quantum.plugins.cisco.extensions import profile
 from quantum.plugins.cisco.common import cisco_exceptions
-from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
+from quantum.plugins.cisco.common import config as conf
 
 
 LOG = logging.getLogger(__name__)
@@ -225,7 +225,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         """Validate if vlan falls within segment boundaries."""
 
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['network_vlan_ranges']
+        ranges = conf.CISCO_N1K.network_vlan_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -240,7 +240,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         """Validate if vxlan falls within segment boundaries."""
 
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['tunnel_id_ranges']
+        ranges = conf.CISCO_N1K.tunnel_id_ranges
         ranges = ranges.split(',')
         g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min,
