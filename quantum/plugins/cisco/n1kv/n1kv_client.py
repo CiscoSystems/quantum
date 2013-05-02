@@ -239,7 +239,7 @@ class Client(object):
 
         if subnet['cidr']:
             cidr_block = subnet['cidr'].split('/')[1]
-            if cidr_block < 33:
+            if cidr_block < '33':
                 netmask = cidr[cidr_block]
             else:
                 netmask = ''

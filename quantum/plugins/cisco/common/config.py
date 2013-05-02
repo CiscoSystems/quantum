@@ -31,8 +31,7 @@ cisco_plugins_opts = [
                        'OVSQuantumPluginV2',
                help=_("Virtual Switch to use")),
     cfg.StrOpt('nexus_plugin',
-               default='quantum.plugins.cisco.nexus.cisco_nexus_plugin_v2.'
-                       'NexusPlugin',
+               default=None,
                help=_("Nexus Switch to use")),
 ]
 
@@ -76,9 +75,9 @@ cisco_n1k_opts = [
                help=_("N1K Tenant Network Type")),
     cfg.StrOpt('bridge_mappings', default='',
                help=_("N1K Bridge Mappings")),
-    cfg.StrOpt('vxlan_id_ranges', default='',
+    cfg.StrOpt('vxlan_id_ranges', default='5000:10000',
                help=_("N1K VXLAN ID Ranges")),
-    cfg.StrOpt('network_vlan_ranges', default='',
+    cfg.StrOpt('network_vlan_ranges', default='vlan:1:4095',
                help=_("N1K Network VLAN Ranges")),
 ]
 
