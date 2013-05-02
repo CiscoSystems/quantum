@@ -263,6 +263,9 @@ class Client(object):
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
+    # TODO: Removing tenantId from the request as a temp fix to allow 
+    #       port create. VSM CLI needs to be fixed. Should not interfere
+    #       since VSM is not using tenantId as of now.
     def create_vm_network(self, port, name, policy_profile, **_params):
         """
         Creates a VM Network on the VSM
@@ -272,7 +275,7 @@ class Client(object):
         :return:
         """
         body = {'name': name,
-                'tenantId': port['tenant_id'],
+                #'tenantId': port['tenant_id'],
                 'vmNetworkDefinition': port['network_id'],
                 'portProfile': policy_profile['name'],
                 'portProfileId': policy_profile['id'],
@@ -295,11 +298,11 @@ class Client(object):
                 'macAddress': port['mac_address']}
         return self._post(self.ports_path % (name), body=body, params=_params)
 
-    def update_n1kv_port(self, port, body):
+    def update_n1kv_port(self, vm_network_name, port_id, body):
         """
         Updates a Port on the VSM
         """
-        return self._post(self.port_path % (port), body=body)
+        return self._post(self.port_path % ((vm_network_name), (port_id)), body=body)
 
     def delete_n1kv_port(self, vm_network_name, port_id, **_params):
         """

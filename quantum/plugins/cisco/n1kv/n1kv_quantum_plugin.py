@@ -610,7 +610,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         body = {'portId': port['id'],
                 'macAddress': port['mac_address']}
         n1kvclient = n1kv_client.Client()
-        n1kvclient.update_n1kv_port(vm_network_name, body)
+        n1kvclient.update_n1kv_port(vm_network_name, port['id'], body)
 
     def _update_port_count(self, port_count, action):
         """ Increments/Decrements port count by 1 based on action.
@@ -836,7 +836,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._extend_port_dict_profile(context, port)
         if self.agent_vsm:
             if original_port['admin_state_up'] != port['admin_state_up']:
-                self._send_update_port_request(port)
+                vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
+                                                port['network_id'])
+                self._send_update_port_request(port, vm_network['name'])                
         return port
 
     def delete_port(self, context, id):
