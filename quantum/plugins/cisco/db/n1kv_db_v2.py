@@ -457,6 +457,7 @@ def create_network_profile(profile):
                             name=profile['name'],
                             segment_type=profile['segment_type'],
                             mcast_ip_index=0,
+                            segment_range=profile['segment_range'],
                             mcast_ip_range=profile['multicast_ip_range'])
         session.add(net_profile)
         return net_profile
