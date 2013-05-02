@@ -65,9 +65,3 @@ PORT_GATEWAY_FLOW_XML = """
     <actions>CONTROLLER</actions>
 </flowConfig>
 """
-
-HOST_ADD_XML = """
-<flowConfig>
-    <name>%s</name>
-</flowConfig>
-"""

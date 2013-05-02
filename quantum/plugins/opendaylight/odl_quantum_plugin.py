@@ -192,6 +192,109 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
 
         return False
 
+    def _add_port_drop_flow(self, context, switch_id, port_id,
+                            of_port_id, priority, container):
+        duuid = uuid.uuid4()
+        xml = odl_xml_snippets.PORT_DROP_PACKET_XML % \
+            (switch_id, of_port_id, duuid, priority)
+
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, duuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, duuid, port_id, 'drop')
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+    def _add_static_host(self, context, mac_address, switch_id, of_port_id,
+                            node_ip, segmentation_id, container):
+        query_args = '?dataLayerAddress=%s&nodeType=OF&nodeId=%s&'
+        query_args += 'nodeConnectorType=OF&nodeConnectorId=%s&vlan=%s'
+        query_args = query_args % (mac_address, switch_id, of_port_id,
+                                    segmentation_id)
+        uri = HOST_ADD_PATH % (container, node_ip)
+        uri = uri + query_args
+        (status, response) = self._rest_call('POST', uri, {}, json.dumps({}))
+        if status == 201:
+            LOG.debug(_("Host added"))
+            #odl_db.add_port_flow(context.session, fuuid, port_id, 'setVlan')
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+    def _port_outbound_setvlan_flow(self, context, switch_id, port_id,
+                                    of_port_id, segmentation_id, priority,
+                                    container):
+        fuuid = uuid.uuid4()
+        xml = odl_xml_snippets.PORT_VLAN_SET_FLOW_XML % \
+              (switch_id, of_port_id, fuuid,
+                priority, segmentation_id)
+
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, fuuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, fuuid, port_id, 'setVlan')
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+    def _port_inbound_strip_vlan_flow(self, context, switch_id, port_id,
+                                        of_port_id, segmentation_id,
+                                        priority, container):
+        ruuid = uuid.uuid4()
+        xml = odl_xml_snippets.INT_PORT_POP_VLAN_XML % \
+              (switch_id, ruuid, priority,
+                segmentation_id, of_port_id)
+
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, ruuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, ruuid, port_id, 'popVlan')
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+    def _add_port_gateway_flow(self, context, switch_id, port_id, of_port_id,
+                                gateway_ip, priority, container):
+        guuid = uuid.uuid4()
+        xml = odl_xml_snippets.PORT_GATEWAY_FLOW_XML % \
+              (switch_id, of_port_id, guuid, gateway_ip, priority)
+
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, guuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, guuid, port_id, 'gateway')
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+    def _add_port_port_dual_flow(self, context, switch_id, ingress_id,
+                                    egress_id, priority, container, label):
+
+        duuid = uuid.uuid4()
+        xml = odl_xml_snippets.PORT_DHCP_FLOW_XML % \
+              (switch_id, ingress_id, duuid,
+                priority, egress_id)
+
+        # Add forward flow
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, duuid)
+        headers = {"Content-type": "application/xml"}
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, duuid, ingress_id, label)
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
+        # Add reverse flow from dhcp port
+        rduuid = uuid.uuid4()
+        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, rduuid)
+        xml = odl_xml_snippets.PORT_DHCP_FLOW_XML % \
+              (switch_id, egress_id, rduuid, priority, ingress_id)
+        (status, response) = self._rest_call('POST', uri, headers, xml)
+        if status == 201:
+            odl_db.add_port_flow(context.session, rduuid, ingress_id, label)
+        else:
+            LOG.error(_("Error creating flow: %s" % response))
+
     def _create_port_add_flows(self, context, data,
                                 container=DEFAULT_CONTAINER):
         LOG.debug(_("Creating port flows on controller"))
@@ -215,43 +318,25 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         bport = self._get_phy_br_port_id(context, switch_id, container)
 
         # Add drop flow first
-        """
-        duuid = uuid.uuid4()
-        xml = odl_xml_snippets.PORT_DROP_PACKET_XML % \
-            (switch_id, of_port_id, duuid, DEFAULT_PRIORITY + 1)
+        self._add_port_drop_flow(context, switch_id, port_id, of_port_id,
+                                    DEFAULT_PRIORITY + 1, container)
 
-        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, duuid)
-        headers = {"Content-type": "application/xml"}
-        (dstatus, dresponse) = self._rest_call('POST', uri, headers, xml)
-        if dstatus == 201:
-            odl_db.add_port_flow(context.session, duuid, port_id, 'drop')
-        """
+        # Add host and set vlan
+        node_ip = port['fixed_ips'][0]['ip_address']
+        self._add_static_host(context, port['mac_address'], switch_id,
+                                of_port_id, node_ip, segmentation_id,
+                                container)
 
         # Add setVlan flow now
-        fuuid = uuid.uuid4()
-        mac = port['mac_address']
-        xml = odl_xml_snippets.PORT_VLAN_SET_FLOW_XML % \
-              (switch_id, of_port_id, fuuid,
-                DEFAULT_PRIORITY + 2, segmentation_id)
+        self._port_outbound_setvlan_flow(context, switch_id, port_id,
+                                            of_port_id, segmentation_id,
+                                            DEFAULT_PRIORITY + 2, container)
 
-        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, fuuid)
-        headers = {"Content-type": "application/xml"}
-        (status, response) = self._rest_call('POST', uri, headers, xml)
-        if status == 201:
-            odl_db.add_port_flow(context.session, fuuid, port_id, 'setVlan')
-
-        # Add reverse flow
+        # Add inbound flow
         """
-        ruuid = uuid.uuid4()
-        xml = odl_xml_snippets.INT_PORT_POP_VLAN_XML % \
-              (switch_id, ruuid, DEFAULT_PRIORITY + 2,
-                segmentation_id, of_port_id)
-
-        uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, ruuid)
-        headers = {"Content-type": "application/xml"}
-        (status, response) = self._rest_call('POST', uri, headers, xml)
-        if status == 201:
-            odl_db.add_port_flow(context.session, ruuid, port_id, 'popVlan')
+        self._port_inbound_strip_vlan_flow(context, switch_id, port_id,
+                                            of_port_id, segmentation_id,
+                                            DEFAULT_PRIORITY + 2, container)
         """
 
         # Add port gateway flow
@@ -259,18 +344,10 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         subnets = self.get_subnets(
             context, filters={'network_id': [port['network_id']]})
         for subnet in subnets:
-            guuid = uuid.uuid4()
-            xml = odl_xml_snippets.PORT_GATEWAY_FLOW_XML % \
-                  (switch_id, of_port_id, guuid,
-                    subnet['gateway_ip'], DEFAULT_PRIORITY + 3)
-
-            uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, guuid)
-            headers = {"Content-type": "application/xml"}
-            (status, response) = self._rest_call('POST', uri, headers, xml)
-            if status == 201:
-                odl_db.add_port_flow(context.session, guuid,
-                                        port_id, 'gateway')
-
+            self._add_port_gateway_flow(context, switch_id, port_id,
+                                        of_port_id, subnet['gateway_ip'],
+                                        DEFAULT_PRIORITY + 2, container)
+ 
         # Check if this is a regular port
         """
         if (port['device_owner'] != 'network:dhcp'):
@@ -284,29 +361,11 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             for dport in ports:
                 # Get of id for this port
                 of_dport_id = odl_db.get_ovs_port(context.session,
-                                rport['id']).of_port_id
-                duuid = uuid.uuid4()
-                xml = odl_xml_snippets.PORT_DHCP_FLOW_XML % \
-                      (switch_id, of_port_id, duuid,
-                        DEFAULT_PRIORITY + 3, of_dport_id)
-
-                uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, duuid)
-                headers = {"Content-type": "application/xml"}
-                (status, response) = self._rest_call('POST', uri, headers, xml)
-                if status == 201:
-                    odl_db.add_port_flow(context.session, duuid,
-                                            port_id, 'dhcp')
-
-                # Add reverse flow from dhcp port
-                rduuid = uuid.uuid4()
-                uri = FLOW_CREATE_PATH % (container, 'OF', switch_id, rduuid)
-                xml = odl_xml_snippets.PORT_DHCP_FLOW_XML % \
-                      (switch_id, of_dport_id, rduuid,
-                        DEFAULT_PRIORITY + 3, of_port_id)
-                (status, response) = self._rest_call('POST', uri, headers, xml)
-                if status == 201:
-                    odl_db.add_port_flow(context.session,
-                                            rduuid, port_id, 'dhcp')
+                                                    dport['id']).of_port_id
+                self._add_port_port_dual_flow(context, switch_id, of_port_id,
+                                                of_dport_id,
+                                                DEFAULT_PRIORITY + 3,
+                                                container, 'dhcp')
         """
 
     def _delete_port_del_flow(self, context, data,
@@ -329,6 +388,8 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
                                                 json.dumps({}))
         if status == 200:
             odl_db.del_port_flow(context.session, flow_name)
+        else:
+            LOG.error(_("Error deleting flow on controller: %s" % response))
 
     def _create_subnet(self, context, subnet, container=DEFAULT_CONTAINER):
         LOG.debug(_("Creating subnet gateway on controller"))
