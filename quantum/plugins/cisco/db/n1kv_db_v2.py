@@ -74,7 +74,6 @@ def add_network_binding(session, network_id, network_type,
             segmentation_id, multicast_ip, profile_id)
         session.add(binding)
 
-
 def get_port_binding(session, port_id):
     session = session or db.get_session()
     try:
@@ -122,7 +121,7 @@ def sync_vlan_allocations(network_vlan_ranges):
                                     "%s from pool" %
                                     (alloc.vlan_id, physical_network))
                         session.delete(alloc)
-
+ 
             # add missing allocatable vlans to table
             for vlan_id in sorted(vlan_ids):
                 alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
@@ -147,20 +146,18 @@ def reserve_vlan(session, profile):
     segment_type = 'vlan'
 
     with session.begin(subtransactions=True):
-        try:
-            alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
-                    filter(and_(
-                        n1kv_models_v2.N1kvVlanAllocation.vlan_id >= seg_min,
-                        n1kv_models_v2.N1kvVlanAllocation.vlan_id <= seg_max,
-                        n1kv_models_v2.N1kvVlanAllocation.allocated == False)
-                        )).first()
+        alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
+                filter(and_(
+                    n1kv_models_v2.N1kvVlanAllocation.vlan_id >= seg_min,
+                    n1kv_models_v2.N1kvVlanAllocation.vlan_id <= seg_max,
+                    n1kv_models_v2.N1kvVlanAllocation.allocated == False)
+                    )).first()
+        if alloc:
             segment_id = alloc.vlan_id
             physical_network = alloc.physical_network
             alloc.allocated = True
             return (physical_network, segment_type, segment_id, '0.0.0.0')
-        except exc.NoResultFound:
-            raise q_exc.VlanIdInUse(vlan_id=segment_id,
-                    physical_network=segment_type)
+    raise q_exc.NoNetworkAvailable()
 
 
 def reserve_vxlan(session, profile):
@@ -169,21 +166,20 @@ def reserve_vxlan(session, profile):
     physical_network = ""
 
     with session.begin(subtransactions=True):
-        try:
-            alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
-                    filter(and_(
-                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id >=
-                           seg_min,
-                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id <=
-                           seg_max,
-                       n1kv_models_v2.N1kvVxlanAllocation.allocated == False)
-                       ).first())
+        alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                filter(and_(
+                   n1kv_models_v2.N1kvVxlanAllocation.vxlan_id >=
+                       seg_min,
+                   n1kv_models_v2.N1kvVxlanAllocation.vxlan_id <=
+                       seg_max,
+                   n1kv_models_v2.N1kvVxlanAllocation.allocated == False)
+                   ).first())
+        if alloc:
             segment_id = alloc.vxlan_id
             alloc.allocated = True
             return (physical_network, segment_type,
                     segment_id, profile.get_multicast_ip(session))
-        except exc.NoResultFound:
-            raise c_exc.VxlanIdInUse(vxlan_id=segment_id)
+        raise q_exc.NoNetworkAvailable()
 
 
 def alloc_network(session, profile_id):
