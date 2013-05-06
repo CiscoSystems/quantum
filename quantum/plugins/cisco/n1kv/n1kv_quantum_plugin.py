@@ -56,6 +56,7 @@ from quantum.plugins.cisco.extensions import credential
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
 from quantum.plugins.cisco.common import config as conf
+from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.plugins.cisco.db import network_db_v2
@@ -455,26 +456,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
-            dummy_network_profile = self._create_dummy_network_profile()
-            profile_id = dummy_network_profile['id']
+            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
         if not self.network_profile_exists(context, profile_id):
-            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id)
+            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
         return (profile_id)
-
-    def _create_dummy_network_profile(self):
-        """
-        Create a fake network profile object.
-        Use vlan range 3968-4047 which is allocated for internal use.
-        :return: network profile object
-        """
-        profile = n1kv_db_v2.get_network_profile_by_name('dummy_profile')
-        if profile:
-            return profile
-        else:
-            profile = {'name': 'dummy_profile',
-                       'segment_type': 'vlan',
-                       'segment_range': '3968-4047'}
-            return n1kv_db_v2.create_network_profile(profile)
 
     def _process_policy_profile(self, context, attrs):
         """ Validates whether policy profile exists """
@@ -649,7 +634,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])
-
+        self._add_dummy_profile_for_test(network)
         profile_id = self._process_network_profile(context, network['network'])
 
         LOG.debug('create network: profile_id=%s', profile_id)
@@ -750,14 +735,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         to identify the pre created port
 
         """
-        if self._populate_profile_for_test():
-            dummy_p_profile_name = "dummy_pprofile"
-            dummy_p_profile_id = "00000000-1111-1111-1111-000000000000"
-            dummy_tenant_id = "test-tenant"
-            self._add_policy_profile(dummy_p_profile_name,
-                                     dummy_p_profile_id,
-                                     dummy_tenant_id)
-            port['port'][n1kv_profile.PROFILE_ID] = dummy_p_profile_id
+        self._add_dummy_profile_for_test(port)
 
         profile_id_set = False
         if n1kv_profile.PROFILE_ID in port['port']:
@@ -819,16 +797,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 pt = self.update_port(context, pt['id'], port)
                 return pt
 
-    def _populate_profile_for_test(self):
+    def _add_dummy_profile_for_test(self, obj):
         """
-        Method to be patched by the test code to inject n1kv:profile_id
-        into the port object. This method will return False value and not
-        affect the plugin code in any way. Method must be patched by 
-        test_n1kv_plugin module to return True so that the port object
-        includes n1kv:profile_id argument, since the plugin tests for 
-        its existence.
+        Method to be patched by the test_n1kv_plugin module to 
+        inject n1kv:profile_id into the network/port object, since the plugin
+        tests for its existence. This method does not affect 
+        the plugin code in any way.
         """
-        return False
+        pass
 
     def _get_instance_port_id(self, tenant_id, instance_id):
         """ Get the port IDs from the meta data """

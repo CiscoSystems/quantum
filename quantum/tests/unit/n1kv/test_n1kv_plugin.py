@@ -22,6 +22,7 @@ from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.tests.unit import test_db_plugin as test_plugin
+from quantum.plugins.cisco.extensions import n1kv_profile
 
 from quantum.plugins.cisco.n1kv import n1kv_client
 from quantum.plugins.cisco.n1kv import n1kv_quantum_plugin
@@ -65,6 +66,32 @@ def _fake_get_vsm_hosts(self, tenant_id):
 # Override an internal function in the N1KV client.
 n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
 
+def _fake_add_dummy_profile_for_test(self, obj):
+    """
+    Replacement for a function in the N1KV quantum plugin module.
+
+    Since VSM is not available at the time of tests, we have no 
+    policy profiles. Hence we inject a dummy policy/network profile into the
+    port/network object.
+    """
+    dummy_profile_name = "dummy_profile"
+    dummy_tenant_id = "test-tenant"
+    if 'port' in obj:
+        dummy_profile_id = "00000000-1111-1111-1111-000000000000"
+        self._add_policy_profile(dummy_profile_name,
+                                 dummy_profile_id,
+                                 dummy_tenant_id)
+        obj['port'][n1kv_profile.PROFILE_ID] = dummy_profile_id
+    elif 'network' in obj:
+        profile = {'name': 'dummy_profile',
+                   'segment_type': 'vlan',
+                   'segment_range': '3968-4047'}
+        np = n1kv_db_v2.create_network_profile(profile)
+        obj['network'][n1kv_profile.PROFILE_ID] = np.id 
+
+# Override an internal function in the N1KV quantum plugin.
+n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
+              _fake_add_dummy_profile_for_test
 
 def _fake_get_credential_name(tenant_id, cred_name):
     """
@@ -105,8 +132,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
         alloc_obj.allocated = False
-        #profile_obj = n1kv_profile_db.N1kvProfile_db()
-        #profile_obj.tenant_id = tenant_id
         segment_range = "100-900"
         segment_type = 'vlan'
         tunnel_id = 200
@@ -191,12 +216,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         self.addCleanup(get_cred_name_patcher.stop)
         fake_get_cred_name.return_value = \
                        { "user_name" : "admin", "password" : "admin_password" }
-
-        populate_profile_patcher = patch(n1kv_quantum_plugin.__name__ + \
-                                         ".N1kvQuantumPluginV2._populate_profile_for_test")
-        fake_populate_profile = populate_profile_patcher.start()
-        self.addCleanup(populate_profile_patcher.stop)
-        fake_populate_profile.return_value = True 
 
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
