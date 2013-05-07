@@ -969,11 +969,25 @@ class PolicyProfile_db_mixin(object):
         session = db.get_session()
         with session.begin(subtransactions=True):
             session.query(n1kv_models_v2.PolicyProfile).\
-                filter(n1kv_models_v2.PolicyProfile.profile_id ==
+                filter(n1kv_models_v2.PolicyProfile.id ==
                        profile_id).delete()
             session.query(n1kv_models_v2.ProfileBinding).\
                 filter(n1kv_models_v2.ProfileBinding.profile_id ==
                        profile_id).delete()
+
+    def _get_policy_profile_by_name(self, name):
+        """
+        Get policy profile based on name
+        """
+        session = db.get_session()
+        try:
+            with session.begin(subtransactions=True):
+                profile = session.query(n1kv_models_v2.PolicyProfile).\
+                          filter(n1kv_models_v2.PolicyProfile.name ==
+                                 name).one()
+                return profile
+        except exc.NoResultFound:
+            return None
 
     def _remove_all_fake_policy_profiles(self):
         """

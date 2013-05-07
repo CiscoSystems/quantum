@@ -113,12 +113,24 @@ class Client(object):
     bridge_domains_path = "/bridge-domain"
     bridge_domain_path = "/bridge-domain/%s"
     fabric_networks_path = "/fabric-network"
+    events_path = "/events"
 
     def list_profiles(self, **_params):
         """
         Fetches a list of all profiles
         """
         return self._get(self.profiles_path, params=_params)
+
+    def list_events(self, event_type=None, epoch=None, **_params):
+        """
+        Fetches a list of events from the VSM.
+        Event type: port_profile
+        Event type of port_profile retrieves all updates/create/deletes
+        of port profiles from the VSM. 
+        """
+        if event_type:
+            self.events_path = self.events_path + '?type=' + event_type
+        return self._get(self.events_path, params=_params)
 
     def create_bridge_domain(self, network, **_params):
         """
