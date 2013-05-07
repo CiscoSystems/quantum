@@ -36,7 +36,7 @@ class FakeResponse(object):
     """
     This object is returned by mocked httplib instead of a normal response.
 
-    Initialize it with the status code, content type and buffer contents 
+    Initialize it with the status code, content type and buffer contents
     you wish to return.
 
     """
@@ -51,26 +51,13 @@ class FakeResponse(object):
 
     def getheader(self, *args, **kwargs):
         return self.content_type
-        
 
-def _fake_get_vsm_hosts(self, tenant_id):
-    """
-    Replacement for a function in the N1KV client: Return VSM IP addresses.
-
-    This normally requires more complicated interactions with the VSM,
-    so we just shortcut all of this by returning a dummy result.
-
-    """
-    return ["127.0.0.1"]
-
-# Override an internal function in the N1KV client.
-n1kv_client.Client._get_vsm_hosts = _fake_get_vsm_hosts
 
 def _fake_add_dummy_profile_for_test(self, obj):
     """
     Replacement for a function in the N1KV quantum plugin module.
 
-    Since VSM is not available at the time of tests, we have no 
+    Since VSM is not available at the time of tests, we have no
     policy profiles. Hence we inject a dummy policy/network profile into the
     port/network object.
     """
@@ -87,21 +74,7 @@ def _fake_add_dummy_profile_for_test(self, obj):
                    'segment_type': 'vlan',
                    'segment_range': '3968-4047'}
         np = n1kv_db_v2.create_network_profile(profile)
-        obj['network'][n1kv_profile.PROFILE_ID] = np.id 
-
-# Override an internal function in the N1KV quantum plugin.
-n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
-              _fake_add_dummy_profile_for_test
-
-def _fake_get_credential_name(tenant_id, cred_name):
-    """
-    Replacement for a function in the Db module: Return user credentials.
-
-    """
-    return {"user_name": "admin", "password": "admin_password"}
-
-# Override an internal function in the DB module.
-cdb.get_credential_name = _fake_get_credential_name
+        obj['network'][n1kv_profile.PROFILE_ID] = np.id
 
 
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
@@ -205,23 +178,33 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # Patch some internal functions in a few other parts of the system.
         # These help us move along, without having to mock up even more systems
         # in the background.
+
+        # Return a dummy VSM IP address
         get_vsm_hosts_patcher = patch(n1kv_client.__name__ + \
                                       ".Client._get_vsm_hosts")
         fake_get_vsm_hosts = get_vsm_hosts_patcher.start()
         self.addCleanup(get_vsm_hosts_patcher.stop)
         fake_get_vsm_hosts.return_value = [ "127.0.0.1" ]
 
+        # Return dummy user profiles
         get_cred_name_patcher = patch(cdb.__name__ + ".get_credential_name")
         fake_get_cred_name = get_cred_name_patcher.start()
         self.addCleanup(get_cred_name_patcher.stop)
         fake_get_cred_name.return_value = \
                        { "user_name" : "admin", "password" : "admin_password" }
 
+        # Patch a dummy profile creation into the N1K plugin code. The original
+        # function in the plugin is a noop for production, but during test, we
+        # need it to return a dummy network profile.
+        n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
+                                                  _fake_add_dummy_profile_for_test
+
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
         profile_obj = self._make_test_profile(self.tenant_id)
-        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
+        policy_profile_obj = \
+               self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
@@ -287,7 +270,7 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
 
         """
         profile_obj = self._make_test_profile(tenant_id)
-        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')    
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
             "port" : { "n1kv:profile_id" : policy_profile_obj.id }
