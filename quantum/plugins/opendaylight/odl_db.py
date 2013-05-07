@@ -43,6 +43,8 @@ def del_network_binding(session, network_id):
                    filter_by(network_id=network_id).
                    one())
         session.delete(binding)
+    except exc.NoResultFound:
+        LOG.debug(_("Segmentation binding not found"))
     except:
         raise
 

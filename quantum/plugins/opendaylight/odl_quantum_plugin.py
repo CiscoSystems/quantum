@@ -318,8 +318,10 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         bport = self._get_phy_br_port_id(context, switch_id, container)
 
         # Add drop flow first
+        """
         self._add_port_drop_flow(context, switch_id, port_id, of_port_id,
                                     DEFAULT_PRIORITY + 1, container)
+        """
 
         # Add host and set vlan
         node_ip = port['fixed_ips'][0]['ip_address']
@@ -348,7 +350,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
                                         of_port_id, subnet['gateway_ip'],
                                         DEFAULT_PRIORITY + 2, container)
  
-        # Check if this is a regular port
+        # Add flow to dhcp port
         """
         if (port['device_owner'] != 'network:dhcp'):
             # Add a high priority path to the dhcp/bootp port
