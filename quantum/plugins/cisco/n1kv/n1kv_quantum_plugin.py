@@ -34,12 +34,15 @@ from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum.common import rpc as q_rpc
+from quantum.agent import securitygroups_rpc as sg_rpc
 
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
+from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.db import agents_db
+from quantum.db import agentschedulers_db
 
 from quantum.extensions import providernet as provider
 
@@ -48,6 +51,7 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
+from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
 
 from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
 from quantum.plugins.cisco.extensions import network_profile
@@ -68,7 +72,8 @@ VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
 
 
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
-                       l3_rpc_base.L3RpcCallbackMixin):
+                       l3_rpc_base.L3RpcCallbackMixin,
+                       sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
 
     # Set RPC API version to 1.0 by default.
     RPC_API_VERSION = '1.0'
@@ -146,7 +151,8 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return entry
 
 
-class AgentNotifierApi(proxy.RpcProxy):
+class AgentNotifierApi(proxy.RpcProxy,
+                       sg_rpc.SecurityGroupAgentRpcApiMixin):
     '''Agent side of the N1kv rpc API.
 
     API version history:
@@ -195,10 +201,10 @@ class AgentNotifierApi(proxy.RpcProxy):
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         # n1kv_profile_db.N1kvProfile_db_mixin,
                          n1kv_db_v2.NetworkProfile_db_mixin,
                          n1kv_db_v2.PolicyProfile_db_mixin,
-                         network_db_v2.Credential_db_mixin):
+                         network_db_v2.Credential_db_mixin,
+                         agentschedulers_db.AgentSchedulerDbMixin):
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
@@ -237,7 +243,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if not quantum_cfg.CONF.api_extensions_path:
             quantum_cfg.CONF.set_override(
                 'api_extensions_path',
-                'quantum/plugins/cisco/extensions')
+                'extensions:quantum/plugins/cisco/extensions')
         # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
@@ -254,6 +260,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                   fanout=False)
         # Consume from all consumers in a thread
         self.dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
+        self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
         self.conn.consume_in_thread()
 
     def _setup_vsm(self):
