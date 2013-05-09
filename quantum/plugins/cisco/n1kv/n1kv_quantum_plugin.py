@@ -23,6 +23,8 @@
 import logging
 import sys
 import itertools
+import threading
+import time
 
 from novaclient.v1_1 import client as nova_client
 from oslo.config import cfg as quantum_cfg
@@ -68,8 +70,7 @@ from quantum.plugins.cisco.n1kv import n1kv_client
 
 
 LOG = logging.getLogger(__name__)
-VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
-
+POLL_DURATION = 10
 
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                        l3_rpc_base.L3RpcCallbackMixin,
@@ -268,32 +269,39 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         self._send_register_request()
-        self._poll_policies()
+        PollVSM().start()
+        #self._poll_policies()
 
-    def _poll_policies(self, tenant_id=None):
+    def _poll_policies(self, event_type=None, epoch=None, tenant_id=None):
         """
         Retrieve Policy Profiles from Cisco Nexus1000V
-        :param tenant_id:
-        :return:
         """
         LOG.debug('_poll_policies')
-        client = n1kv_client.Client()
-        policy_profiles = client.list_profiles()
+        n1kvclient = n1kv_client.Client()
+        #policy_profiles = client.list_profiles()
+        policy_profiles = n1kvclient.list_events(event_type, epoch)
         for profile in policy_profiles['body'][const.SET]:
+            if const.NAME in profile:
+                cmd = profile[const.PROPERTIES]['cmd']
+                cmds = cmd.split(';')
+                cmdwords = cmds[1].split()
+                time = profile[const.PROPERTIES]['time']
+                profile_name = profile[const.PROPERTIES][const.NAME]
+                if 'no' in cmdwords[0]:
+                    p = self._get_policy_profile_by_name(profile_name)
+                    if p:
+                        self._delete_policy_profile(p['id'])
+                elif const.ID in profile[const.PROPERTIES]:
+                    profile_id = profile[const.PROPERTIES][const.ID]
+                    self._add_policy_profile(profile_name, profile_id, tenant_id)
+            '''
             if const.ID and const.NAME in profile:
                 profile_id = profile[const.PROPERTIES][const.ID]
                 profile_name = profile[const.PROPERTIES][const.NAME]
                 self._add_policy_profile(profile_name, profile_id, tenant_id)
+            '''
         self._remove_all_fake_policy_profiles()
 
-    # def _add_policy_profiles(self, n1kvclient, tenant_id):
-    #     """Populate Profiles of type Policy on init."""
-    #     profiles = n1kvclient.list_profiles()
-    #     for profile in profiles[const.SET]:
-    #         profile_id = profile[const.PROPERTIES][const.ID]
-    #         profile_name = profile[const.PROPERTIES][const.NAME]
-    #         self.add_profile(tenant_id,
-    #                          profile_id, profile_name, const.POLICY)
     # TBD Begin : To be removed. Needs some change in logic before removal
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
@@ -914,3 +922,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def delete_network_profile(self, context, id):
         _network_profile = super(N1kvQuantumPluginV2, self).delete_network_profile(context, id)
         self._send_delete_network_profile_request(_network_profile)
+
+class PollVSM (threading.Thread, N1kvQuantumPluginV2):
+    def run(self):
+        while True:
+            self._poll_policies(event_type="port_profile")
+            time.sleep(POLL_DURATION)

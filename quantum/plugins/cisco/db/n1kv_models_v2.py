@@ -193,7 +193,7 @@ class N1kVmNetwork(model_base.BASEV2):
     """Represents VM Network information"""
     __tablename__ = 'vmnetwork'
 
-    name = Column(String(255), primary_key=True)
+    name = Column(String(80), primary_key=True)
     profile_id = Column(String(36))
     network_id = Column(String(36))
     port_count = Column(Integer)
