@@ -9,6 +9,7 @@ from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
 from quantum.plugins.opendaylight import odl_models
 
+
 LOG = logging.getLogger(__name__)
 
 
@@ -48,6 +49,7 @@ def del_network_binding(session, network_id):
     except:
         raise
 
+
 def allocate_network_segment(session, network_id, network_type, seg_range):
     session = session or db.get_session()
     # Get a free network segment in the range specified
@@ -71,6 +73,7 @@ def allocate_network_segment(session, network_id, network_type, seg_range):
         add_network_binding(session, network_id, network_type, allocated_segment)
     else:
         raise "No usable segment id found"
+
 
 def get_port_from_device(port_id):
     """Get port from database."""
@@ -97,12 +100,13 @@ def get_port_from_device(port_id):
                               for ip in port['fixed_ips']]
     return port_dict
 
+
 def add_port_flow(session, flow_id, port_id, flow_type, sec_group_rule=None):
     session = session or db.get_session()
 
-    with session.begin(subtransactions=True):
-        binding = odl_models.Flow(flow_id, port_id, flow_type, sec_group_rule)
-        session.add(binding)
+    binding = odl_models.Flow(flow_id, port_id, flow_type, sec_group_rule)
+    session.add(binding)
+
     
 def del_port_flow(session, flow_id):
     session = session or db.get_session()
@@ -116,6 +120,7 @@ def del_port_flow(session, flow_id):
     except:
         raise
 
+
 def get_port_flows(session, port_id):
     session = session or db.get_session()
 
@@ -127,11 +132,15 @@ def get_port_flows(session, port_id):
     except:
         raise 
 
+
 def add_ovs_port(session, port_id, of_port_id, vif_id):
     session = session or db.get_session()
-    with session.begin(subtransactions=True):
+    try:
         binding = odl_models.OvsPort(port_id, int(of_port_id), vif_id)
         session.add(binding)
+    except:
+        raise
+
 
 def del_ovs_port(session, port_id):
     session = session or db.get_session()
@@ -144,6 +153,7 @@ def del_ovs_port(session, port_id):
         session.flush()
     except:
         raise 
+
 
 def get_ovs_port(session, port_id):
     session = session or db.get_session()
