@@ -777,7 +777,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             LOG.debug("Created port: %s", pt)
             return pt
         elif 'device_id' in port['port'].keys():
-            if port['port']['device_id'].startswith('dhcp'):
+            if port['port']['device_owner'] == 'network:dhcp' or \
+                port['port']['device_owner'] == 'network:router_interface':
                 # Grab profile id from the network
                 LOG.debug("create dhcp port")
                 network_id = port['port']['network_id']
