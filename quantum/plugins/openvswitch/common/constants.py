@@ -24,6 +24,7 @@ TYPE_FLAT = 'flat'
 TYPE_VLAN = 'vlan'
 TYPE_GRE = 'gre'
 TYPE_LOCAL = 'local'
+TYPE_VXLAN = 'vxlan'
 TYPE_NONE = 'none'
 
 # Name prefixes for veth device pair linking the integration bridge

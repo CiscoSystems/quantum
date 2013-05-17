@@ -44,7 +44,7 @@ ovs_opts = [
                 help=_("List of <physical_network>:<bridge>")),
     cfg.StrOpt('tenant_network_type', default='local',
                help=_("Network type for tenant networks "
-                      "(local, vlan, gre, or none)")),
+                      "(local, vlan, gre, vxlan, or none)")),
     cfg.ListOpt('network_vlan_ranges',
                 default=DEFAULT_VLAN_RANGES,
                 help=_("List of <physical_network>:<vlan_min>:<vlan_max> "

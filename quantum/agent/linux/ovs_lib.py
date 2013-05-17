@@ -22,6 +22,7 @@ import re
 
 from quantum.agent.linux import utils
 from quantum.openstack.common import log as logging
+from quantum.plugins.openvswitch.common import constants as constants
 
 LOG = logging.getLogger(__name__)
 
@@ -162,9 +163,13 @@ class OVSBridge:
         flow_str = ",".join(flow_expr_arr)
         self.run_ofctl("del-flows", [flow_str])
 
-    def add_tunnel_port(self, port_name, remote_ip):
+    def add_tunnel_port(self, port_name, remote_ip, 
+            tunnel_type=constants.TYPE_GRE):
         self.run_vsctl(["add-port", self.br_name, port_name])
-        self.set_db_attribute("Interface", port_name, "type", "gre")
+        if tunnel_type == constants.TYPE_VXLAN:
+            self.set_db_attribute("Interface", port_name, "type", "vxlan")
+        else:
+            self.set_db_attribute("Interface", port_name, "type", "gre")
         self.set_db_attribute("Interface", port_name, "options:remote_ip",
                               remote_ip)
         self.set_db_attribute("Interface", port_name, "options:in_key", "flow")
