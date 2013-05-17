@@ -62,6 +62,8 @@ PORT_GATEWAY_FLOW_XML = """
     <etherType>0x800</etherType>
     <nwDst>%s</nwDst>
     <priority>%s</priority>
+    <actions>POP_VLAN</actions>
     <actions>CONTROLLER</actions>
+    <actions>HW_PATH</actions>
 </flowConfig>
 """

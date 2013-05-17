@@ -168,6 +168,12 @@ class ODLPluginApi(agent_rpc.PluginApi, object):
                                        switch_id=switch_id),
                          topic=self.topic)
 
+    def get_segmentation_id(self, context, port_id):
+        LOG.debug(_("Getting segmentation id for port"))
+        return self.call(context,
+                         self.make_msg("get_segment_id",
+                                       port_id=port_id),
+                         topic=self.topic)
 
 class OVSQuantumOFPODLAgent(object):
 
@@ -275,6 +281,12 @@ class OVSQuantumOFPODLAgent(object):
         for port in port_info['added']:
             vif_port = self.int_br.get_vif_port_by_id(port)
             self.ports[port] = vif_port
+            # Get segmentation id for the port
+            seg_id = self.plugin_rpc.get_segmentation_id(self.context,
+                                                        str(port))
+            # Set port tag to vlan
+            self.int_br.set_db_attribute("Port", str(vif_port.port_name), "tag",
+                                         str(seg_id))
             # update plugin about port status
             self.plugin_rpc.odl_port_create(
                 self.context,

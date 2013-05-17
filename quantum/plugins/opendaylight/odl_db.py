@@ -106,6 +106,7 @@ def add_port_flow(session, flow_id, port_id, flow_type, sec_group_rule=None):
 
     binding = odl_models.Flow(flow_id, port_id, flow_type, sec_group_rule)
     session.add(binding)
+    session.flush()
 
     
 def del_port_flow(session, flow_id):
@@ -138,6 +139,7 @@ def add_ovs_port(session, port_id, of_port_id, vif_id):
     try:
         binding = odl_models.OvsPort(port_id, int(of_port_id), vif_id)
         session.add(binding)
+        session.flush()
     except:
         raise
 

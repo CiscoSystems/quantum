@@ -155,9 +155,15 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             else:
                 return func(*args)
 
-    def _get_segmentation_id(self, network_id):
+    def _get_segmentation_id(self, id):
+        plugin_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                        self._func_name(),
+                                                        [id])
+        return plugin_output[0]
+        """
         binding_seg_id = odb.get_network_binding(None, network_id)
         return binding_seg_id.segmentation_id
+        """
 
     def _get_all_segmentation_ids(self):
         vlan_ids = cdb.get_ovs_vlans()

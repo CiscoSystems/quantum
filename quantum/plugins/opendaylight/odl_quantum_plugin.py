@@ -90,8 +90,11 @@ class ODLRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         obj._delete_port_del_flow(rpc_context, kwargs)
 
     def get_segment_id(self, rpc_context, *args, **kwargs):
-        LOG.debug(_("Getting segment id for network"))
-        network_id = kwargs['network_id']
+        LOG.debug(_("Getting segment id for port"))
+        port = kwargs['port_id']
+        obj = ODLQuantumPlugin()
+        port = obj.get_port(rpc_context, port)
+        network_id = port['network_id']
         segmgr = SegmentationManager()
 
         return segmgr.get_segmentation_id(None, network_id)
@@ -304,6 +307,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             port = self.get_port(context, port_id)
         except:
             return True
+
         # Get segmentation id
         segmentation_id = self.segmentation_manager.get_segmentation_id(
             context.session, port['network_id'])
@@ -315,7 +319,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
         odl_db.add_ovs_port(context.session, port_id, of_port_id, port_name)
 
         # Get bridge port id
-        bport = self._get_phy_br_port_id(context, switch_id, container)
+        #bport = self._get_phy_br_port_id(context, switch_id, container)
 
         # Add drop flow first
         """
@@ -330,9 +334,11 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
                                 container)
 
         # Add setVlan flow now
+        """
         self._port_outbound_setvlan_flow(context, switch_id, port_id,
                                             of_port_id, segmentation_id,
                                             DEFAULT_PRIORITY + 2, container)
+        """
 
         # Add inbound flow
         """
@@ -349,7 +355,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             self._add_port_gateway_flow(context, switch_id, port_id,
                                         of_port_id, subnet['gateway_ip'],
                                         DEFAULT_PRIORITY + 2, container)
- 
+
         # Add flow to dhcp port
         """
         if (port['device_owner'] != 'network:dhcp'):
@@ -438,7 +444,7 @@ class ODLQuantumPlugin(QuantumDbPluginV2, SecurityGroupDbMixin):
             for subnet in network['subnets']:
                 self.delete_subnet(context, subnet)
             super(ODLQuantumPlugin, self).delete_network(context, id)
-            self.segmentation_manager.delete_segment_binding(session, id)
+            #self.segmentation_manager.delete_segment_binding(session, id)
 
     def create_port(self, context, port):
         LOG.debug(_("Creating port"))
