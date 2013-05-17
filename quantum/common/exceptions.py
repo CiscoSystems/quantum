@@ -25,12 +25,11 @@ from quantum.openstack.common.exception import OpenstackException
 
 
 class QuantumException(OpenstackException):
-    """Base Quantum Exception
+    """Base Quantum Exception.
 
     To correctly use this class, inherit from it and define
     a 'message' property. That message will get printf'd
     with the keyword arguments provided to the constructor.
-
     """
     message = _("An unknown exception occurred.")
 
@@ -80,8 +79,12 @@ class PortNotFound(NotFound):
                 "on network %(net_id)s")
 
 
-class PolicyNotFound(NotFound):
+class PolicyFileNotFound(NotFound):
     message = _("Policy configuration policy.json could not be found")
+
+
+class PolicyRuleNotFound(NotFound):
+    message = _("Requested rule:%(rule)s cannot be found")
 
 
 class StateInvalid(BadRequest):
@@ -258,3 +261,7 @@ class InvalidConfigurationOption(QuantumException):
 class GatewayConflictWithAllocationPools(InUse):
     message = _("Gateway ip %(ip_address)s conflicts with "
                 "allocation pool %(pool)s")
+
+
+class NetworkVlanRangeError(QuantumException):
+    message = _("Invalid network VLAN range: '%(range)s' - '%(error)s'")

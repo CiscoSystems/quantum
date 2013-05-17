@@ -40,6 +40,7 @@ from quantum import context
 from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import loopingcall
+from quantum.openstack.common.rpc import common as rpc_common
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.openvswitch.common import config  # noqa
 from quantum.plugins.openvswitch.common import constants
@@ -263,14 +264,17 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.treat_vif_port(vif_port, port['id'], port['network_id'],
                             network_type, physical_network,
                             segmentation_id, port['admin_state_up'])
-        if port['admin_state_up']:
-            # update plugin about port status
-            self.plugin_rpc.update_device_up(self.context, port['id'],
-                                             self.agent_id)
-        else:
-            # update plugin about port status
-            self.plugin_rpc.update_device_down(self.context, port['id'],
-                                               self.agent_id)
+        try:
+            if port['admin_state_up']:
+                # update plugin about port status
+                self.plugin_rpc.update_device_up(self.context, port['id'],
+                                                 self.agent_id)
+            else:
+                # update plugin about port status
+                self.plugin_rpc.update_device_down(self.context, port['id'],
+                                                   self.agent_id)
+        except rpc_common.Timeout:
+            LOG.error(_("RPC timeout while updating port %s"), port['id'])
 
     def tunnel_update(self, context, **kwargs):
         LOG.debug(_("tunnel_update received"))
@@ -474,14 +478,13 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                      net_uuid)
             return
         lvm = self.local_vlan_map[net_uuid]
-        if lvm.network_type == 'gre':
-            if self.enable_tunneling:
+
+        vif_port = lvm.vif_ports.pop(vif_id, None)
+        if vif_port:
+            if self.enable_tunneling and lvm.network_type == 'gre':
                 # remove inbound unicast flow
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id,
-                                         dl_dst=lvm.vif_ports[vif_id].vif_mac)
-
-        if vif_id in lvm.vif_ports:
-            del lvm.vif_ports[vif_id]
+                                         dl_dst=vif_port.vif_mac)
         else:
             LOG.info(_('port_unbound: vif_id %s not in local_vlan_map'),
                      vif_id)

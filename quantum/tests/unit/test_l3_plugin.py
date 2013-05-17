@@ -24,7 +24,6 @@ import itertools
 
 import mock
 from oslo.config import cfg
-import testtools
 from webob import exc
 import webtest
 
@@ -60,6 +59,12 @@ _get_path = test_api_v2._get_path
 class L3TestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            l3.RESOURCE_ATTRIBUTE_MAP)
         return l3.L3.get_resources()
 
     def get_actions(self):
@@ -360,7 +365,8 @@ class L3NatTestCaseMixin(object):
                             expected_code=expected_code)
 
     def _router_interface_action(self, action, router_id, subnet_id, port_id,
-                                 expected_code=exc.HTTPOk.code):
+                                 expected_code=exc.HTTPOk.code,
+                                 expected_body=None):
         interface_data = {}
         if subnet_id:
             interface_data.update({'subnet_id': subnet_id})
@@ -371,7 +377,10 @@ class L3NatTestCaseMixin(object):
                                       "%s_router_interface" % action)
         res = req.get_response(self.ext_api)
         self.assertEqual(res.status_int, expected_code)
-        return self.deserialize(self.fmt, res)
+        response = self.deserialize(self.fmt, res)
+        if expected_body:
+            self.assertEqual(response, expected_body)
+        return response
 
     @contextlib.contextmanager
     def router(self, name='router1', admin_state_up=True,
@@ -1015,6 +1024,19 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                                   None,
                                                   p['port']['id'])
 
+    def test_router_remove_interface_returns_200(self):
+        with self.router() as r:
+            with self.port(no_delete=True) as p:
+                body = self._router_interface_action('add',
+                                                     r['router']['id'],
+                                                     None,
+                                                     p['port']['id'])
+                self._router_interface_action('remove',
+                                              r['router']['id'],
+                                              None,
+                                              p['port']['id'],
+                                              expected_body=body)
+
     def test_router_remove_interface_wrong_port_returns_404(self):
         with self.router() as r:
             with self.subnet():
@@ -1328,6 +1350,15 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                 self._delete('floatingips', fp2['floatingip']['id'])
                 self._delete('floatingips', fp3['floatingip']['id'])
 
+    def test_floatingip_list_with_port_id(self):
+        with self.floatingip_with_assoc() as fip:
+            port_id = fip['floatingip']['port_id']
+            res = self._list('floatingips',
+                             query_params="port_id=%s" % port_id)
+            self.assertEqual(len(res['floatingips']), 1)
+            res = self._list('floatingips', query_params="port_id=aaa")
+            self.assertEqual(len(res['floatingips']), 0)
+
     def test_floatingip_list_with_pagination(self):
         with contextlib.nested(self.subnet(cidr="10.0.0.0/24"),
                                self.subnet(cidr="11.0.0.0/24"),
@@ -1458,13 +1489,13 @@ class L3NatDBTestCase(L3NatTestCaseBase):
     def test_create_port_external_network_non_admin_fails(self):
         with self.network(router__external=True) as ext_net:
             with self.subnet(network=ext_net) as ext_subnet:
-                with testtools.ExpectedException(
+                with testlib_api.ExpectedException(
                         exc.HTTPClientError) as ctx_manager:
                     with self.port(subnet=ext_subnet,
                                    set_context='True',
                                    tenant_id='noadmin'):
                         pass
-                    self.assertEqual(ctx_manager.exception.code, 403)
+                self.assertEqual(ctx_manager.exception.code, 403)
 
     def test_create_port_external_network_admin_suceeds(self):
         with self.network(router__external=True) as ext_net:
@@ -1474,12 +1505,12 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                          ext_net['network']['id'])
 
     def test_create_external_network_non_admin_fails(self):
-        with testtools.ExpectedException(exc.HTTPClientError) as ctx_manager:
+        with testlib_api.ExpectedException(exc.HTTPClientError) as ctx_manager:
             with self.network(router__external=True,
                               set_context='True',
                               tenant_id='noadmin'):
                 pass
-            self.assertEqual(ctx_manager.exception.code, 403)
+        self.assertEqual(ctx_manager.exception.code, 403)
 
     def test_create_external_network_admin_suceeds(self):
         with self.network(router__external=True) as ext_net:

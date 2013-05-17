@@ -28,11 +28,11 @@ from quantum.extensions import portbindings
 from quantum.extensions import providernet as provider
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
+from quantum.plugins.common import utils as plugin_utils
 from quantum.plugins.hyperv import agent_notifier_api
 from quantum.plugins.hyperv.common import constants
 from quantum.plugins.hyperv import db as hyperv_db
 from quantum.plugins.hyperv import rpc_callbacks
-from quantum import policy
 
 
 DEFAULT_VLAN_RANGES = []
@@ -149,11 +149,6 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     __native_bulk_support = True
     supported_extension_aliases = ["provider", "router", "binding", "quotas"]
 
-    network_view = "extension:provider_network:view"
-    network_set = "extension:provider_network:set"
-    binding_view = "extension:port_binding:view"
-    binding_set = "extension:port_binding:set"
-
     def __init__(self, configfile=None):
         self._db = hyperv_db.HyperVPluginDB()
         self._db.initialize()
@@ -192,40 +187,10 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         # Consume from all consumers in a thread
         self.conn.consume_in_thread()
 
-    def _check_view_auth(self, context, resource, action):
-        return policy.check(context, action, resource)
-
-    def _enforce_set_auth(self, context, resource, action):
-        policy.enforce(context, action, resource)
-
     def _parse_network_vlan_ranges(self):
-        self._network_vlan_ranges = {}
-        for entry in cfg.CONF.HYPERV.network_vlan_ranges:
-            entry = entry.strip()
-            if ':' in entry:
-                try:
-                    physical_network, vlan_min, vlan_max = entry.split(':')
-                    self._add_network_vlan_range(physical_network.strip(),
-                                                 int(vlan_min),
-                                                 int(vlan_max))
-                except ValueError as ex:
-                    msg = _(
-                        "Invalid network VLAN range: "
-                        "'%(range)s' - %(e)s. Agent terminated!"), \
-                        {'range': entry, 'e': ex}
-                    raise q_exc.InvalidInput(error_message=msg)
-            else:
-                self._add_network(entry)
+        self._network_vlan_ranges = plugin_utils.parse_network_vlan_ranges(
+            cfg.CONF.HYPERV.network_vlan_ranges)
         LOG.info(_("Network VLAN ranges: %s"), self._network_vlan_ranges)
-
-    def _add_network_vlan_range(self, physical_network, vlan_min, vlan_max):
-        self._add_network(physical_network)
-        self._network_vlan_ranges[physical_network].append(
-            (vlan_min, vlan_max))
-
-    def _add_network(self, physical_network):
-        if physical_network not in self._network_vlan_ranges:
-            self._network_vlan_ranges[physical_network] = []
 
     def _check_vlan_id_in_range(self, physical_network, vlan_id):
         for r in self._network_vlan_ranges[physical_network]:
@@ -256,9 +221,6 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         # Provider specific network creation
         p.create_network(session, attrs)
 
-        if network_type_set:
-            self._enforce_set_auth(context, attrs, self.network_set)
-
     def create_network(self, context, network):
         session = context.session
         with session.begin(subtransactions=True):
@@ -284,12 +246,11 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             return net
 
     def _extend_network_dict_provider(self, context, network):
-        if self._check_view_auth(context, network, self.network_view):
-            binding = self._db.get_network_binding(
-                context.session, network['id'])
-            network[provider.NETWORK_TYPE] = binding.network_type
-            p = self._network_providers_map[binding.network_type]
-            p.extend_network_dict(network, binding)
+        binding = self._db.get_network_binding(
+            context.session, network['id'])
+        network[provider.NETWORK_TYPE] = binding.network_type
+        p = self._network_providers_map[binding.network_type]
+        p.extend_network_dict(network, binding)
 
     def _check_provider_update(self, context, attrs):
         network_type = attrs.get(provider.NETWORK_TYPE)
@@ -310,8 +271,6 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def update_network(self, context, id, network):
         network_attrs = network['network']
         self._check_provider_update(context, network_attrs)
-        # Authorize before exposing plugin details to client
-        self._enforce_set_auth(context, network_attrs, self.network_set)
 
         session = context.session
         with session.begin(subtransactions=True):
@@ -349,8 +308,7 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(net, fields) for net in nets]
 
     def _extend_port_dict_binding(self, context, port):
-        if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_HYPERV
+        port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_HYPERV
         return port
 
     def create_port(self, context, port):

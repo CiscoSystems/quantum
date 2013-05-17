@@ -26,7 +26,8 @@ from quantum.api.v2 import base
 from quantum import manager
 from quantum import quota
 
-RESOURCE_NAME = "network-gateway"
+
+RESOURCE_NAME = "network_gateway"
 COLLECTION_NAME = "%ss" % RESOURCE_NAME
 EXT_ALIAS = RESOURCE_NAME
 DEVICE_ID_ATTR = 'id'
@@ -62,15 +63,20 @@ def _validate_device_list(data, valid_values=None):
         return msg
     try:
         for device in data:
+            key_specs = {DEVICE_ID_ATTR:
+                         {'type:regex': attributes.UUID_PATTERN,
+                          'required': True},
+                         IFACE_NAME_ATTR:
+                         {'type:string': None,
+                          'required': False}}
             err_msg = attributes._validate_dict(
-                device,
-                key_specs={DEVICE_ID_ATTR:
-                           {'type:regex': attributes.UUID_PATTERN,
-                            'required': True},
-                           IFACE_NAME_ATTR:
-                           {'type:string': None,
-                            'required': False}})
+                device, key_specs=key_specs)
             if err_msg:
+                return err_msg
+            unexpected_keys = [key for key in device if key not in key_specs]
+            if unexpected_keys:
+                err_msg = ("Unexpected keys found in device description:%s",
+                           ",".join(unexpected_keys))
                 return err_msg
     except TypeError:
         return (_("%s: provided data are not iterable") %
@@ -131,14 +137,20 @@ class Nvp_networkgw(object):
 
         # register quotas for network gateways
         quota.QUOTAS.register_resource_by_name(RESOURCE_NAME)
-
-        controller = base.create_resource(COLLECTION_NAME,
+        collection_name = COLLECTION_NAME.replace('_', '-')
+        controller = base.create_resource(collection_name,
                                           RESOURCE_NAME,
                                           plugin, params,
                                           member_actions=member_actions)
         return [extensions.ResourceExtension(COLLECTION_NAME,
                                              controller,
                                              member_actions=member_actions)]
+
+    def get_extended_resources(self, version):
+        if version == "2.0":
+            return RESOURCE_ATTRIBUTE_MAP
+        else:
+            return {}
 
 
 class NetworkGatewayPluginBase(object):

@@ -1,4 +1,3 @@
-"""
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
 # Copyright 2012 Nicira Networks, Inc.  All rights reserved.
@@ -17,7 +16,6 @@
 #
 # @author: Dan Wendlandt, Nicira, Inc
 #
-"""
 
 import eventlet
 from eventlet import semaphore
@@ -141,6 +139,8 @@ class L3NATAgent(manager.Manager):
         cfg.StrOpt('gateway_external_network_id', default='',
                    help=_("UUID of external network for routers implemented "
                           "by the agents.")),
+        cfg.BoolOpt('enable_metadata_proxy', default=True,
+                    help=_("Allow running metadata proxy.")),
     ]
 
     def __init__(self, host, conf=None):
@@ -234,7 +234,8 @@ class L3NATAgent(manager.Manager):
         for c, r in self.metadata_nat_rules():
             ri.iptables_manager.ipv4['nat'].add_rule(c, r)
         ri.iptables_manager.apply()
-        self._spawn_metadata_proxy(ri)
+        if self.conf.enable_metadata_proxy:
+            self._spawn_metadata_proxy(ri)
 
     def _router_removed(self, router_id):
         ri = self.router_info[router_id]
@@ -247,7 +248,8 @@ class L3NATAgent(manager.Manager):
         for c, r in self.metadata_nat_rules():
             ri.iptables_manager.ipv4['nat'].remove_rule(c, r)
         ri.iptables_manager.apply()
-        self._destroy_metadata_proxy(ri)
+        if self.conf.enable_metadata_proxy:
+            self._destroy_metadata_proxy(ri)
         del self.router_info[router_id]
         self._destroy_router_namespace(ri.ns_name())
 

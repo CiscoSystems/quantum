@@ -22,6 +22,7 @@ import webtest
 
 from quantum.api import extensions
 from quantum.api.extensions import PluginAwareExtensionManager
+from quantum.api.v2 import attributes
 from quantum.common import config
 from quantum.common.test_lib import test_config
 from quantum import context
@@ -43,6 +44,12 @@ _get_path = test_api_v2._get_path
 class TestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            networkgw.RESOURCE_ATTRIBUTE_MAP)
         return networkgw.Nvp_networkgw.get_resources()
 
     def get_actions(self):
@@ -102,6 +109,27 @@ class NetworkGatewayExtensionTestCase(base.BaseTestCase):
         self.assertTrue(self._resource in res.json)
         nw_gw = res.json[self._resource]
         self.assertEqual(nw_gw['id'], nw_gw_id)
+
+    def _test_network_gateway_create_with_error(
+        self, data, error_code=exc.HTTPBadRequest.code):
+        res = self.api.post_json(_get_path(networkgw.COLLECTION_NAME), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, error_code)
+
+    def test_network_gateway_create_invalid_device_spec(self):
+        data = {self._resource: {'name': 'nw-gw',
+                                 'tenant_id': _uuid(),
+                                 'devices': [{'id': _uuid(),
+                                              'invalid': 'xxx'}]}}
+        self._test_network_gateway_create_with_error(data)
+
+    def test_network_gateway_create_extra_attr_in_device_spec(self):
+        data = {self._resource: {'name': 'nw-gw',
+                                 'tenant_id': _uuid(),
+                                 'devices': [{'id': _uuid(),
+                                              'interface_name': 'xxx',
+                                              'extra_attr': 'onetoomany'}]}}
+        self._test_network_gateway_create_with_error(data)
 
     def test_network_gateway_update(self):
         nw_gw_name = 'updated'
@@ -316,8 +344,8 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
         session = db_api.get_session()
         gw_query = session.query(nicira_networkgw_db.NetworkGateway)
         dev_query = session.query(nicira_networkgw_db.NetworkGatewayDevice)
-        self.assertEqual(exp_gw_count, len(gw_query.all()))
-        self.assertEqual(0, len(dev_query.all()))
+        self.assertEqual(exp_gw_count, gw_query.count())
+        self.assertEqual(0, dev_query.count())
 
     def test_delete_network_gateway(self):
         self._test_delete_network_gateway()

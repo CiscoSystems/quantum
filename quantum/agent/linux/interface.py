@@ -39,7 +39,7 @@ OPTS = [
     cfg.BoolOpt('ovs_use_veth',
                 default=False,
                 help=_('Uses veth for an interface or not')),
-    cfg.StrOpt('network_device_mtu',
+    cfg.IntOpt('network_device_mtu',
                help=_('MTU setting for device.')),
     cfg.StrOpt('meta_flavor_driver_mappings',
                help=_('Mapping between flavor and LinuxInterfaceDriver')),
@@ -72,7 +72,8 @@ class LinuxInterfaceDriver(object):
 
     def init_l3(self, device_name, ip_cidrs, namespace=None):
         """Set the L3 settings for the interface using data from the port.
-           ip_cidrs: list of 'X.X.X.X/YY' strings
+
+        ip_cidrs: list of 'X.X.X.X/YY' strings
         """
         device = ip_lib.IPDevice(device_name,
                                  self.root_helper,
@@ -167,13 +168,17 @@ class OVSInterfaceDriver(LinuxInterfaceDriver):
             tap_name = self._get_tap_name(device_name, prefix)
 
             if self.conf.ovs_use_veth:
-                root_dev, ns_dev = ip.add_veth(tap_name, device_name)
+                # Create ns_dev in a namespace if one is configured.
+                root_dev, ns_dev = ip.add_veth(tap_name,
+                                               device_name,
+                                               namespace2=namespace)
+            else:
+                ns_dev = ip.device(device_name)
 
             internal = not self.conf.ovs_use_veth
             self._ovs_add_port(bridge, tap_name, port_id, mac_address,
                                internal=internal)
 
-            ns_dev = ip.device(device_name)
             ns_dev.link.set_address(mac_address)
 
             if self.conf.network_device_mtu:
@@ -181,7 +186,8 @@ class OVSInterfaceDriver(LinuxInterfaceDriver):
                 if self.conf.ovs_use_veth:
                     root_dev.link.set_mtu(self.conf.network_device_mtu)
 
-            if namespace:
+            # Add an interface created by ovs to the namespace.
+            if not self.conf.ovs_use_veth and namespace:
                 namespace_obj = ip.ensure_namespace(namespace)
                 namespace_obj.add_device_to_namespace(ns_dev)
 
@@ -231,16 +237,14 @@ class BridgeInterfaceDriver(LinuxInterfaceDriver):
                 tap_name = device_name.replace(prefix, 'tap')
             else:
                 tap_name = device_name.replace(self.DEV_NAME_PREFIX, 'tap')
-            root_veth, ns_veth = ip.add_veth(tap_name, device_name)
+            # Create ns_veth in a namespace if one is configured.
+            root_veth, ns_veth = ip.add_veth(tap_name, device_name,
+                                             namespace2=namespace)
             ns_veth.link.set_address(mac_address)
 
             if self.conf.network_device_mtu:
                 root_veth.link.set_mtu(self.conf.network_device_mtu)
                 ns_veth.link.set_mtu(self.conf.network_device_mtu)
-
-            if namespace:
-                namespace_obj = ip.ensure_namespace(namespace)
-                namespace_obj.add_device_to_namespace(ns_veth)
 
             root_veth.link.set_up()
             ns_veth.link.set_up()

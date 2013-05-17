@@ -100,7 +100,6 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def __init__(self, configfile=None):
         db.configure_db()
-
         self.tunnel_key = db_api_v2.TunnelKey(
             cfg.CONF.OVS.tunnel_key_min, cfg.CONF.OVS.tunnel_key_max)
         self.ofp_api_host = cfg.CONF.OVS.openflow_rest_api
@@ -132,7 +131,7 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         for tun in self.tunnel_key.all_list():
             self.tun_client.update_tunnel_key(tun.network_id, tun.tunnel_key)
         session = db.get_session()
-        for port in session.query(models_v2.Port).all():
+        for port in session.query(models_v2.Port):
             self.iface_client.update_network_id(port.id, port.network_id)
 
     def _client_create_network(self, net_id, tunnel_key):
@@ -203,8 +202,7 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             sgids = self._get_security_groups_on_port(context, port)
             port = super(RyuQuantumPluginV2, self).create_port(context, port)
             self._process_port_create_security_group(
-                context, port['id'], sgids)
-            self._extend_port_dict_security_group(context, port)
+                context, port, sgids)
         self.notify_security_groups_member_updated(context, port)
         self.iface_client.create_network_id(port['id'], port['network_id'])
         return port
@@ -253,13 +251,10 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with context.session.begin(subtransactions=True):
             port = super(RyuQuantumPluginV2, self).get_port(context, id,
                                                             fields)
-            self._extend_port_dict_security_group(context, port)
         return self._fields(port, fields)
 
     def get_ports(self, context, filters=None, fields=None):
         with context.session.begin(subtransactions=True):
             ports = super(RyuQuantumPluginV2, self).get_ports(
                 context, filters, fields)
-            for port in ports:
-                self._extend_port_dict_security_group(context, port)
         return [self._fields(port, fields) for port in ports]

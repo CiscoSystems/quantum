@@ -38,7 +38,6 @@ from quantum.plugins.nec.common import exceptions as nexc
 from quantum.plugins.nec.db import api as ndb
 from quantum.plugins.nec.db import nec_plugin_base
 from quantum.plugins.nec import ofc_manager
-from quantum import policy
 
 LOG = logging.getLogger(__name__)
 
@@ -87,9 +86,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             self._aliases = aliases
         return self._aliases
 
-    binding_view = "extension:port_binding:view"
-    binding_set = "extension:port_binding:set"
-
     def __init__(self):
         ndb.initialize()
         self.ofc = ofc_manager.OFCManager()
@@ -129,12 +125,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         self.conn.create_consumer(self.topic, self.dispatcher, fanout=False)
         # Consume from all consumers in a thread
         self.conn.consume_in_thread()
-
-    def _check_view_auth(self, context, resource, action):
-        return policy.check(context, action, resource)
-
-    def _enforce_set_auth(self, context, resource, action):
-        policy.enforce(context, action, resource)
 
     def _update_resource_status(self, context, resource, id, status):
         """Update status of specified resource."""
@@ -368,11 +358,10 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         return [self._fields(net, fields) for net in nets]
 
     def _extend_port_dict_binding(self, context, port):
-        if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
-            port[portbindings.CAPABILITIES] = {
-                portbindings.CAP_PORT_FILTER:
-                'security-group' in self.supported_extension_aliases}
+        port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+        port[portbindings.CAPABILITIES] = {
+            portbindings.CAP_PORT_FILTER:
+            'security-group' in self.supported_extension_aliases}
         return port
 
     def create_port(self, context, port):
@@ -383,8 +372,7 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             sgids = self._get_security_groups_on_port(context, port)
             port = super(NECPluginV2, self).create_port(context, port)
             self._process_port_create_security_group(
-                context, port['id'], sgids)
-            self._extend_port_dict_security_group(context, port)
+                context, port, sgids)
         self.notify_security_groups_member_updated(context, port)
         self._update_resource_status(context, "port", port['id'],
                                      OperationalStatus.BUILD)
@@ -419,9 +407,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             else:
                 self.deactivate_port(context, old_port)
 
-        # NOTE: _extend_port_dict_security_group() is called in
-        # update_security_group_on_port() above, so we don't need to
-        # call it here.
         return self._extend_port_dict_binding(context, new_port)
 
     def delete_port(self, context, id, l3_port_check=True):
@@ -455,7 +440,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
     def get_port(self, context, id, fields=None):
         with context.session.begin(subtransactions=True):
             port = super(NECPluginV2, self).get_port(context, id, fields)
-            self._extend_port_dict_security_group(context, port)
             self._extend_port_dict_binding(context, port)
         return self._fields(port, fields)
 
@@ -465,7 +449,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
                                                        fields)
             # TODO(amotoki) filter by security group
             for port in ports:
-                self._extend_port_dict_security_group(context, port)
                 self._extend_port_dict_binding(context, port)
         return [self._fields(port, fields) for port in ports]
 

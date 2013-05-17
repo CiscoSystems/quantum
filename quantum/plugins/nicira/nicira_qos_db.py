@@ -132,39 +132,29 @@ class NVPQoSDbMixin(ext_qos.QueuePluginBase):
 
     def _delete_network_queue_mapping(self, context, network_id):
         query = self._model_query(context, NetworkQueueMapping)
-        try:
-            with context.session.begin(subtransactions=True):
-                binding = query.filter_by(network_id=network_id).first()
-                if binding:
-                    context.session.delete(binding)
-        except exc.NoResultFound:
-            # return since this can happen if we are updating a port that
-            # did not already have a queue on it. There is no need to check
-            # if there is one before deleting if we return here.
-            return
+        with context.session.begin(subtransactions=True):
+            binding = query.filter_by(network_id=network_id).first()
+            if binding:
+                context.session.delete(binding)
 
     def _extend_port_qos_queue(self, context, port):
-        if self._check_view_auth(context, {'qos_queue': None},
-                                 ext_qos.qos_queue_get):
-            filters = {'port_id': [port['id']]}
-            fields = ['queue_id']
-            port[ext_qos.QUEUE] = None
-            queue_id = self._get_port_queue_bindings(
-                context, filters, fields)
-            if queue_id:
-                port[ext_qos.QUEUE] = queue_id[0]['queue_id']
+        filters = {'port_id': [port['id']]}
+        fields = ['queue_id']
+        port[ext_qos.QUEUE] = None
+        queue_id = self._get_port_queue_bindings(
+            context, filters, fields)
+        if queue_id:
+            port[ext_qos.QUEUE] = queue_id[0]['queue_id']
         return port
 
     def _extend_network_qos_queue(self, context, network):
-        if self._check_view_auth(context, {'qos_queue': None},
-                                 ext_qos.qos_queue_get):
-            filters = {'network_id': [network['id']]}
-            fields = ['queue_id']
-            network[ext_qos.QUEUE] = None
-            queue_id = self._get_network_queue_bindings(
-                context, filters, fields)
-            if queue_id:
-                network[ext_qos.QUEUE] = queue_id[0]['queue_id']
+        filters = {'network_id': [network['id']]}
+        fields = ['queue_id']
+        network[ext_qos.QUEUE] = None
+        queue_id = self._get_network_queue_bindings(
+            context, filters, fields)
+        if queue_id:
+            network[ext_qos.QUEUE] = queue_id[0]['queue_id']
         return network
 
     def _make_qos_queue_dict(self, queue, fields=None):
@@ -189,7 +179,9 @@ class NVPQoSDbMixin(ext_qos.QueuePluginBase):
         return self._fields(res, fields)
 
     def _check_for_queue_and_create(self, context, port):
-        """This function determines if a port should be associated with a
+        """Check for queue and create.
+
+        This function determines if a port should be associated with a
         queue. It works by first querying NetworkQueueMapping to determine
         if the network is associated with a queue. If so, then it queries
         NetworkQueueMapping for all the networks that are associated with
@@ -230,14 +222,14 @@ class NVPQoSDbMixin(ext_qos.QueuePluginBase):
             filters = {'device_id': [port.get('device_id')],
                        'network_id': [network['network_id'] for
                                       network in networks_with_same_queue]}
-            query = self._model_query(context, models_v2.Port)
-            ports = self._apply_filters_to_query(query, models_v2.Port,
-                                                 filters).all()
-
-            if ports:
+            query = self._model_query(context, models_v2.Port.id)
+            query = self._apply_filters_to_query(query, models_v2.Port,
+                                                 filters)
+            ports_ids = [p[0] for p in query]
+            if ports_ids:
                 # shared queue already exists find the queue id
-                filters = {'port_id': [p['id'] for p in ports]}
-                queues = self._get_port_queue_bindings(context, filters,
+                queues = self._get_port_queue_bindings(context,
+                                                       {'port_id': ports_ids},
                                                        ['queue_id'])
                 if queues:
                     return queues[0]['queue_id']

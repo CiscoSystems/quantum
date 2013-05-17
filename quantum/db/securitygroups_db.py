@@ -22,6 +22,7 @@ from sqlalchemy.orm import exc
 from sqlalchemy.orm import scoped_session
 
 from quantum.api.v2 import attributes as attr
+from quantum.db import db_base_plugin_v2
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.extensions import securitygroup as ext_sg
@@ -30,12 +31,14 @@ from quantum.openstack.common import uuidutils
 
 class SecurityGroup(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum security group."""
+
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(255))
 
 
 class SecurityGroupPortBinding(model_base.BASEV2):
     """Represents binding between quantum ports and security profiles."""
+
     port_id = sa.Column(sa.String(36),
                         sa.ForeignKey("ports.id",
                                       ondelete='CASCADE'),
@@ -44,10 +47,18 @@ class SecurityGroupPortBinding(model_base.BASEV2):
                                   sa.ForeignKey("securitygroups.id"),
                                   primary_key=True)
 
+    # Add a relationship to the Port model in order to instruct SQLAlchemy to
+    # eagerly load security group bindings
+    ports = orm.relationship(
+        models_v2.Port,
+        backref=orm.backref("security_groups",
+                            lazy='joined', cascade='delete'))
+
 
 class SecurityGroupRule(model_base.BASEV2, models_v2.HasId,
                         models_v2.HasTenant):
     """Represents a v2 quantum security group rule."""
+
     security_group_id = sa.Column(sa.String(36),
                                   sa.ForeignKey("securitygroups.id",
                                                 ondelete="CASCADE"),
@@ -86,6 +97,7 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
 
     def create_security_group(self, context, security_group, default_sg=False):
         """Create security group.
+
         If default_sg is true that means we are a default security group for
         a given tenant if it does not exist.
         """
@@ -124,7 +136,14 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
 
     def get_security_groups(self, context, filters=None, fields=None,
                             sorts=None, limit=None,
-                            marker=None, page_reverse=False):
+                            marker=None, page_reverse=False, default_sg=False):
+
+        # If default_sg is True do not call _ensure_default_security_group()
+        # so this can be done recursively. Context.tenant_id is checked
+        # because all the unit tests do not explicitly set the context on
+        # GETS. TODO(arosen)  context handling can probably be improved here.
+        if not default_sg and context.tenant_id:
+            self._ensure_default_security_group(context, context.tenant_id)
         marker_obj = self._get_marker_obj(context, 'security_group', limit,
                                           marker)
         return self._get_collection(context,
@@ -140,8 +159,8 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
                                           filters=filters)
 
     def get_security_group(self, context, id, fields=None, tenant_id=None):
-        """Tenant id is given to handle the case when we
-        are creating a security group rule on behalf of another use.
+        """Tenant id is given to handle the case when creating a security
+        group rule on behalf of another use.
         """
 
         if tenant_id:
@@ -176,7 +195,7 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
         # confirm security group exists
         sg = self._get_security_group(context, id)
 
-        if sg['name'] == 'default':
+        if sg['name'] == 'default' and not context.is_admin:
             raise ext_sg.SecurityGroupCannotRemoveDefault()
         with context.session.begin(subtransactions=True):
             context.session.delete(sg)
@@ -257,7 +276,9 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
                                                            bulk_rule)[0]
 
     def _validate_security_group_rules(self, context, security_group_rule):
-        """Check that rules being installed all belong to the same security
+        """Check that rules being installed.
+
+        Check that all rules belong to the same security
         group, remote_group_id/security_group_id belong to the same tenant,
         and rules are valid.
         """
@@ -379,25 +400,29 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
             rule = self._get_security_group_rule(context, id)
             context.session.delete(rule)
 
-    def _extend_port_dict_security_group(self, context, port):
-        filters = {'port_id': [port['id']]}
-        fields = {'security_group_id': None}
-        security_group_id = self._get_port_security_group_bindings(
-            context, filters, fields)
+    def _extend_port_dict_security_group(self, port_res, port_db):
+        # If port_db is provided, security groups will be accessed via
+        # sqlalchemy models. As they're loaded together with ports this
+        # will not cause an extra query.
+        security_group_ids = [sec_group_mapping['security_group_id'] for
+                              sec_group_mapping in port_db.security_groups]
+        port_res[ext_sg.SECURITYGROUPS] = security_group_ids
+        return port_res
 
-        port[ext_sg.SECURITYGROUPS] = []
-        for security_group_id in security_group_id:
-            port[ext_sg.SECURITYGROUPS].append(
-                security_group_id['security_group_id'])
-        return port
+    # Register dict extend functions for ports
+    db_base_plugin_v2.QuantumDbPluginV2.register_dict_extend_funcs(
+        attr.PORTS, [_extend_port_dict_security_group])
 
-    def _process_port_create_security_group(self, context, port_id,
-                                            security_group_id):
-        if not attr.is_attr_set(security_group_id):
-            return
-        for security_group_id in security_group_id:
-            self._create_port_security_group_binding(context, port_id,
-                                                     security_group_id)
+    def _process_port_create_security_group(self, context, port,
+                                            security_group_ids):
+        if attr.is_attr_set(security_group_ids):
+            for security_group_id in security_group_ids:
+                self._create_port_security_group_binding(context, port['id'],
+                                                         security_group_id)
+        # Convert to list as a set might be passed here and
+        # this has to be serialized
+        port[ext_sg.SECURITYGROUPS] = (security_group_ids and
+                                       list(security_group_ids) or [])
 
     def _ensure_default_security_group(self, context, tenant_id):
         """Create a default security group if one doesn't exist.
@@ -405,7 +430,8 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
         :returns: the default security group id.
         """
         filters = {'name': ['default'], 'tenant_id': [tenant_id]}
-        default_group = self.get_security_groups(context, filters)
+        default_group = self.get_security_groups(context, filters,
+                                                 default_sg=True)
         if not default_group:
             security_group = {'security_group': {'name': 'default',
                                                  'tenant_id': tenant_id,

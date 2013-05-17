@@ -57,7 +57,6 @@ as it allows particular rules to be explicitly disabled.
 """
 
 import abc
-import logging
 import re
 import urllib
 
@@ -65,6 +64,7 @@ import urllib2
 
 from quantum.openstack.common.gettextutils import _
 from quantum.openstack.common import jsonutils
+from quantum.openstack.common import log as logging
 
 
 LOG = logging.getLogger(__name__)
@@ -738,7 +738,6 @@ class RuleCheck(Check):
 class RoleCheck(Check):
     def __call__(self, target, creds):
         """Check that there is a matching role in the cred dict."""
-
         return self.match.lower() in [x.lower() for x in creds['roles']]
 
 

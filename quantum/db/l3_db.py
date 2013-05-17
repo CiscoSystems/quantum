@@ -34,8 +34,6 @@ from quantum.extensions import l3
 from quantum.openstack.common import log as logging
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common import uuidutils
-from quantum import policy
-
 
 LOG = logging.getLogger(__name__)
 
@@ -44,9 +42,15 @@ DEVICE_OWNER_ROUTER_INTF = l3_constants.DEVICE_OWNER_ROUTER_INTF
 DEVICE_OWNER_ROUTER_GW = l3_constants.DEVICE_OWNER_ROUTER_GW
 DEVICE_OWNER_FLOATINGIP = l3_constants.DEVICE_OWNER_FLOATINGIP
 
+# Maps API field to DB column
+# API parameter name and Database column names may differ.
+# Useful to keep the filtering between API and Database.
+API_TO_DB_COLUMN_MAP = {'port_id': 'fixed_port_id'}
+
 
 class Router(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum router."""
+
     name = sa.Column(sa.String(255))
     status = sa.Column(sa.String(16))
     admin_state_up = sa.Column(sa.Boolean)
@@ -61,10 +65,12 @@ class ExternalNetwork(model_base.BASEV2):
 
 
 class FloatingIP(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-    """Represents a floating IP, which may or many not be
-       allocated to a tenant, and may or may not be associated with
-       an internal port/ip address/router.
+    """Represents a floating IP address.
+
+    This IP address may or many not be allocated to a tenant, and may or
+    may not be associated with an internal port/ip address/router.
     """
+
     floating_ip_address = sa.Column(sa.String(64), nullable=False)
     floating_network_id = sa.Column(sa.String(36), nullable=False)
     floating_port_id = sa.Column(sa.String(36), sa.ForeignKey('ports.id'),
@@ -120,7 +126,8 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             raise l3.RouterNotFound(router_id=id)
         return router
 
-    def _make_router_dict(self, router, fields=None):
+    def _make_router_dict(self, router, fields=None,
+                          process_extensions=True):
         res = {'id': router['id'],
                'name': router['name'],
                'tenant_id': router['tenant_id'],
@@ -131,6 +138,9 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
         if router['gw_port_id']:
             nw_id = router.gw_port['network_id']
             res['external_gateway_info'] = {'network_id': nw_id}
+        if process_extensions:
+            for func in self._dict_extend_functions.get(l3.ROUTERS, []):
+                func(self, res, router)
         return self._fields(res, fields)
 
     def create_router(self, context, router):
@@ -285,8 +295,7 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                                      network_id, subnet_id, subnet_cidr):
         try:
             rport_qry = context.session.query(models_v2.Port)
-            rports = rport_qry.filter_by(
-                device_id=router_id).all()
+            rports = rport_qry.filter_by(device_id=router_id)
             # its possible these ports on on the same network, but
             # different subnet
             new_ipnet = netaddr.IPNetwork(subnet_cidr)
@@ -427,7 +436,7 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                 ports = rport_qry.filter_by(
                     device_id=router_id,
                     device_owner=DEVICE_OWNER_ROUTER_INTF,
-                    network_id=subnet['network_id']).all()
+                    network_id=subnet['network_id'])
 
                 for p in ports:
                     if p['fixed_ips'][0]['subnet_id'] == subnet_id:
@@ -456,6 +465,7 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                             'router.interface.delete',
                             notifier_api.CONF.default_notification_level,
                             {'router.interface': info})
+        return info
 
     def _get_floatingip(self, context, id):
         try:
@@ -509,7 +519,9 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             port_id=internal_port['id'])
 
     def get_assoc_data(self, context, fip, floating_network_id):
-        """When a floating IP is associated with an internal port,
+        """Determine/extract data associated with the internal port.
+
+        When a floating IP is associated with an internal port,
         we need to extract/determine some data associated with the
         internal port, including the internal_ip_address, and router_id.
         We also need to confirm that this internal port is owned by the
@@ -710,6 +722,11 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                         page_reverse=False):
         marker_obj = self._get_marker_obj(context, 'floatingip', limit,
                                           marker)
+        if filters is not None:
+            for key, val in API_TO_DB_COLUMN_MAP.iteritems():
+                if key in filters:
+                    filters[val] = filters.pop(key)
+
         return self._get_collection(context, FloatingIP,
                                     self._make_floatingip_dict,
                                     filters=filters, fields=fields,
@@ -723,12 +740,13 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
                                           filters=filters)
 
     def prevent_l3_port_deletion(self, context, port_id):
-        """Checks to make sure a port is allowed to be deleted, raising
-        an exception if this is not the case.  This should be called by
-        any plugin when the API requests the deletion of a port, since
-        some ports for L3 are not intended to be deleted directly via a
-        DELETE to /ports, but rather via other API calls that perform the
-        proper deletion checks.
+        """Checks to make sure a port is allowed to be deleted.
+
+        Raises an exception if this is not the case.  This should be called by
+        any plugin when the API requests the deletion of a port, since some
+        ports for L3 are not intended to be deleted directly via a DELETE
+        to /ports, but rather via other API calls that perform the proper
+        deletion checks.
         """
         port_db = self._get_port(context, port_id)
         if port_db['device_owner'] in [DEVICE_OWNER_ROUTER_INTF,
@@ -765,16 +783,6 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             routers = self.get_sync_data(context.elevated(), [router_id])
             l3_rpc_agent_api.L3AgentNotify.routers_updated(context, routers)
 
-    def _check_l3_view_auth(self, context, network):
-        return policy.check(context,
-                            "extension:router:view",
-                            network)
-
-    def _enforce_l3_set_auth(self, context, network):
-        return policy.enforce(context,
-                              "extension:router:set",
-                              network)
-
     def _network_is_external(self, context, net_id):
         try:
             context.session.query(ExternalNetwork).filter_by(
@@ -784,9 +792,8 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
             return False
 
     def _extend_network_dict_l3(self, context, network):
-        if self._check_l3_view_auth(context, network):
-            network[l3.EXTERNAL] = self._network_is_external(
-                context, network['id'])
+        network[l3.EXTERNAL] = self._network_is_external(
+            context, network['id'])
 
     def _process_l3_create(self, context, net_data, net_id):
         external = net_data.get(l3.EXTERNAL)
@@ -794,8 +801,6 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
 
         if not external_set:
             return
-
-        self._enforce_l3_set_auth(context, net_data)
 
         if external:
             # expects to be called within a plugin's session
@@ -807,7 +812,6 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
         if not attributes.is_attr_set(new_value):
             return
 
-        self._enforce_l3_set_auth(context, net_data)
         existing_value = self._network_is_external(context, net_id)
 
         if existing_value == new_value:
@@ -833,8 +837,8 @@ class L3_NAT_db_mixin(l3.RouterPluginBase):
         if not vals:
             return nets
 
-        ext_nets = set([en['network_id'] for en in
-                        context.session.query(ExternalNetwork).all()])
+        ext_nets = set(en['network_id']
+                       for en in context.session.query(ExternalNetwork))
         if vals[0]:
             return [n for n in nets if n['id'] in ext_nets]
         else:

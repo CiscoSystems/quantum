@@ -422,7 +422,9 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             port_db_entry = super(MidonetPluginV2,
                                   self).create_port(context, port)
-            self._extend_port_dict_security_group(context, port_db_entry)
+            # Caveat: port_db_entry is not a db model instance
+            sg_ids = self._get_security_groups_on_port(context, port)
+            self._process_port_create_security_group(context, port, sg_ids)
             if is_compute_interface:
                 # Create a DHCP entry if needed.
                 if 'ip_address' in (port_db_entry['fixed_ips'] or [{}])[0]:
@@ -453,8 +455,6 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # get the quantum port from DB.
         port_db_entry = super(MidonetPluginV2, self).get_port(context,
                                                               id, fields)
-        self._extend_port_dict_security_group(context, port_db_entry)
-
         # verify that corresponding port exists in MidoNet.
         try:
             self.mido_api.get_port(id)
@@ -477,7 +477,6 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             try:
                 for port in ports_db_entry:
                     self.mido_api.get_port(port['id'])
-                    self._extend_port_dict_security_group(context, port)
             except w_exc.HTTPNotFound:
                 raise MidonetResourceNotFound(resource_type='Port',
                                               id=port['id'])
@@ -831,7 +830,7 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             ports = rport_qry.filter_by(
                 device_id=router_id,
                 device_owner=l3_db.DEVICE_OWNER_ROUTER_INTF,
-                network_id=network_id).all()
+                network_id=network_id)
             network_port = None
             for p in ports:
                 if p['fixed_ips'][0]['subnet_id'] == subnet_id:
@@ -869,9 +868,10 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 break
         assert found
 
-        super(MidonetPluginV2, self).remove_router_interface(
+        info = super(MidonetPluginV2, self).remove_router_interface(
             context, router_id, interface_info)
         LOG.debug(_("MidonetPluginV2.remove_router_interface exiting"))
+        return info
 
     def update_floatingip(self, context, id, floatingip):
         LOG.debug(_("MidonetPluginV2.update_floatingip called: id=%(id)s "
@@ -1017,7 +1017,7 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             sg_id = sg_db_entry['id']
             tenant_id = sg_db_entry['tenant_id']
 
-            if sg_name == 'default':
+            if sg_name == 'default' and not context.is_admin:
                 raise ext_sg.SecurityGroupCannotRemoveDefault()
 
             filters = {'security_group_id': [sg_id]}
@@ -1032,12 +1032,13 @@ class MidonetPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             return super(MidonetPluginV2, self).delete_security_group(
                 context, id)
 
-    def get_security_groups(self, context, filters=None, fields=None):
+    def get_security_groups(self, context, filters=None, fields=None,
+                            default_sg=False):
         LOG.debug(_("MidonetPluginV2.get_security_groups called: "
                     "filters=%(filters)r fields=%(fields)r"),
                   {'filters': filters, 'fields': fields})
         return super(MidonetPluginV2, self).get_security_groups(
-            context, filters, fields)
+            context, filters, fields, default_sg=default_sg)
 
     def get_security_group(self, context, id, fields=None, tenant_id=None):
         LOG.debug(_("MidonetPluginV2.get_security_group called: id=%(id)s "
