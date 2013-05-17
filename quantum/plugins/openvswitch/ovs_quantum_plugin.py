@@ -326,23 +326,22 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.info(_("Tunnel ID ranges: %s"), self.tunnel_id_ranges)
 
     def _extend_network_dict_provider(self, context, network):
-        if self._check_view_auth(context, network, self.network_view):
-            binding = ovs_db_v2.get_network_binding(context.session,
+        binding = ovs_db_v2.get_network_binding(context.session,
                                                     network['id'])
-            network[provider.NETWORK_TYPE] = binding.network_type
-            if binding.network_type in [constants.TYPE_GRE, 
-                    constants.TYPE_VXLAN]:
-                network[provider.PHYSICAL_NETWORK] = None
-                network[provider.SEGMENTATION_ID] = binding.segmentation_id
-            elif binding.network_type == constants.TYPE_FLAT:
-                network[provider.PHYSICAL_NETWORK] = binding.physical_network
-                network[provider.SEGMENTATION_ID] = None
-            elif binding.network_type == constants.TYPE_VLAN:
-                network[provider.PHYSICAL_NETWORK] = binding.physical_network
-                network[provider.SEGMENTATION_ID] = binding.segmentation_id
-            elif binding.network_type == constants.TYPE_LOCAL:
-                network[provider.PHYSICAL_NETWORK] = None
-                network[provider.SEGMENTATION_ID] = None
+        network[provider.NETWORK_TYPE] = binding.network_type
+        if binding.network_type in [constants.TYPE_GRE, 
+                constants.TYPE_VXLAN]:
+            network[provider.PHYSICAL_NETWORK] = None
+            network[provider.SEGMENTATION_ID] = binding.segmentation_id
+        elif binding.network_type == constants.TYPE_FLAT:
+            network[provider.PHYSICAL_NETWORK] = binding.physical_network
+            network[provider.SEGMENTATION_ID] = None
+        elif binding.network_type == constants.TYPE_VLAN:
+            network[provider.PHYSICAL_NETWORK] = binding.physical_network
+            network[provider.SEGMENTATION_ID] = binding.segmentation_id
+        elif binding.network_type == constants.TYPE_LOCAL:
+            network[provider.PHYSICAL_NETWORK] = None
+            network[provider.SEGMENTATION_ID] = None
 
     def _process_provider_create(self, context, attrs):
         network_type = attrs.get(provider.NETWORK_TYPE)
