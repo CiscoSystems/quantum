@@ -770,7 +770,7 @@ def create_agent_config_map(config):
             kwargs['tunnel_type'] = config.OVS.tenant_network_type
         else:
             msg = _('When Tunnelling is enabled tenant_network_type '
-                    'should be %s or %s' % (constants.GRE,
+                    'should be %s or %s' % (constants.TYPE_GRE,
                         constants.TYPE_VXLAN))
             raise ValueError(msg)
 
