@@ -20,7 +20,9 @@
 # @author: Dave Lapsley, Nicira Networks, Inc.
 # @author: Aaron Rosen, Nicira Networks, Inc.
 # @author: Seetharama Ayyadevara, Freescale Semiconductor, Inc.
+# @author: Kyle Mestery, Cisco Systems, Inc.
 
+import re
 import sys
 import time
 
@@ -172,6 +174,9 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.local_ip = local_ip
         self.tunnel_count = 0
         self.tunnel_type = tunnel_type
+        if self.tunnel_type == constants.TYPE_VXLAN:
+            LOG.error(_("CHECKING VXLAN VERSION"))
+            self.check_version()
         if self.enable_tunneling:
             self.setup_tunnel_br(tun_br)
         self.agent_state = {
@@ -187,6 +192,28 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.sg_agent = OVSSecurityGroupAgent(self.context,
                                               self.plugin_rpc,
                                               root_helper)
+
+    MINIMUM_VXLAN_VERSION = 1.10
+
+    def check_version(self):
+        ver = 0
+        try:
+            cmd = ['ovs-vsctl', '--version']
+            out = utils.execute(cmd)
+            ver = re.findall("\d+.\d+", out)[0]
+            is_valid_version = float(ver) >= self.MINIMUM_VXLAN_VERSION
+            if not is_valid_version:
+                LOG.warning(_('FAILED VERSION REQUIREMENT FOR Open '
+                              'vSwitch with VXLAN support. To use '
+                              'VXLAN tunnels with OVS, please ensure '
+                              'the OVS version version is %1.2f '
+                              'or above!'), self.MINIMUM_VXLAN_VERSION)
+                sys.exit(1)
+        except (OSError, RuntimeError, IndexError, ValueError):
+            LOG.warning(_('Unable to determine Open vSwitch version. '
+                          'Please ensure that its version is %1.2f '
+                          'or above!'), self.MINIMUM_VXLAN_VERSION)
+
 
     def _report_state(self):
         try:
