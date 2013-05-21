@@ -19,6 +19,7 @@
 # @author: Dan Wendlandt, Nicira Networks, Inc.
 # @author: Dave Lapsley, Nicira Networks, Inc.
 # @author: Aaron Rosen, Nicira Networks, Inc.
+# @author: Seetharama Ayyadevara, Freescale Semiconductor, Inc.
 
 import sys
 import time
@@ -147,7 +148,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
     def __init__(self, integ_br, tun_br, local_ip,
                  bridge_mappings, root_helper,
-                 polling_interval, enable_tunneling):
+                 polling_interval, enable_tunneling, tunnel_type):
         '''Constructor.
 
         :param integ_br: name of the integration bridge.
@@ -156,7 +157,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         :param bridge_mappings: mappings from physical network name to bridge.
         :param root_helper: utility to use when running shell cmds.
         :param polling_interval: interval (secs) to poll DB.
-        :param enable_tunneling: if True enable GRE networks.
+        :param enable_tunneling: if True enable GRE or VXLAN networks.
         '''
         self.root_helper = root_helper
         self.available_local_vlans = set(xrange(q_const.MIN_VLAN_TAG,
@@ -170,6 +171,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.enable_tunneling = enable_tunneling
         self.local_ip = local_ip
         self.tunnel_count = 0
+        self.tunnel_type = tunnel_type
         if self.enable_tunneling:
             self.setup_tunnel_br(tun_br)
         self.agent_state = {
@@ -275,8 +277,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         tunnel_id = kwargs.get('tunnel_id')
         if tunnel_ip == self.local_ip:
             return
-        tun_name = 'gre-%s' % tunnel_id
-        self.tun_br.add_tunnel_port(tun_name, tunnel_ip)
+        tun_name = '%s-%s' % (self.tunnel_type, tunnel_id)
+        self.tun_br.add_tunnel_port(tun_name, tunnel_ip, self.tunnel_type)
 
     def create_rpc_dispatcher(self):
         '''Get the rpc dispatcher for this manager.
@@ -307,7 +309,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                                          physical_network,
                                                          segmentation_id)
 
-        if network_type == constants.TYPE_GRE:
+        if network_type in [constants.TYPE_GRE, constants.TYPE_VXLAN]:
             if self.enable_tunneling:
                 # outbound
                 self.tun_br.add_flow(priority=4, in_port=self.patch_int_ofport,
@@ -322,8 +324,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                     actions="mod_vlan_vid:%s,output:%s" %
                     (lvid, self.patch_int_ofport))
             else:
-                LOG.error(_("Cannot provision GRE network for net-id=%s "
-                          "- tunneling disabled"), net_uuid)
+                LOG.error(_("Cannot provision %s network for net-id=%s "
+                          "- tunneling disabled"), network_type, net_uuid)
         elif network_type == constants.TYPE_FLAT:
             if physical_network in self.phys_brs:
                 # outbound
@@ -384,7 +386,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                  {'vlan_id': lvm.vlan,
                   'net_uuid': net_uuid})
 
-        if lvm.network_type == constants.TYPE_GRE:
+        if lvm.network_type in [constants.TYPE_GRE, constants.TYPE_VXLAN]:
             if self.enable_tunneling:
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id)
                 self.tun_br.delete_flows(dl_vlan=lvm.vlan)
@@ -439,7 +441,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         lvm = self.local_vlan_map[net_uuid]
         lvm.vif_ports[port.vif_id] = port
 
-        if network_type == constants.TYPE_GRE:
+        if network_type in [constants.TYPE_GRE, constants.TYPE_VXLAN]:
             if self.enable_tunneling:
                 # inbound unicast
                 self.tun_br.add_flow(priority=3, tun_id=segmentation_id,
@@ -675,8 +677,9 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             tunnels = details['tunnels']
             for tunnel in tunnels:
                 if self.local_ip != tunnel['ip_address']:
-                    tun_name = 'gre-%s' % tunnel['id']
-                    self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'])
+                    tun_name = '%s-%s' % (self.tunnel_type, tunnel['id'])
+                    self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'],
+                            self.tunnel_type)
         except Exception as e:
             LOG.debug(_("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
                       {'local_ip': self.local_ip, 'e': e})
@@ -748,11 +751,21 @@ def create_agent_config_map(config):
         root_helper=config.AGENT.root_helper,
         polling_interval=config.AGENT.polling_interval,
         enable_tunneling=config.OVS.enable_tunneling,
+        tunnel_type=None,
     )
 
-    if kwargs['enable_tunneling'] and not kwargs['local_ip']:
-        msg = _('Tunnelling cannot be enabled without a valid local_ip.')
-        raise ValueError(msg)
+    if kwargs['enable_tunneling']:
+        if not kwargs['local_ip']:
+            msg = _('Tunnelling cannot be enabled without a valid local_ip.')
+            raise ValueError(msg)
+        if config.OVS.tenant_network_type in [constants.TYPE_GRE,
+                constants.TYPE_VXLAN]:
+            kwargs['tunnel_type'] = config.OVS.tenant_network_type
+        else:
+            msg = _('When Tunnelling is enabled tenant_network_type '
+                    'should be %s or %s' % (constants.TYPE_GRE,
+                        constants.TYPE_VXLAN))
+            raise ValueError(msg)
 
     return kwargs
 
