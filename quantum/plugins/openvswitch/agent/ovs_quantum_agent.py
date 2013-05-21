@@ -214,7 +214,6 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                           'Please ensure that its version is %1.2f '
                           'or above!'), self.MINIMUM_VXLAN_VERSION)
 
-
     def _report_state(self):
         try:
             # How many devices are likely used by a VM
@@ -351,8 +350,10 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                     actions="mod_vlan_vid:%s,output:%s" %
                     (lvid, self.patch_int_ofport))
             else:
-                LOG.error(_("Cannot provision %s network for net-id=%s "
-                          "- tunneling disabled"), network_type, net_uuid)
+                LOG.error(_("Cannot provision %(network_type)s network for "
+                          "net-id=%(net_uuid)s - tunneling disabled"),
+                          {'network_type': network_type,
+                           'net_uuid': net_uuid})
         elif network_type == constants.TYPE_FLAT:
             if physical_network in self.phys_brs:
                 # outbound
@@ -706,7 +707,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 if self.local_ip != tunnel['ip_address']:
                     tun_name = '%s-%s' % (self.tunnel_type, tunnel['id'])
                     self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'],
-                            self.tunnel_type)
+                                                self.tunnel_type)
         except Exception as e:
             LOG.debug(_("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
                       {'local_ip': self.local_ip, 'e': e})
@@ -786,12 +787,13 @@ def create_agent_config_map(config):
             msg = _('Tunnelling cannot be enabled without a valid local_ip.')
             raise ValueError(msg)
         if config.OVS.tenant_network_type in [constants.TYPE_GRE,
-                constants.TYPE_VXLAN]:
+                                              constants.TYPE_VXLAN]:
             kwargs['tunnel_type'] = config.OVS.tenant_network_type
         else:
-            msg = _('When Tunnelling is enabled tenant_network_type '
-                    'should be %s or %s' % (constants.TYPE_GRE,
-                        constants.TYPE_VXLAN))
+            msg = (_('When Tunnelling is enabled tenant_network_type '
+                   'should be %(gre)s or %(vxlan)s') %
+                   {'gre': constants.TYPE_GRE,
+                   'vxlan': constants.TYPE_VXLAN})
             raise ValueError(msg)
 
     return kwargs

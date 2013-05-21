@@ -163,8 +163,8 @@ class OVSBridge:
         flow_str = ",".join(flow_expr_arr)
         self.run_ofctl("del-flows", [flow_str])
 
-    def add_tunnel_port(self, port_name, remote_ip, 
-            tunnel_type=constants.TYPE_GRE):
+    def add_tunnel_port(self, port_name, remote_ip,
+                        tunnel_type=constants.TYPE_GRE):
         self.run_vsctl(["add-port", self.br_name, port_name])
         if tunnel_type == constants.TYPE_VXLAN:
             self.set_db_attribute("Interface", port_name, "type", "vxlan")
