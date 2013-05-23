@@ -786,9 +786,9 @@ def create_agent_config_map(config):
         if not kwargs['local_ip']:
             msg = _('Tunnelling cannot be enabled without a valid local_ip.')
             raise ValueError(msg)
-        if config.OVS.tenant_network_type in [constants.TYPE_GRE,
+        if config.ovs.tenant_network_type in [constants.TYPE_GRE,
                                               constants.TYPE_VXLAN]:
-            kwargs['tunnel_type'] = config.OVS.tenant_network_type
+            kwargs['tunnel_type'] = config.ovs.tenant_network_type
         else:
             msg = (_('When Tunnelling is enabled tenant_network_type '
                    'should be %(gre)s or %(vxlan)s') %
