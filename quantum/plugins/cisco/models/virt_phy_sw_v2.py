@@ -36,12 +36,12 @@ from quantum.plugins.cisco.common import config as conf
 from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum import quantum_plugin_base_v2
 from quantum.db import api as db_api
-
+from quantum.db.db_base_plugin_v2 import QuantumDbPluginV2
 
 LOG = logging.getLogger(__name__)
 
 
-class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
+class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
     """
     This implementation works with OVS and Nexus plugin for the
     following topology:
@@ -58,7 +58,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                             'create_subnet', 'create_subnet_bulk',
                             'delete_subnet', 'update_subnet',
                             'get_subnet', 'get_subnets',
-                            'create_or_update_agent', ]
+                            'create_or_update_agent', 'report_state']
 
     def __init__(self):
         """
