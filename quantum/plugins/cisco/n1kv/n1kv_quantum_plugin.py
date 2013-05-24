@@ -227,13 +227,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kv_db_v2.initialize()
         cred.Store.initialize()
         # TBD Begin : To be removed. No need for this parameters
-        self._parse_network_vlan_ranges()
-        n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
-        self.enable_tunneling = conf.CISCO_N1K.enable_tunneling
-        self.vxlan_id_ranges = []
-        if self.enable_tunneling:
-            self._parse_vxlan_id_ranges()
-            n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
         # If no api_extensions_path is provided set the following
         if not quantum_cfg.CONF.api_extensions_path:
             quantum_cfg.CONF.set_override(
@@ -263,7 +256,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.agent_vsm = True
         self._send_register_request()
         PollVSM().start()
-        #self._poll_policies()
 
     def _poll_policies(self, event_type=None, epoch=None, tenant_id=None):
         """
@@ -271,7 +263,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug('_poll_policies')
         n1kvclient = n1kv_client.Client()
-        #policy_profiles = client.list_profiles()
         policy_profiles = n1kvclient.list_events(event_type, epoch)
         for profile in policy_profiles['body'][const.SET]:
             if const.NAME in profile:
@@ -287,12 +278,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 elif const.ID in profile[const.PROPERTIES]:
                     profile_id = profile[const.PROPERTIES][const.ID]
                     self._add_policy_profile(profile_name, profile_id, tenant_id)
-            '''
-            if const.ID and const.NAME in profile:
-                profile_id = profile[const.PROPERTIES][const.ID]
-                profile_name = profile[const.PROPERTIES][const.NAME]
-                self._add_policy_profile(profile_name, profile_id, tenant_id)
-            '''
         self._remove_all_fake_policy_profiles()
 
     # TBD Begin : To be removed. Needs some change in logic before removal
@@ -753,12 +738,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if profile_id_set:
             # If it is a dhcp port, profile id is
             # populated with network profile id.
-            if port['port']['device_id'].startswith('dhcp'):
-                profile_id = self._process_network_profile(context,
-                                                           port['port'])
-            else:
-                profile_id = self._process_policy_profile(context,
-                                                          port['port'])
+            profile_id = self._process_policy_profile(context,
+                                                      port['port'])
             LOG.debug('create port: profile_id=%s', profile_id)
             session = context.session
             with session.begin(subtransactions=True):
@@ -773,9 +754,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if port['port']['device_id'].startswith('dhcp'):
                 # Grab profile id from the network
                 LOG.debug("create dhcp port")
-                network_id = port['port']['network_id']
-                network = self.get_network(context, network_id)
-                port['port']['n1kv:profile_id'] = network['n1kv:profile_id']
+                p_profile_name = conf.CISCO_N1K.default_policy_profile
+                p_profile = self._get_policy_profile_by_name(p_profile_name) 
+                port['port']['n1kv:profile_id'] = p_profile['id']
                 tenant_id = port['port']['tenant_id']
                 instance_id = port['port']['device_id']
                 device_owner = port['port']['device_owner']
@@ -908,12 +889,34 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def create_network_profile(self, context, network_profile):
         self._replace_fake_tenant_id_with_real(context)
         _network_profile = super(N1kvQuantumPluginV2, self).create_network_profile(context, network_profile)
+        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        if _network_profile['segment_type'] == const.TYPE_VLAN:
+            self.network_vlan_ranges = {}
+            self._add_network_vlan_range(_network_profile['physical_network'],
+                            int(seg_min),
+                            int(seg_max))
+            n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
+        elif _network_profile['segment_type'] == const.TYPE_VXLAN:
+            self.vxlan_id_ranges = []
+            self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
+            n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
         #self._send_create_fabric_network_request(_network_profile)
         self._send_create_network_profile_request(context, _network_profile)
         return _network_profile
 
     def delete_network_profile(self, context, id):
         _network_profile = super(N1kvQuantumPluginV2, self).delete_network_profile(context, id)
+        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        if _network_profile['segment_type'] == const.TYPE_VLAN:
+            self.network_vlan_ranges = {}
+            self._add_network_vlan_range(_network_profile['physical_network'],
+                            int(seg_min),
+                            int(seg_max))
+            n1kv_db_v2.delete_vlan_allocations(self.network_vlan_ranges)
+        elif _network_profile['segment_type'] == const.TYPE_VXLAN:
+            self.delete_vxlan_ranges = []
+            self.delete_vxlan_ranges.append((int(seg_min), int(seg_max)))
+            n1kv_db_v2.delete_vxlan_allocations(self.delete_vxlan_ranges)
         self._send_delete_network_profile_request(_network_profile)
 
 class PollVSM (threading.Thread, N1kvQuantumPluginV2):

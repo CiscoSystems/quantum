@@ -24,6 +24,8 @@ RESOURCE_ATTRIBUTE_MAP = {
                                'is_visible': True, 'default': '0.0.0.0'},
         'multicast_ip_index': {'allow_post': False, 'allow_put': False,
                                'is_visible': False, 'default': '0'},
+        'physical_network': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'is_visible': False, 'default': ''},
         'add_tenant': {'allow_post': True, 'allow_put': True, 'is_visible': True, 'default': None},

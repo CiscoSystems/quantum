@@ -79,6 +79,8 @@ cisco_n1k_opts = [
                help=_("N1K VXLAN ID Ranges")),
     cfg.StrOpt('network_vlan_ranges', default='vlan:1:4095',
                help=_("N1K Network VLAN Ranges")),
+    cfg.StrOpt('default_policy_profile', default='service_profile',
+               help=_("N1K default policy profile")),
 ]
 
 cfg.CONF.register_opts(cisco_opts, "CISCO")

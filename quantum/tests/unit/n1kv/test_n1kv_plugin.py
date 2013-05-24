@@ -72,10 +72,19 @@ def _fake_add_dummy_profile_for_test(self, obj):
     elif 'network' in obj:
         profile = {'name': 'dummy_profile',
                    'segment_type': 'vlan',
+                   'physical_network': 'phsy1',
                    'segment_range': '3968-4047'}
+        self.network_vlan_ranges = {profile['physical_network']: [(3968, 4047)]}
+        n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         np = n1kv_db_v2.create_network_profile(profile)
         obj['network'][n1kv_profile.PROFILE_ID] = np.id
 
+
+def _fake_setup_vsm(self):
+    """ Fake establish Communication with Cisco Nexus1000V VSM """
+    self.agent_vsm = True
+    self._send_register_request()
+    self._poll_policies(event_type="port_profile")
 
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
@@ -108,9 +117,11 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         segment_range = "100-900"
         segment_type = 'vlan'
         tunnel_id = 200
+        physical_network = 'phys1'
         profile_obj = n1kv_models_v2.NetworkProfile("test_np",
                                                     segment_type,
-                                                    segment_range)
+                                                    segment_range,
+                                                    physical_network)
         session = db.get_session()
         session.add(profile_obj)
         session.flush()
@@ -131,33 +142,28 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         if not self.DEFAULT_RESP_BODY:
             self.DEFAULT_RESP_BODY = \
-            """<?xml version="1.0" encoding="UTF-8"?>
-            <set name="virtual_port_profile_set">
-              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB"
-                        url="/api/hyper-v/virtual-port-profile">
-                <properties>
-                  <state>enabled</state>
-                  <type>vethernet</type>
-                  <name>AbhishekPP</name>
-                  <id>41548d21-7f89-4da0-9131-3d4fd4e8BBBB</id>
-                  <maxPorts>512</maxPorts>
-                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-                </properties>
-              </instance>
-              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8AAAA"
-                        url="/api/hyper-v/virtual-port-profile">
-                <properties>
-                  <state>enabled</state>
-                  <type>vethernet</type>
-                  <name>grizzlyPP</name>
-                  <id>41548d21-7f89-4da0-9131-3d4fd4e8AAAA</id>
-                  <maxPorts>512</maxPorts>
-                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-                </properties>
-              </instance>
+            """<?xml version="1.0" encoding="utf-8"?>
+               <set name="events_set">
+               <instance name="1" url="/api/hyper-v/events/1">
+               <properties>
+        <cmd>configure terminal ; port-profile type vethernet grizzlyPP (SUCCESS)
+        </cmd>
+            <id>42227269-e348-72ed-bdb7-7ce91cd1423c</id>
+            <time>1369223611</time>
+            <name>grizzlyPP</name>
+            </properties>
+            </instance>
+            <instance name="2" url="/api/hyper-v/events/2">
+            <properties>
+        <cmd>configure terminal ; port-profile type vethernet havanaPP (SUCCESS)
+        </cmd>
+            <id>3fc83608-ae36-70e7-9d22-dec745623d06</id>
+            <time>1369223661</time>
+            <name>havanaPP</name>
+            </properties>
+            </instance>
             </set>
             """
-
         # Creating a mock HTTP connection object for httplib. The N1KV client
         # interacts with the VSM via HTTP. Since we don't have a VSM running
         # in the unit tests, we need to 'fake' it by patching the HTTP library
@@ -198,6 +204,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # need it to return a dummy network profile.
         n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
                                                   _fake_add_dummy_profile_for_test
+
+        n1kv_quantum_plugin.N1kvQuantumPluginV2._setup_vsm = _fake_setup_vsm
 
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.

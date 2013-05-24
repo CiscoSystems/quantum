@@ -30,15 +30,16 @@ PHYS_NET_2 = 'physnet2'
 VLAN_MIN = 10
 VLAN_MAX = 19
 VLAN_RANGES = {PHYS_NET: [(VLAN_MIN, VLAN_MAX)]}
-UPDATED_VLAN_RANGES = {PHYS_NET: [(VLAN_MIN + 5, VLAN_MAX + 5)],
-                       PHYS_NET_2: [(VLAN_MIN + 20, VLAN_MAX + 20)]}
+UPDATED_VLAN_RANGES = {PHYS_NET: [(VLAN_MIN + 20, VLAN_MAX + 20)],
+                       PHYS_NET_2: [(VLAN_MIN + 40, VLAN_MAX + 40)]}
 VXLAN_MIN = 100
 VXLAN_MAX = 109
 VXLAN_RANGES = [(VXLAN_MIN, VXLAN_MAX)]
-UPDATED_VXLAN_RANGES = [(VXLAN_MIN + 5, VXLAN_MAX + 5)]
+UPDATED_VXLAN_RANGES = [(VXLAN_MIN + 20, VXLAN_MAX + 20)]
 TEST_NETWORK_ID = 'abcdefghijklmnopqrstuvwxyz'
 TEST_NETWORK_PROFILE = {'name': 'test_profile',
                         'segment_type': 'vlan',
+                        'physical_network': 'physnet1',
                         'segment_range': '10-19'}
 TEST_NETWORK_PROFILE_VXLAN = {'name': 'test_profile',
                               'segment_type': 'vxlan',
@@ -94,38 +95,38 @@ class VlanAllocationsTest(unittest2.TestCase):
         n1kv_db_v2.sync_vlan_allocations(UPDATED_VLAN_RANGES)
 
         self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                        VLAN_MIN + 5 - 1))
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                       VLAN_MIN + 5).
-                         allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                       VLAN_MIN + 5 + 1).
-                         allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                       VLAN_MAX + 5 - 1).
-                         allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                       VLAN_MAX + 5).
-                         allocated)
-        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
-                                                        VLAN_MAX + 5 + 1))
-
-        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
                                                         VLAN_MIN + 20 - 1))
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 20).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MIN + 20 + 1).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX + 20 - 1).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                        VLAN_MAX + 20).
                          allocated)
-        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET,
                                                         VLAN_MAX + 20 + 1))
+
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                        VLAN_MIN + 40 - 1))
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                       VLAN_MIN + 40).
+                         allocated)
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                       VLAN_MIN + 40 + 1).
+                         allocated)
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                       VLAN_MAX + 40 - 1).
+                         allocated)
+        self.assertFalse(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                       VLAN_MAX + 40).
+                         allocated)
+        self.assertIsNone(n1kv_db_v2.get_vlan_allocation(PHYS_NET_2,
+                                                        VLAN_MAX + 40 + 1))
 
         n1kv_db_v2.sync_vlan_allocations(VLAN_RANGES)
 
@@ -225,16 +226,16 @@ class VxlanAllocationsTest(unittest2.TestCase):
 
         n1kv_db_v2.sync_vxlan_allocations(UPDATED_VXLAN_RANGES)
 
-        self.assertIsNone(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 5 - 1))
-        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 5).
+        self.assertIsNone(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 20 - 1))
+        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 20).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 5 + 1).
+        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MIN + 20 + 1).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 5 - 1).
+        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 20 - 1).
                          allocated)
-        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 5).
+        self.assertFalse(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 20).
                          allocated)
-        self.assertIsNone(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 5 + 1))
+        self.assertIsNone(n1kv_db_v2.get_vxlan_allocation(VXLAN_MAX + 20 + 1))
 
     def test_vxlan_pool(self):
         vxlan_ids = set()
@@ -374,24 +375,31 @@ class NetworkProfileTests(unittest2.TestCase):
     def test_get_network_profiles(self):
         test_profiles = [{'name': 'test_profile1',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '200-210'},
                          {'name': 'test_profile2',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '211-220'},
                          {'name': 'test_profile3',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '221-230'},
                          {'name': 'test_profile4',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '231-240'},
                          {'name': 'test_profile5',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '241-250'},
                          {'name': 'test_profile6',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '251-260'},
                          {'name': 'test_profile7',
                           'segment_type': 'vlan',
+                          'physical_network': 'phys1',
                           'segment_range': '261-270'}]
         [n1kv_db_v2.create_network_profile(p) for p in test_profiles]
         #TODO Fix this test to work with real tenant_td
