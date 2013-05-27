@@ -113,12 +113,24 @@ class Client(object):
     bridge_domains_path = "/bridge-domain"
     bridge_domain_path = "/bridge-domain/%s"
     fabric_networks_path = "/fabric-network"
+    events_path = "/events"
 
     def list_profiles(self, **_params):
         """
         Fetches a list of all profiles
         """
         return self._get(self.profiles_path, params=_params)
+
+    def list_events(self, event_type=None, epoch=None, **_params):
+        """
+        Fetches a list of events from the VSM.
+        Event type: port_profile
+        Event type of port_profile retrieves all updates/create/deletes
+        of port profiles from the VSM. 
+        """
+        if event_type:
+            self.events_path = self.events_path + '?type=' + event_type
+        return self._get(self.events_path, params=_params)
 
     def create_bridge_domain(self, network, **_params):
         """
@@ -238,7 +250,11 @@ class Client(object):
                 '32': '255.255.255.255',}
 
         if subnet['cidr']:
-            netmask = cidr[subnet['cidr'].split('/')[1]]
+            cidr_block = subnet['cidr'].split('/')[1]
+            if int(cidr_block) in range(0,32):
+                netmask = cidr[cidr_block]
+            else:
+                netmask = ''
         else:
             netmask = ''
 
@@ -250,8 +266,8 @@ class Client(object):
             address_range_end   = None
 
         body = {'dhcp': subnet['enable_dhcp'],
-                'addressRangeStart': subnet['allocation_pools'][0]['start'],
-                'addressRangeEnd': subnet['allocation_pools'][0]['end'],
+                'addressRangeStart': address_range_start,
+                'addressRangeEnd': address_range_end,
                 'ipAddressSubnet': netmask,
                 'name': subnet['name'],
                 'gateway': subnet['gateway_ip'], }

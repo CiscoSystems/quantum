@@ -23,8 +23,9 @@
 import logging
 import sys
 import itertools
+import threading
+import time
 
-from keystoneclient.v2_0 import client as keystone_client
 from novaclient.v1_1 import client as nova_client
 from oslo.config import cfg as quantum_cfg
 
@@ -35,11 +36,15 @@ from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum.common import rpc as q_rpc
+from quantum.agent import securitygroups_rpc as sg_rpc
 
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
+from quantum.db import securitygroups_rpc_base as sg_db_rpc
+from quantum.db import agents_db
+from quantum.db import agentschedulers_db
 
 from quantum.extensions import providernet as provider
 
@@ -47,6 +52,8 @@ from quantum.openstack.common import context
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
+from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
+from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
 
 from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
 from quantum.plugins.cisco.extensions import network_profile
@@ -54,20 +61,19 @@ from quantum.plugins.cisco.extensions import policy_profile
 from quantum.plugins.cisco.extensions import credential
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco import l2network_plugin_configuration as conf
+from quantum.plugins.cisco.common import config as conf
+from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.plugins.cisco.db import n1kv_db_v2
-from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.plugins.cisco.db import network_db_v2
-from quantum.plugins.cisco.n1kv import n1kv_configuration as n1kv_conf
 from quantum.plugins.cisco.n1kv import n1kv_client
 
 
 LOG = logging.getLogger(__name__)
-VM_NETWORK_NUM = itertools.count()  # thread-safe increment operations
-
+POLL_DURATION = 10
 
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
-                       l3_rpc_base.L3RpcCallbackMixin):
+                       l3_rpc_base.L3RpcCallbackMixin,
+                       sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
 
     # Set RPC API version to 1.0 by default.
     RPC_API_VERSION = '1.0'
@@ -81,7 +87,8 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
         '''
-        return q_rpc.PluginRpcDispatcher([self])
+        return q_rpc.PluginRpcDispatcher([self,
+                                          agents_db.AgentExtRpcCallback()])
 
     def get_device_details(self, rpc_context, **kwargs):
         """Agent requests device details"""
@@ -144,7 +151,8 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return entry
 
 
-class AgentNotifierApi(proxy.RpcProxy):
+class AgentNotifierApi(proxy.RpcProxy,
+                       sg_rpc.SecurityGroupAgentRpcApiMixin):
     '''Agent side of the N1kv rpc API.
 
     API version history:
@@ -193,10 +201,10 @@ class AgentNotifierApi(proxy.RpcProxy):
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          l3_db.L3_NAT_db_mixin,
-                         # n1kv_profile_db.N1kvProfile_db_mixin,
                          n1kv_db_v2.NetworkProfile_db_mixin,
                          n1kv_db_v2.PolicyProfile_db_mixin,
-                         network_db_v2.Credential_db_mixin):
+                         network_db_v2.Credential_db_mixin,
+                         agentschedulers_db.AgentSchedulerDbMixin):
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
@@ -208,8 +216,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     # This attribute specifies whether the plugin supports or not
     # bulk operations. Name mangling is used in order to ensure it
     # is qualified by class
-    __native_bulk_support = True
-    supported_extension_aliases = ["provider",
+    __native_bulk_support = False
+    supported_extension_aliases = ["provider", "agent",
                                    "n1kv_profile", "network_profile",
                                    "policy_profile", "router", "credential"]
 
@@ -224,18 +232,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kv_db_v2.initialize()
         cred.Store.initialize()
         # TBD Begin : To be removed. No need for this parameters
-        self._parse_network_vlan_ranges()
-        n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
-        self.enable_tunneling = n1kv_conf.N1KV['enable_tunneling']
-        self.vxlan_id_ranges = []
-        if self.enable_tunneling:
-            self._parse_vxlan_id_ranges()
-            n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
         # If no api_extensions_path is provided set the following
         if not quantum_cfg.CONF.api_extensions_path:
             quantum_cfg.CONF.set_override(
                 'api_extensions_path',
-                'quantum/plugins/cisco/extensions')
+                'extensions:quantum/plugins/cisco/extensions')
         # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
@@ -251,6 +252,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.create_consumer(self.topic, self.dispatcher,
                                   fanout=False)
         # Consume from all consumers in a thread
+        self.dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
+        self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
         self.conn.consume_in_thread()
 
     def _setup_vsm(self):
@@ -258,36 +261,35 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         self._send_register_request()
-        self._poll_policies()
+        PollVSM().start()
 
-    def _poll_policies(self, tenant_id=None):
+    def _poll_policies(self, event_type=None, epoch=None, tenant_id=None):
         """
         Retrieve Policy Profiles from Cisco Nexus1000V
-        :param tenant_id:
-        :return:
         """
         LOG.debug('_poll_policies')
-        client = n1kv_client.Client()
-        policy_profiles = client.list_profiles()
+        n1kvclient = n1kv_client.Client()
+        policy_profiles = n1kvclient.list_events(event_type, epoch)
         for profile in policy_profiles['body'][const.SET]:
-            if const.ID and const.NAME in profile:
-                profile_id = profile[const.PROPERTIES][const.ID]
+            if const.NAME in profile:
+                cmd = profile[const.PROPERTIES]['cmd']
+                cmds = cmd.split(';')
+                cmdwords = cmds[1].split()
+                time = profile[const.PROPERTIES]['time']
                 profile_name = profile[const.PROPERTIES][const.NAME]
-                self._add_policy_profile(profile_name, profile_id, tenant_id)
+                if 'no' in cmdwords[0]:
+                    p = self._get_policy_profile_by_name(profile_name)
+                    if p:
+                        self._delete_policy_profile(p['id'])
+                elif const.ID in profile[const.PROPERTIES]:
+                    profile_id = profile[const.PROPERTIES][const.ID]
+                    self._add_policy_profile(profile_name, profile_id, tenant_id)
         self._remove_all_fake_policy_profiles()
 
-    # def _add_policy_profiles(self, n1kvclient, tenant_id):
-    #     """Populate Profiles of type Policy on init."""
-    #     profiles = n1kvclient.list_profiles()
-    #     for profile in profiles[const.SET]:
-    #         profile_id = profile[const.PROPERTIES][const.ID]
-    #         profile_name = profile[const.PROPERTIES][const.NAME]
-    #         self.add_profile(tenant_id,
-    #                          profile_id, profile_name, const.POLICY)
     # TBD Begin : To be removed. Needs some change in logic before removal
     def _parse_network_vlan_ranges(self):
         self.network_vlan_ranges = {}
-        ranges = n1kv_conf.N1KV['network_vlan_ranges']
+        ranges = conf.CISCO_N1K.network_vlan_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -314,7 +316,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.network_vlan_ranges[physical_network] = []
 
     def _parse_vxlan_id_ranges(self):
-        ranges = n1kv_conf.N1KV['vxlan_id_ranges']
+        ranges = conf.CISCO_N1K.vxlan_id_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -453,26 +455,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
-            dummy_network_profile = self._create_dummy_network_profile()
-            profile_id = dummy_network_profile['id']
+            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
         if not self.network_profile_exists(context, profile_id):
-            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id)
+            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
         return (profile_id)
-
-    def _create_dummy_network_profile(self):
-        """
-        Create a fake network profile object.
-        Use vlan range 3968-4047 which is allocated for internal use.
-        :return: network profile object
-        """
-        profile = n1kv_db_v2.get_network_profile_by_name('dummy_profile')
-        if profile:
-            return profile
-        else:
-            profile = {'name': 'dummy_profile',
-                       'segment_type': 'vlan',
-                       'segment_range': '3968-4047'}
-            return n1kv_db_v2.create_network_profile(profile)
 
     def _process_policy_profile(self, context, attrs):
         """ Validates whether policy profile exists """
@@ -591,10 +577,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         else:
             policy_profile = n1kv_db_v2.get_policy_profile(\
                                 port[n1kv_profile.PROFILE_ID])
-            profile_name = policy_profile['name']
-            network = self.get_network(context, port['network_id'])
-            network_name = network['name']
-            vm_network_name = str(profile_name) + '_' + str(network_name)
+            vm_network_name = "vmn_" + str(port[n1kv_profile.PROFILE_ID]) +\
+                              "_" + str(port['network_id'])
             port_count = 1
             n1kv_db_v2.add_vm_network(vm_network_name,
                                      port[n1kv_profile.PROFILE_ID],
@@ -646,11 +630,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_network(self, context, network):
         """ Create network based on Network Profile """
-        # self._poll_policies(network['network']['tenant_id'])
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
             network['network'])
-
+        self._add_dummy_profile_for_test(network)
         profile_id = self._process_network_profile(context, network['network'])
 
         LOG.debug('create network: profile_id=%s', profile_id)
@@ -751,6 +734,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         to identify the pre created port
 
         """
+        self._add_dummy_profile_for_test(port)
+
         profile_id_set = False
         if n1kv_profile.PROFILE_ID in port['port']:
             profile_id = port['port'].get(n1kv_profile.PROFILE_ID)
@@ -759,12 +744,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if profile_id_set:
             # If it is a dhcp port, profile id is
             # populated with network profile id.
-            if port['port']['device_id'].startswith('dhcp'):
-                profile_id = self._process_network_profile(context,
-                                                           port['port'])
-            else:
-                profile_id = self._process_policy_profile(context,
-                                                          port['port'])
+            profile_id = self._process_policy_profile(context,
+                                                      port['port'])
             LOG.debug('create port: profile_id=%s', profile_id)
             session = context.session
             with session.begin(subtransactions=True):
@@ -772,17 +753,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     port)
                 n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
-
             self._send_create_port_request(context, pt)
             LOG.debug("Created port: %s", pt)
             return pt
         elif 'device_id' in port['port'].keys():
-            if port['port']['device_id'].startswith('dhcp'):
+            if port['port']['device_owner'] == 'network:dhcp' or \
+                port['port']['device_owner'] == 'network:router_interface':
                 # Grab profile id from the network
                 LOG.debug("create dhcp port")
-                network_id = port['port']['network_id']
-                network = self.get_network(context, network_id)
-                port['port']['n1kv:profile_id'] = network['n1kv:profile_id']
+                p_profile_name = conf.CISCO_N1K.default_policy_profile
+                p_profile = self._get_policy_profile_by_name(p_profile_name) 
+                port['port']['n1kv:profile_id'] = p_profile['id']
                 tenant_id = port['port']['tenant_id']
                 instance_id = port['port']['device_id']
                 device_owner = port['port']['device_owner']
@@ -812,20 +793,25 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 pt = self.update_port(context, pt['id'], port)
                 return pt
 
+    def _add_dummy_profile_for_test(self, obj):
+        """
+        Method to be patched by the test_n1kv_plugin module to 
+        inject n1kv:profile_id into the network/port object, since the plugin
+        tests for its existence. This method does not affect 
+        the plugin code in any way.
+        """
+        pass
+
     def _get_instance_port_id(self, tenant_id, instance_id):
         """ Get the port IDs from the meta data """
-        keystone = cred._creds_dictionary['keystone']
-        url = keystone.keys()[0]
-        kc = keystone_client.Client(username=keystone[url]['username'],
-                                    password=keystone[url]['password'],
-                                    tenant_id=tenant_id,
-                                    auth_url=url)
-        tenant = kc.tenants.get(tenant_id)
-        tenant_name = tenant.name
-        nc = nova_client.Client(keystone[url]['username'],
-                                keystone[url]['password'],
-                                tenant_name,
-                                url,
+        keystone_conf = quantum_cfg.CONF.keystone_authtoken
+        keystone_auth_url = '%s://%s:%s/v2.0/' % (keystone_conf.auth_protocol,
+                                                  keystone_conf.auth_host,
+                                                  keystone_conf.auth_port)
+        nc = nova_client.Client(keystone_conf.admin_user,
+                                keystone_conf.admin_password,
+                                keystone_conf.admin_tenant_name,
+                                keystone_auth_url,
                                 no_cache=True)
         serv = nc.servers.get(instance_id)
         port_id = serv.__getattr__('metadata')
@@ -844,7 +830,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if original_port['admin_state_up'] != port['admin_state_up']:
                 vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                 port['network_id'])
-                self._send_update_port_request(port, vm_network['name'])                
+                self._send_update_port_request(port, vm_network['name'])
         return port
 
     def delete_port(self, context, id):
@@ -910,10 +896,38 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def create_network_profile(self, context, network_profile):
         self._replace_fake_tenant_id_with_real(context)
         _network_profile = super(N1kvQuantumPluginV2, self).create_network_profile(context, network_profile)
+        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        if _network_profile['segment_type'] == const.TYPE_VLAN:
+            self.network_vlan_ranges = {}
+            self._add_network_vlan_range(_network_profile['physical_network'],
+                            int(seg_min),
+                            int(seg_max))
+            n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
+        elif _network_profile['segment_type'] == const.TYPE_VXLAN:
+            self.vxlan_id_ranges = []
+            self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
+            n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
         #self._send_create_fabric_network_request(_network_profile)
         self._send_create_network_profile_request(context, _network_profile)
         return _network_profile
 
     def delete_network_profile(self, context, id):
         _network_profile = super(N1kvQuantumPluginV2, self).delete_network_profile(context, id)
+        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        if _network_profile['segment_type'] == const.TYPE_VLAN:
+            self.network_vlan_ranges = {}
+            self._add_network_vlan_range(_network_profile['physical_network'],
+                            int(seg_min),
+                            int(seg_max))
+            n1kv_db_v2.delete_vlan_allocations(self.network_vlan_ranges)
+        elif _network_profile['segment_type'] == const.TYPE_VXLAN:
+            self.delete_vxlan_ranges = []
+            self.delete_vxlan_ranges.append((int(seg_min), int(seg_max)))
+            n1kv_db_v2.delete_vxlan_allocations(self.delete_vxlan_ranges)
         self._send_delete_network_profile_request(_network_profile)
+
+class PollVSM (threading.Thread, N1kvQuantumPluginV2):
+    def run(self):
+        while True:
+            self._poll_policies(event_type="port_profile")
+            time.sleep(POLL_DURATION)

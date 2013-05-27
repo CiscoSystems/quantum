@@ -33,7 +33,7 @@ import quantum.db.api as db
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
-from quantum.plugins.cisco.n1kv import n1kv_configuration as conf
+from quantum.plugins.cisco.common import config as conf
 from quantum.api.v2.attributes import _validate_ip_address
 
 LOG = logging.getLogger(__name__)
@@ -74,7 +74,6 @@ def add_network_binding(session, network_id, network_type,
             segmentation_id, multicast_ip, profile_id)
         session.add(binding)
 
-
 def get_port_binding(session, port_id):
     session = session or db.get_session()
     try:
@@ -106,29 +105,40 @@ def sync_vlan_allocations(network_vlan_ranges):
             for vlan_range in vlan_ranges:
                 vlan_ids |= set(xrange(vlan_range[0], vlan_range[1] + 1))
 
-            # remove from table unallocated vlans not currently allocatable
+            # add missing allocatable vlans to table
+            for vlan_id in sorted(vlan_ids):
+                try:
+                    alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
+                             filter_by(physical_network=physical_network).
+                             filter_by(vlan_id=vlan_id).one())
+                except exc.NoResultFound:
+                    alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
+                                                              vlan_id)
+                    session.add(alloc)
+
+def delete_vlan_allocations(network_vlan_ranges):
+    """Delete vlan_allocations for deleted network profile range"""
+
+    session = db.get_session()
+    with session.begin():
+        # process vlan ranges for each physical network separately
+        for physical_network, vlan_ranges in network_vlan_ranges.iteritems():
+            # Determine the set of vlan ids which need to be deleted.
+            vlan_ids = set()
+            for vlan_range in vlan_ranges:
+                vlan_ids |= set(xrange(vlan_range[0], vlan_range[1] + 1))
+
             allocs = (session.query(n1kv_models_v2.N1kvVlanAllocation).
                         filter_by(physical_network=physical_network).
                         all())
             for alloc in allocs:
-                try:
-                    # see if vlan is allocatable
-                    vlan_ids.remove(alloc.vlan_id)
-                except KeyError:
-                    # it's not allocatable, so check if its allocated
+                if alloc.vlan_id in vlan_ids:
                     if not alloc.allocated:
-                        # it's not, so remove it from table
+                        # it's not allocated, so remove it from table
                         LOG.debug("removing vlan %s on physical network "
                                     "%s from pool" %
                                     (alloc.vlan_id, physical_network))
                         session.delete(alloc)
-
-            # add missing allocatable vlans to table
-            for vlan_id in sorted(vlan_ids):
-                alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
-                                                         vlan_id)
-                session.add(alloc)
-
 
 def get_vlan_allocation(physical_network, vlan_id):
     session = db.get_session()
@@ -147,20 +157,18 @@ def reserve_vlan(session, profile):
     segment_type = 'vlan'
 
     with session.begin(subtransactions=True):
-        try:
-            alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
-                    filter(and_(
-                        n1kv_models_v2.N1kvVlanAllocation.vlan_id >= seg_min,
-                        n1kv_models_v2.N1kvVlanAllocation.vlan_id <= seg_max,
-                        n1kv_models_v2.N1kvVlanAllocation.allocated == False)
-                        )).first()
+        alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
+                filter(and_(
+                    n1kv_models_v2.N1kvVlanAllocation.vlan_id >= seg_min,
+                    n1kv_models_v2.N1kvVlanAllocation.vlan_id <= seg_max,
+                    n1kv_models_v2.N1kvVlanAllocation.allocated == False)
+                    )).first()
+        if alloc:
             segment_id = alloc.vlan_id
             physical_network = alloc.physical_network
             alloc.allocated = True
             return (physical_network, segment_type, segment_id, '0.0.0.0')
-        except exc.NoResultFound:
-            raise q_exc.VlanIdInUse(vlan_id=segment_id,
-                    physical_network=segment_type)
+        raise q_exc.NoNetworkAvailable()
 
 
 def reserve_vxlan(session, profile):
@@ -169,21 +177,20 @@ def reserve_vxlan(session, profile):
     physical_network = ""
 
     with session.begin(subtransactions=True):
-        try:
-            alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
-                    filter(and_(
-                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id >=
-                           seg_min,
-                       n1kv_models_v2.N1kvVxlanAllocation.vxlan_id <=
-                           seg_max,
-                       n1kv_models_v2.N1kvVxlanAllocation.allocated == False)
-                       ).first())
+        alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                filter(and_(
+                   n1kv_models_v2.N1kvVxlanAllocation.vxlan_id >=
+                       seg_min,
+                   n1kv_models_v2.N1kvVxlanAllocation.vxlan_id <=
+                       seg_max,
+                   n1kv_models_v2.N1kvVxlanAllocation.allocated == False)
+                   ).first())
+        if alloc:
             segment_id = alloc.vxlan_id
             alloc.allocated = True
             return (physical_network, segment_type,
                     segment_id, profile.get_multicast_ip(session))
-        except exc.NoResultFound:
-            raise c_exc.VxlanIdInUse(vxlan_id=segment_id)
+        raise q_exc.NoNetworkAvailable()
 
 
 def alloc_network(session, profile_id):
@@ -263,25 +270,37 @@ def sync_vxlan_allocations(vxlan_id_ranges):
 
     session = db.get_session()
     with session.begin():
-        # remove from table unallocated vxlans not currently allocatable
+        # add missing allocatable vxlans to table
+        for vxlan_id in sorted(vxlan_ids):
+            try:
+                alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
+                         filter_by(vxlan_id=vxlan_id).one())
+            except exc.NoResultFound:
+                alloc = n1kv_models_v2.N1kvVxlanAllocation(vxlan_id)
+                session.add(alloc)
+
+def delete_vxlan_allocations(vxlan_id_ranges):
+    """Delete vxlan_allocations for deleted network profile range"""
+    # determine current configured allocatable vxlans
+    vxlan_ids = set()
+    for vxlan_id_range in vxlan_id_ranges:
+        tun_min, tun_max = vxlan_id_range
+        if tun_max + 1 - tun_min > 1000000:
+            LOG.error("Skipping unreasonable vxlan ID range %s:%s" %
+                      vxlan_id_range)
+        else:
+            vxlan_ids |= set(xrange(tun_min, tun_max + 1))
+
+    session = db.get_session()
+    with session.begin():
         allocs = (session.query(n1kv_models_v2.N1kvVxlanAllocation).all())
         for alloc in allocs:
-            try:
-                # see if vxlan is allocatable
-                vxlan_ids.remove(alloc.vxlan_id)
-            except KeyError:
-                # it's not allocatable, so check if its allocated
+            if alloc.vxlan_id in vxlan_ids:
                 if not alloc.allocated:
                     # it's not, so remove it from table
                     LOG.debug("removing vxlan %s from pool" %
                                 alloc.vxlan_id)
                     session.delete(alloc)
-
-        # add missing allocatable vxlans to table
-        for vxlan_id in sorted(vxlan_ids):
-            alloc = n1kv_models_v2.N1kvVxlanAllocation(vxlan_id)
-            session.add(alloc)
-
 
 def get_vxlan_allocation(vxlan_id):
     session = db.get_session()
@@ -402,13 +421,17 @@ def get_vm_network(profile_id, network_id):
 
 def add_vm_network(name, profile_id, network_id, port_count):
     session = db.get_session()
-    with session.begin(subtransactions=True):
-        vm_network = n1kv_models_v2.N1kVmNetwork(name,
-                                                 profile_id,
-                                                 network_id,
-                                                 port_count)
-        session.add(vm_network)
-
+    try:
+        vm_network = (session.query(n1kv_models_v2.N1kVmNetwork).
+                      filter_by(name=name).one())
+    except exc.NoResultFound:
+        with session.begin(subtransactions=True):
+            vm_network = n1kv_models_v2.N1kVmNetwork(name,
+                                                     profile_id,
+                                                     network_id,
+                                                     port_count)
+            session.add(vm_network)
+            session.flush()
 
 def update_vm_network(name, port_count):
     """Updates a vm network with new port count"""
@@ -447,14 +470,15 @@ def create_network_profile(profile):
             net_profile = n1kv_models_v2.NetworkProfile(\
                             name=profile['name'],
                             segment_type=profile['segment_type'],
-                            segment_range=profile['segment_range'])
+                            segment_range=profile['segment_range'],
+                            physical_network=profile['physical_network'])
         elif profile['segment_type'] == 'vxlan':
-            net_profile = n1kv_models_v2.NetworkProfile(name=profile['name'],
-                                                        segment_type=profile['segment_type'],
-                                                        segment_range=profile['segment_range'],
-                                                        mcast_ip_index=0,
-                                                        mcast_ip_range=profile['multicast_ip_range'])
-        
+            net_profile = n1kv_models_v2.NetworkProfile(\
+                            name=profile['name'],
+                            segment_type=profile['segment_type'],
+                            mcast_ip_index=0,
+                            segment_range=profile['segment_range'],
+                            mcast_ip_range=profile['multicast_ip_range'])
         session.add(net_profile)
         return net_profile
 
@@ -471,8 +495,10 @@ def delete_network_profile(id):
     profile = get_network_profile(id)
     with session.begin(subtransactions=True):
         session.delete(profile)
-        session.query(n1kv_models_v2.ProfileBinding).filter(n1kv_models_v2.ProfileBinding.profile_id==id).delete()
+        session.query(n1kv_models_v2.ProfileBinding).filter(\
+            n1kv_models_v2.ProfileBinding.profile_id == id).delete()
     return profile
+
 
 def update_network_profile(id, profile):
     """
@@ -519,14 +545,22 @@ def get_network_profile_by_name(name):
     except exc.NoResultFound:
         return None
 
-def _get_network_profiles():
+def _get_network_profiles(**kwargs):
     """
     Get Network Profiles
 
     :return:
     """
     session = db.get_session()
-    return session.query(n1kv_models_v2.NetworkProfile).all()
+    if "physical_network" in kwargs:
+        try:
+            profiles = session.query(n1kv_models_v2.NetworkProfile).\
+                           filter_by(physical_network=kwargs['physical_network']).all()
+            return profiles
+        except exc.NoResultFound:
+            return None
+    else:
+        return session.query(n1kv_models_v2.NetworkProfile).all()
 
 
 def create_policy_profile(profile):
@@ -612,6 +646,7 @@ def create_profile_binding(tenant_id, profile_id, profile_type):
         binding = n1kv_models_v2.ProfileBinding(profile_type=profile_type,
                         profile_id=profile_id, tenant_id=tenant_id)
         session.add(binding)
+        session.flush()
         return binding
 
 
@@ -689,7 +724,8 @@ class NetworkProfile_db_mixin(object):
                'segment_type': profile['segment_type'],
                'segment_range': profile['segment_range'],
                'multicast_ip_index': profile['multicast_ip_index'],
-               'multicast_ip_range': profile['multicast_ip_range']}
+               'multicast_ip_range': profile['multicast_ip_range'],
+               'physical_network': profile['physical_network']}
         return self._fields(res, fields)
 
     def create_network_profile(self, context, network_profile):
@@ -771,9 +807,9 @@ class NetworkProfile_db_mixin(object):
 
     def _validate_vlan(self, p):
         """Validate if vlan falls within segment boundaries."""
-
+        '''
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['network_vlan_ranges']
+        ranges = conf.CISCO_N1K.network_vlan_ranges
         ranges = ranges.split(',')
         for entry in ranges:
             entry = entry.strip()
@@ -783,6 +819,8 @@ class NetworkProfile_db_mixin(object):
                     msg = _("Vlan out of range")
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
+        '''
+        pass
 
     def _validate_vxlan(self, p):
         """
@@ -790,8 +828,9 @@ class NetworkProfile_db_mixin(object):
         :param p:
         :return:
         """
+        '''
         seg_min, seg_max = self._get_segment_range(p['segment_range'])
-        ranges = conf.N1KV['vxlan_id_ranges']
+        ranges = conf.CISCO_N1K.vxlan_id_ranges
         ranges = ranges.split(',')
         g_seg_min, g_seg_max = map(int, ranges[0].split(':'))
         LOG.debug("segmin %s segmax %s gsegmin %s gsegmax %s", seg_min,
@@ -811,6 +850,8 @@ class NetworkProfile_db_mixin(object):
             if _validate_ip_address(ip) != None:
                 msg = _("invalid ip address %s" % ip)
                 raise q_exc.InvalidInput(error_message=msg)
+        '''
+        pass
 
     def _validate_segment_range(self, p):
         """
@@ -854,26 +895,27 @@ class NetworkProfile_db_mixin(object):
         :return:
         """
         # self.get_network_profiles(context)
-        profiles = _get_network_profiles()
-        for prfl in profiles:
-            _name = prfl.name
-            _segment_range = prfl.segment_range
-            if p['name'] == _name:
-                msg = _("NetworkProfile name %s already exists" % p['name'])
-                LOG.exception(msg)
-                raise q_exc.InvalidInput(error_message=msg)
-            seg_min, seg_max = self._get_segment_range(p['segment_range'])
-            prfl_seg_min, prfl_seg_max = self._get_segment_range(\
+        profiles = _get_network_profiles(physical_network=p['physical_network'])
+        if profiles:
+            for prfl in profiles:
+                _name = prfl.name
+                _segment_range = prfl.segment_range
+                if p['name'] == _name:
+                    msg = _("NetworkProfile name %s already exists" % p['name'])
+                    LOG.exception(msg)
+                    raise q_exc.InvalidInput(error_message=msg)
+                seg_min, seg_max = self._get_segment_range(p['segment_range'])
+                prfl_seg_min, prfl_seg_max = self._get_segment_range(\
                                             _segment_range)
-            if (((seg_min >= prfl_seg_min) and
-                 (seg_min <= prfl_seg_max)) or
-                ((seg_max >= prfl_seg_min) and
-                 (seg_max <= prfl_seg_max)) or
-                ((seg_min <= prfl_seg_min) and
-                 (seg_max >= prfl_seg_max))):
-                msg = _("segment range overlaps with another profile")
-                LOG.exception(msg)
-                raise q_exc.InvalidInput(error_message=msg)
+                if (((seg_min >= prfl_seg_min) and
+                     (seg_min <= prfl_seg_max)) or
+                    ((seg_max >= prfl_seg_min) and
+                     (seg_max <= prfl_seg_max)) or
+                    ((seg_min <= prfl_seg_min) and
+                     (seg_max >= prfl_seg_max))):
+                    msg = _("segment range overlaps with another profile")
+                    LOG.exception(msg)
+                    raise q_exc.InvalidInput(error_message=msg)
 
 
 class PolicyProfile_db_mixin(object):
@@ -968,11 +1010,25 @@ class PolicyProfile_db_mixin(object):
         session = db.get_session()
         with session.begin(subtransactions=True):
             session.query(n1kv_models_v2.PolicyProfile).\
-                filter(n1kv_models_v2.PolicyProfile.profile_id ==
+                filter(n1kv_models_v2.PolicyProfile.id ==
                        profile_id).delete()
             session.query(n1kv_models_v2.ProfileBinding).\
                 filter(n1kv_models_v2.ProfileBinding.profile_id ==
                        profile_id).delete()
+
+    def _get_policy_profile_by_name(self, name):
+        """
+        Get policy profile based on name
+        """
+        session = db.get_session()
+        try:
+            with session.begin(subtransactions=True):
+                profile = session.query(n1kv_models_v2.PolicyProfile).\
+                          filter(n1kv_models_v2.PolicyProfile.name ==
+                                 name).one()
+                return profile
+        except exc.NoResultFound:
+            return None
 
     def _remove_all_fake_policy_profiles(self):
         """
@@ -1030,5 +1086,4 @@ class PolicyProfile_db_mixin(object):
         tenant_id = tenant_id or n1kv_models_v2.TENANT_ID_NOT_SET
         if not self._policy_profile_exists(profile_id):
             create_policy_profile(profile)
-        if not _profile_binding_exists(tenant_id, profile['id'], 'policy'):
-            create_profile_binding(tenant_id, profile['id'], 'policy')
+        create_profile_binding(tenant_id, profile['id'], 'policy')

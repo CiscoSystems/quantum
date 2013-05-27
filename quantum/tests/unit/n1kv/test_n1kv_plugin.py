@@ -22,8 +22,10 @@ from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.tests.unit import test_db_plugin as test_plugin
+from quantum.plugins.cisco.extensions import n1kv_profile
 
 from quantum.plugins.cisco.n1kv import n1kv_client
+from quantum.plugins.cisco.n1kv import n1kv_quantum_plugin
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 
 from quantum import context
@@ -34,7 +36,7 @@ class FakeResponse(object):
     """
     This object is returned by mocked httplib instead of a normal response.
 
-    Initialize it with the status code, content type and buffer contents 
+    Initialize it with the status code, content type and buffer contents
     you wish to return.
 
     """
@@ -49,7 +51,41 @@ class FakeResponse(object):
 
     def getheader(self, *args, **kwargs):
         return self.content_type
-        
+
+
+def _fake_add_dummy_profile_for_test(self, obj):
+    """
+    Replacement for a function in the N1KV quantum plugin module.
+
+    Since VSM is not available at the time of tests, we have no
+    policy profiles. Hence we inject a dummy policy/network profile into the
+    port/network object.
+    """
+    dummy_profile_name = "dummy_profile"
+    dummy_tenant_id = "test-tenant"
+    if 'port' in obj:
+        dummy_profile_id = "00000000-1111-1111-1111-000000000000"
+        self._add_policy_profile(dummy_profile_name,
+                                 dummy_profile_id,
+                                 dummy_tenant_id)
+        obj['port'][n1kv_profile.PROFILE_ID] = dummy_profile_id
+    elif 'network' in obj:
+        profile = {'name': 'dummy_profile',
+                   'segment_type': 'vlan',
+                   'physical_network': 'phsy1',
+                   'segment_range': '3968-4047'}
+        self.network_vlan_ranges = {profile['physical_network']: [(3968, 4047)]}
+        n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
+        np = n1kv_db_v2.create_network_profile(profile)
+        obj['network'][n1kv_profile.PROFILE_ID] = np.id
+
+
+def _fake_setup_vsm(self):
+    """ Fake establish Communication with Cisco Nexus1000V VSM """
+    self.agent_vsm = True
+    self._send_register_request()
+    self._poll_policies(event_type="port_profile")
+
 class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
 
     _plugin_name = ('quantum.plugins.cisco.n1kv.'
@@ -78,14 +114,14 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         alloc_obj = n1kv_models_v2.N1kvVlanAllocation("foo", 123)
         alloc_obj.allocated = False
-        #profile_obj = n1kv_profile_db.N1kvProfile_db()
-        #profile_obj.tenant_id = tenant_id
         segment_range = "100-900"
         segment_type = 'vlan'
         tunnel_id = 200
+        physical_network = 'phys1'
         profile_obj = n1kv_models_v2.NetworkProfile("test_np",
                                                     segment_type,
-                                                    segment_range)
+                                                    segment_range,
+                                                    physical_network)
         session = db.get_session()
         session.add(profile_obj)
         session.flush()
@@ -106,33 +142,28 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         """
         if not self.DEFAULT_RESP_BODY:
             self.DEFAULT_RESP_BODY = \
-            """<?xml version="1.0" encoding="UTF-8"?>
-            <set name="virtual_port_profile_set">
-              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8BBBB"
-                        url="/api/hyper-v/virtual-port-profile">
-                <properties>
-                  <state>enabled</state>
-                  <type>vethernet</type>
-                  <name>AbhishekPP</name>
-                  <id>41548d21-7f89-4da0-9131-3d4fd4e8BBBB</id>
-                  <maxPorts>512</maxPorts>
-                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-                </properties>
-              </instance>
-              <instance name="41548d21-7f89-4da0-9131-3d4fd4e8AAAA"
-                        url="/api/hyper-v/virtual-port-profile">
-                <properties>
-                  <state>enabled</state>
-                  <type>vethernet</type>
-                  <name>grizzlyPP</name>
-                  <id>41548d21-7f89-4da0-9131-3d4fd4e8AAAA</id>
-                  <maxPorts>512</maxPorts>
-                  <switchId>482a2af9-70d6-2f64-89dd-141238ece08f</switchId>
-                </properties>
-              </instance>
+            """<?xml version="1.0" encoding="utf-8"?>
+               <set name="events_set">
+               <instance name="1" url="/api/hyper-v/events/1">
+               <properties>
+        <cmd>configure terminal ; port-profile type vethernet grizzlyPP (SUCCESS)
+        </cmd>
+            <id>42227269-e348-72ed-bdb7-7ce91cd1423c</id>
+            <time>1369223611</time>
+            <name>grizzlyPP</name>
+            </properties>
+            </instance>
+            <instance name="2" url="/api/hyper-v/events/2">
+            <properties>
+        <cmd>configure terminal ; port-profile type vethernet havanaPP (SUCCESS)
+        </cmd>
+            <id>3fc83608-ae36-70e7-9d22-dec745623d06</id>
+            <time>1369223661</time>
+            <name>havanaPP</name>
+            </properties>
+            </instance>
             </set>
             """
-
         # Creating a mock HTTP connection object for httplib. The N1KV client
         # interacts with the VSM via HTTP. Since we don't have a VSM running
         # in the unit tests, we need to 'fake' it by patching the HTTP library
@@ -153,23 +184,35 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # Patch some internal functions in a few other parts of the system.
         # These help us move along, without having to mock up even more systems
         # in the background.
+
+        # Return a dummy VSM IP address
         get_vsm_hosts_patcher = patch(n1kv_client.__name__ + \
                                       ".Client._get_vsm_hosts")
         fake_get_vsm_hosts = get_vsm_hosts_patcher.start()
         self.addCleanup(get_vsm_hosts_patcher.stop)
         fake_get_vsm_hosts.return_value = [ "127.0.0.1" ]
 
+        # Return dummy user profiles
         get_cred_name_patcher = patch(cdb.__name__ + ".get_credential_name")
         fake_get_cred_name = get_cred_name_patcher.start()
         self.addCleanup(get_cred_name_patcher.stop)
         fake_get_cred_name.return_value = \
                        { "user_name" : "admin", "password" : "admin_password" }
 
+        # Patch a dummy profile creation into the N1K plugin code. The original
+        # function in the plugin is a noop for production, but during test, we
+        # need it to return a dummy network profile.
+        n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
+                                                  _fake_add_dummy_profile_for_test
+
+        n1kv_quantum_plugin.N1kvQuantumPluginV2._setup_vsm = _fake_setup_vsm
+
         super(N1kvPluginTestCase, self).setUp(self._plugin_name)
         # Create some of the database entries that we require.
         self.tenant_id = self._default_tenant
         profile_obj = self._make_test_profile(self.tenant_id)
-        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
+        policy_profile_obj = \
+               self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB8')
         # Additional args for create_network(), create_port(), etc.
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
@@ -235,7 +278,7 @@ class TestN1kvPorts(test_plugin.TestPortsV2,
 
         """
         profile_obj = self._make_test_profile(tenant_id)
-        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')    
+        policy_profile_obj = self._make_test_policy_profile('41548d21-7f89-4da0-9131-3d4fd4e8BBB9')
         self.more_args = {
             "network" : { "n1kv:profile_id" : profile_obj.id },
             "port" : { "n1kv:profile_id" : policy_profile_obj.id }

@@ -193,7 +193,7 @@ class N1kVmNetwork(model_base.BASEV2):
     """Represents VM Network information"""
     __tablename__ = 'vmnetwork'
 
-    name = Column(String(255), primary_key=True)
+    name = Column(String(80), primary_key=True)
     profile_id = Column(String(36))
     network_id = Column(String(36))
     port_count = Column(Integer)
@@ -219,6 +219,7 @@ class NetworkProfile(model_base.BASEV2, HasId):
         segment_range - '<integer>-<integer>'
         multicast_ip_index - <integer>
         multicast_ip_range - '<ip>-<ip>'
+        physical_network - Name for the physical network
     """
     __tablename__ = 'network_profiles'
 
@@ -227,6 +228,7 @@ class NetworkProfile(model_base.BASEV2, HasId):
     segment_range = Column(String(255))
     multicast_ip_index = Column(Integer)
     multicast_ip_range = Column(String(255))
+    physical_network = Column(String(255))
 
     def get_segment_range(self, session):
         """Get the segment range min and max for a network profile."""
@@ -268,17 +270,18 @@ class NetworkProfile(model_base.BASEV2, HasId):
 
     def __init__(self, name, segment_type,
                  segment_range=None, mcast_ip_index=None,
-                 mcast_ip_range=None):
+                 mcast_ip_range=None, physical_network=None):
         self.name = name
         self.segment_type = segment_type
         self.segment_range = segment_range
         self.multicast_ip_index = mcast_ip_index or 0
         self.multicast_ip_range = mcast_ip_range
+        self.physical_network = physical_network
 
     def __repr__(self):
-        return "<NetworkProfile (%s, %s, %s, %d, %s)>" % (self.id,
+        return "<NetworkProfile (%s, %s, %s, %d, %s, %s)>" % (self.id,
                self.name, self.segment_type, self.multicast_ip_index,
-               self.multicast_ip_range)
+               self.multicast_ip_range, self.physical_network)
 
 
 class PolicyProfile(model_base.BASEV2):
