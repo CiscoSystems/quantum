@@ -107,18 +107,18 @@ def update_nexusport_binding(port_id, new_vlan_id):
         raise c_exc.NexusPortBindingNotFound(port_id=port_id)
 
 
-def get_nexusvm_binding(vlan_id, instance_id):
+def get_nexusvm_bindings(vlan_id, instance_id):
     """Lists nexusvm bindings."""
     LOG.debug(_("get_nexusvm_binding() called"))
     session = db.get_session()
 
     filters = dict(instance_id=instance_id, vlan_id=vlan_id)
-    binding = (session.query(nexus_models_v2.NexusPortBinding).
-               filter_by(**filters).first())
-    if not binding:
+    bindings = (session.query(nexus_models_v2.NexusPortBinding).
+                filter_by(**filters).all())
+    if not bindings:
         raise c_exc.NexusPortBindingNotFound(**filters)
 
-    return binding
+    return bindings
 
 
 def get_port_vlan_switch_binding(port_id, vlan_id, switch_ip):

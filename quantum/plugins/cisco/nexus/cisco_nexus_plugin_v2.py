@@ -79,66 +79,73 @@ class NexusPlugin(L2DevicePluginBase):
         appropriate interfaces for this VLAN.
         """
         LOG.debug(_("NexusPlugin:create_network() called"))
-        # Grab the switch IP and port for this host
+        # Grab the switch IPs and ports for this host
+        host_connections = []
         for switch_ip, attr in self._nexus_switches:
             if str(attr) == str(host):
-                port_id = self._nexus_switches[switch_ip, attr]
-                break
-        else:
+                port = self._nexus_switches[switch_ip, attr]
+                (etype, port_id) = port.split(':')
+                host_connections.append((switch_ip, etype, port_id))
+        if not host_connections:
             raise cisco_exc.NexusComputeHostNotConfigured(host=host)
 
         # Check if this network is already in the DB
-        vlan_created = False
-        vlan_enabled = False
-
-        try:
-            nxos_db.get_port_vlan_switch_binding(port_id, vlan_id, switch_ip)
-        except cisco_exc.NexusPortBindingNotFound:
-            _nexus_ip = switch_ip
-            _nexus_ports = (port_id,)
-            _nexus_ssh_port = \
-                self._nexus_switches[switch_ip, 'ssh_port']
-            _nexus_creds = self.get_credential(_nexus_ip)
-            _nexus_username = _nexus_creds['username']
-            _nexus_password = _nexus_creds['password']
-            # Check for vlan/switch binding
+        for switch_ip, etype, port_id in host_connections:
+            vlan_created = False
+            vlan_enabled = False
             try:
-                nxos_db.get_nexusvlan_binding(vlan_id, switch_ip)
+                nxos_db.get_port_vlan_switch_binding(port_id, vlan_id,
+                                                     switch_ip)
             except cisco_exc.NexusPortBindingNotFound:
-                # Create vlan and trunk vlan on the port
-                self._client.create_vlan(
-                    vlan_name, str(vlan_id), _nexus_ip,
-                    _nexus_username, _nexus_password,
-                    _nexus_ports, _nexus_ssh_port, vlan_id)
-                vlan_created = True
-            else:
-                # Only trunk vlan on the port
-                man = self._client.nxos_connect(_nexus_ip,
-                                                int(_nexus_ssh_port),
-                                                _nexus_username,
-                                                _nexus_password)
-                self._client.enable_vlan_on_trunk_int(man,
-                                                      _nexus_ip,
-                                                      port_id,
-                                                      vlan_id)
-                vlan_enabled = True
-
-        try:
-            nxos_db.add_nexusport_binding(port_id, str(vlan_id),
-                                          switch_ip, instance)
-        except Exception:
-            with excutils.save_and_reraise_exception():
-                # Add binding failed, roll back any vlan creation/enabling
-                if vlan_created:
-                    self._client.delete_vlan(
-                        str(vlan_id), _nexus_ip,
+                _nexus_ip = switch_ip
+                _nexus_ports = (etype, port_id)
+                _nexus_ssh_port = \
+                    self._nexus_switches[switch_ip, 'ssh_port']
+                _nexus_creds = self.get_credential(_nexus_ip)
+                _nexus_username = _nexus_creds['username']
+                _nexus_password = _nexus_creds['password']
+                # Check for vlan/switch binding
+                try:
+                    nxos_db.get_nexusvlan_binding(vlan_id, switch_ip)
+                except cisco_exc.NexusPortBindingNotFound:
+                    # Create vlan and trunk vlan on the port
+                    self._client.create_vlan(
+                        vlan_name, str(vlan_id), _nexus_ip,
                         _nexus_username, _nexus_password,
-                        _nexus_ports, _nexus_ssh_port)
-                if vlan_enabled:
-                    self._client.disable_vlan_on_trunk_int(man,
-                                                           port_id,
-                                                           vlan_id)
+                        _nexus_ports, _nexus_ssh_port, vlan_id)
+                    vlan_created = True
+                else:
+                    # Only trunk vlan on the port
+                    man = self._client.nxos_connect(_nexus_ip,
+                                                    int(_nexus_ssh_port),
+                                                    _nexus_username,
+                                                    _nexus_password)
+                    self._client.enable_vlan_on_trunk_int(man,
+                                                          etype,
+                                                          port_id,
+                                                          vlan_id)
+                    vlan_enabled = True
 
+            try:
+                nxos_db.add_nexusport_binding(port_id, str(vlan_id),
+                                              switch_ip, instance)
+            except Exception as e:
+                try:
+                    # Add binding failed, roll back any vlan creation/enabling
+                    if vlan_created:
+                        self._client.delete_vlan(
+                            str(vlan_id), _nexus_ip,
+                            _nexus_username, _nexus_password,
+                            _nexus_ports, _nexus_ssh_port)
+                    if vlan_enabled:
+                        self._client.disable_vlan_on_trunk_int(man,
+                                                               etype,
+                                                               port_id,
+                                                               vlan_id)
+                finally:
+                    # Raise the original exception
+                    raise e
+        
         new_net_dict = {const.NET_ID: net_id,
                         const.NET_NAME: net_name,
                         const.NET_PORTS: {},
@@ -275,42 +282,44 @@ class NexusPlugin(L2DevicePluginBase):
         LOG.debug(_("NexusPlugin:delete_port() called"))
         # Delete DB row for this port
         try:
-            row = nxos_db.get_nexusvm_binding(vlan_id, device_id)
+            rows = nxos_db.get_nexusvm_bindings(vlan_id, device_id)
         except cisco_exc.NexusPortBindingNotFound:
             return
 
-        nxos_db.remove_nexusport_binding(row['port_id'], row['vlan_id'],
-                                         row['switch_ip'],
-                                         row['instance_id'])
-        # Check for any other bindings with the same vlan_id and switch_ip
-        try:
-            nxos_db.get_nexusvlan_binding(row['vlan_id'], row['switch_ip'])
-        except cisco_exc.NexusPortBindingNotFound:
+        for row in rows:
+            nxos_db.remove_nexusport_binding(row['port_id'], row['vlan_id'],
+                                             row['switch_ip'],
+                                             row['instance_id'])
+            # Check for any other bindings with the same vlan_id and switch_ip
             try:
-                # Delete this vlan from this switch
-                _nexus_ip = row['switch_ip']
-                _nexus_ports = ()
-                if row['port_id'] != 'router':
+                nxos_db.get_nexusvlan_binding(row['vlan_id'], row['switch_ip'])
+            except cisco_exc.NexusPortBindingNotFound:
+                try:
+                    # Delete this vlan from this switch
+                    _nexus_ip = row['switch_ip']
                     _nexus_ports = (row['port_id'],)
-                _nexus_ssh_port = (self._nexus_switches[_nexus_ip,
-                                                        'ssh_port'])
-                _nexus_creds = self.get_credential(_nexus_ip)
-                _nexus_username = _nexus_creds['username']
-                _nexus_password = _nexus_creds['password']
-                self._client.delete_vlan(
-                    str(row['vlan_id']), _nexus_ip,
-                    _nexus_username, _nexus_password,
-                    _nexus_ports, _nexus_ssh_port)
-            except Exception:
-                # The delete vlan operation on the Nexus failed,
-                # so this delete_port request has failed. For
-                # consistency, roll back the Nexus database to what
-                # it was before this request.
-                with excutils.save_and_reraise_exception():
-                    nxos_db.add_nexusport_binding(row['port_id'],
-                                                  row['vlan_id'],
-                                                  row['switch_ip'],
-                                                  row['instance_id'])
+                    _nexus_ssh_port = (self._nexus_switches[_nexus_ip,
+                                                            'ssh_port'])
+                    _nexus_creds = self.get_credential(_nexus_ip)
+                    _nexus_username = _nexus_creds['username']
+                    _nexus_password = _nexus_creds['password']
+                    self._client.delete_vlan(
+                        str(row['vlan_id']), _nexus_ip,
+                        _nexus_username, _nexus_password,
+                        _nexus_ports, _nexus_ssh_port)
+                except Exception as e:
+                    # The delete vlan operation on the Nexus failed,
+                    # so this delete_port request has failed. For
+                    # consistency, roll back the Nexus database to what
+                    # it was before this request.
+                    try:
+                        nxos_db.add_nexusport_binding(row['port_id'],
+                                                      row['vlan_id'],
+                                                      row['switch_ip'],
+                                                      row['instance_id'])
+                    finally:
+                        # Raise the original exception
+                        raise e
 
         return row['instance_id']
 
