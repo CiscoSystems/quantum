@@ -69,6 +69,8 @@ from quantum.plugins.cisco.n1kv import n1kv_client
 
 
 LOG = logging.getLogger(__name__)
+
+# Polling duration for the plugin retrieve policy profiles from VSM.
 POLL_DURATION = 10
 
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
@@ -231,13 +233,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         n1kv_db_v2.initialize()
         cred.Store.initialize()
-        # TBD Begin : To be removed. No need for this parameters
         # If no api_extensions_path is provided set the following
         if not quantum_cfg.CONF.api_extensions_path:
             quantum_cfg.CONF.set_override(
                 'api_extensions_path',
                 'extensions:quantum/plugins/cisco/extensions')
-        # TBD end
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
         self.setup_rpc()
@@ -261,51 +261,46 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         self._send_register_request()
+        self._populate_policy_profiles()
         PollVSM().start()
 
+    def _populate_policy_profiles(self):
+        """
+        Populate all the policy profiles from VSM. 
+        """
+        LOG.debug('_populate_policy_profiles')
+        n1kvclient = n1kv_client.Client()
+        policy_profiles = n1kvclient.list_profiles()
+        for profile in policy_profiles['body'][const.SET]:
+            if const.ID and const.NAME in profile:
+                profile_id = profile[const.PROPERTIES][const.ID]
+                profile_name = profile[const.PROPERTIES][const.NAME]
+                self._add_policy_profile(profile_name, profile_id)
+        self._remove_all_fake_policy_profiles()
+        
     def _poll_policies(self, event_type=None, epoch=None, tenant_id=None):
         """
-        Retrieve Policy Profiles from Cisco Nexus1000V
+        Poll for Policy Profiles from Cisco Nexus1000V for any updates/deletes
         """
         LOG.debug('_poll_policies')
         n1kvclient = n1kv_client.Client()
         policy_profiles = n1kvclient.list_events(event_type, epoch)
-        for profile in policy_profiles['body'][const.SET]:
-            if const.NAME in profile:
-                cmd = profile[const.PROPERTIES]['cmd']
-                cmds = cmd.split(';')
-                cmdwords = cmds[1].split()
-                time = profile[const.PROPERTIES]['time']
-                profile_name = profile[const.PROPERTIES][const.NAME]
-                if 'no' in cmdwords[0]:
-                    p = self._get_policy_profile_by_name(profile_name)
-                    if p:
-                        self._delete_policy_profile(p['id'])
-                elif const.ID in profile[const.PROPERTIES]:
-                    profile_id = profile[const.PROPERTIES][const.ID]
-                    self._add_policy_profile(profile_name, profile_id, tenant_id)
-        self._remove_all_fake_policy_profiles()
-
-    # TBD Begin : To be removed. Needs some change in logic before removal
-    def _parse_network_vlan_ranges(self):
-        self.network_vlan_ranges = {}
-        ranges = conf.CISCO_N1K.network_vlan_ranges
-        ranges = ranges.split(',')
-        for entry in ranges:
-            entry = entry.strip()
-            if ':' in entry:
-                try:
-                    physical_network, vlan_min, vlan_max = entry.split(':')
-                    self._add_network_vlan_range(physical_network.strip(),
-                        int(vlan_min),
-                        int(vlan_max))
-                except ValueError as ex:
-                    LOG.error("Invalid network VLAN range: \'%s\' - %s",
-                        entry, ex)
-                    sys.exit(1)
-            else:
-                self._add_network(entry)
-        LOG.info("Network VLAN ranges: %s", self.network_vlan_ranges)
+        if policy_profiles:
+            for profile in policy_profiles['body'][const.SET]:
+                if const.NAME in profile:
+                    cmd = profile[const.PROPERTIES]['cmd']
+                    cmds = cmd.split(';')
+                    cmdwords = cmds[1].split()
+                    time = profile[const.PROPERTIES]['time']
+                    profile_name = profile[const.PROPERTIES][const.NAME]
+                    if 'no' in cmdwords[0]:
+                        p = self._get_policy_profile_by_name(profile_name)
+                        if p:
+                            self._delete_policy_profile(p['id'])
+                    elif const.ID in profile[const.PROPERTIES]:
+                        profile_id = profile[const.PROPERTIES][const.ID]
+                        self._add_policy_profile(profile_name, profile_id, tenant_id)
+            self._remove_all_fake_policy_profiles()
 
     def _add_network_vlan_range(self, physical_network, vlan_min, vlan_max):
         self._add_network(physical_network)
@@ -315,23 +310,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if physical_network not in self.network_vlan_ranges:
             self.network_vlan_ranges[physical_network] = []
 
-    def _parse_vxlan_id_ranges(self):
-        ranges = conf.CISCO_N1K.vxlan_id_ranges
-        ranges = ranges.split(',')
-        for entry in ranges:
-            entry = entry.strip()
-            try:
-                tun_min, tun_max = entry.split(':')
-                self.vxlan_id_ranges.append((int(tun_min), int(tun_max)))
-            except ValueError as ex:
-                LOG.error("Invalid vxlan ID range: \'%s\' - %s", entry, ex)
-                sys.exit(1)
-        LOG.info("Tunnel ID ranges: %s", self.vxlan_id_ranges)
-
     # TODO(rkukura) Use core mechanism for attribute authorization
     # when available.
-
-    # TBD End
 
     def _check_provider_view_auth(self, context, network):
         return policy.check(context,
@@ -663,10 +643,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._extend_network_dict_profile(context, net)
 
         #TODO: later move under port
-        self._send_create_network_request(context, net)
+        try:
+            self._send_create_network_request(context, net)
+        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+            self.delete_network(context, net['id'])
+        else:
             # note - exception will rollback entire transaction
-        LOG.debug("Created network: %s", net['id'])
-        return net
+            LOG.debug("Created network: %s", net['id'])
+            return net
 
     def update_network(self, context, id, network):
         """ Update network Parameters """
@@ -753,9 +737,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     port)
                 n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
-            self._send_create_port_request(context, pt)
-            LOG.debug("Created port: %s", pt)
-            return pt
+            try:
+                self._send_create_port_request(context, pt)
+            except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+                self.delete_port(context, pt['id'])
+            else:
+                LOG.debug("Created port: %s", pt)
+                return pt
         elif 'device_id' in port['port'].keys():
             if port['port']['device_owner'] == 'network:dhcp' or \
                 port['port']['device_owner'] == 'network:router_interface':
@@ -859,9 +847,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Create Subnet for a given network """
         LOG.debug('Create subnet')
         sub = super(N1kvQuantumPluginV2, self).create_subnet(context, subnet)
-        self._send_create_subnet_request(context, sub)
-        LOG.debug("Created subnet: %s", sub['id'])
-        return sub
+        try:
+            self._send_create_subnet_request(context, sub)
+        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+            self.delete_subnet(context, sub['id'])
+        else:
+            LOG.debug("Created subnet: %s", sub['id'])
+            return sub
 
     def update_subnet(self, context, id, subnet):
         """ Update Subnet """
@@ -895,10 +887,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_network_profile(self, context, network_profile):
         self._replace_fake_tenant_id_with_real(context)
-        _network_profile = super(N1kvQuantumPluginV2, self).create_network_profile(context, network_profile)
+        _network_profile = super(N1kvQuantumPluginV2, self).\
+                                 create_network_profile(context, network_profile)
+        self.network_vlan_ranges = {}
         seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
         if _network_profile['segment_type'] == const.TYPE_VLAN:
-            self.network_vlan_ranges = {}
             self._add_network_vlan_range(_network_profile['physical_network'],
                             int(seg_min),
                             int(seg_max))
@@ -907,15 +900,20 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.vxlan_id_ranges = []
             self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
             n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
+        #TODO: VSM currently does not support fabric network creation.
+        #      Uncomment the following once VSM supports creation via REST api.
         #self._send_create_fabric_network_request(_network_profile)
-        self._send_create_network_profile_request(context, _network_profile)
-        return _network_profile
+        try:
+            self._send_create_network_profile_request(context, _network_profile)
+        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+            self.delete_network_profile(context, _network_profile['id'])
+        else:
+            return _network_profile
 
     def delete_network_profile(self, context, id):
         _network_profile = super(N1kvQuantumPluginV2, self).delete_network_profile(context, id)
         seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
         if _network_profile['segment_type'] == const.TYPE_VLAN:
-            self.network_vlan_ranges = {}
             self._add_network_vlan_range(_network_profile['physical_network'],
                             int(seg_min),
                             int(seg_max))

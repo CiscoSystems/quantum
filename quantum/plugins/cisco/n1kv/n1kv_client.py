@@ -30,9 +30,6 @@ from quantum.plugins.cisco.extensions import n1kv_profile
 
 LOG = logging.getLogger(__name__)
 
-TENANT = const.NETWORK_ADMIN
-
-
 class Client(object):
     """
     Client for the Cisco Nexus1000V Quantum Plugin
@@ -330,7 +327,7 @@ class Client(object):
         """ Initialize a new client for the Plugin v2.0. """
         self.format = 'json'
         self.action_prefix = '/api/hyper-v'
-        self.hosts = self._get_vsm_hosts(TENANT)
+        self.hosts = self._get_vsm_hosts()
 
     def _handle_fault_response(self, status_code, replybody):
         if status_code == httplib.INTERNAL_SERVER_ERROR:
@@ -423,7 +420,7 @@ class Client(object):
         return self._do_request("PUT", action, body=body,
                                   headers=headers, params=params)
 
-    def _get_vsm_hosts(self, tenant_id):
+    def _get_vsm_hosts(self):
         """
         Returns a list of VSM ip addresses.
         CREDENTIAL_NAME in the credentials object corresponds to an

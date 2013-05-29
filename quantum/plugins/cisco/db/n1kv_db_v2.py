@@ -651,7 +651,7 @@ def create_profile_binding(tenant_id, profile_id, profile_type):
 
 
 def _profile_binding_exists(tenant_id, profile_id, profile_type):
-    LOG.debug("get_profile_binding()")
+    LOG.debug("_profile_binding_exists()")
     try:
         binding = _get_profile_binding(tenant_id, profile_id)
         return binding.profile_type == profile_type
@@ -895,7 +895,11 @@ class NetworkProfile_db_mixin(object):
         :return:
         """
         # self.get_network_profiles(context)
-        profiles = _get_network_profiles(physical_network=p['physical_network'])
+        _segment_type = p['segment_type'].lower()
+        if _segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
+            profiles = _get_network_profiles(physical_network=p['physical_network'])
+        elif _segment_type == n1kv_models_v2.SEGMENT_TYPE_VXLAN:
+            profiles = _get_network_profiles()
         if profiles:
             for prfl in profiles:
                 _name = prfl.name
