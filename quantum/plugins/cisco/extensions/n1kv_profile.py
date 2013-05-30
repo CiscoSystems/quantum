@@ -26,23 +26,24 @@ MULTICAST_IP = 'n1kv:multicast_ip'
 EXTENDED_ATTRIBUTES_2_0 = {
     'networks': {
         PROFILE_ID: {'allow_post': True, 'allow_put': True,
-                       'validate': {'type:regex': attributes.UUID_PATTERN},
-                       'default': attributes.ATTR_NOT_SPECIFIED,
-                       'is_visible': True},
+                     'validate': {'type:regex': attributes.UUID_PATTERN},
+                     'default': attributes.ATTR_NOT_SPECIFIED,
+                     'is_visible': True},
         MULTICAST_IP: {'allow_post': True, 'allow_put': True,
                        'default': attributes.ATTR_NOT_SPECIFIED,
                        'is_visible': True},
     },
     'ports': {
         PROFILE_ID: {'allow_post': True, 'allow_put': True,
-                       'validate': {'type:regex': attributes.UUID_PATTERN},
-                       'default': attributes.ATTR_NOT_SPECIFIED,
-                       'is_visible': True}
+                     'validate': {'type:regex': attributes.UUID_PATTERN},
+                     'default': attributes.ATTR_NOT_SPECIFIED,
+                     'is_visible': True}
     }
 }
 
 
 class N1kv_profile(object):
+
     """Extension class supporting N1kv profiles.
 
     This class is used by quantum's extension framework to make
@@ -91,6 +92,7 @@ class N1kv_profile(object):
 
 
 class Nexus1000vNetworkProfile(extensions.ExtensionDescriptor):
+
     @classmethod
     def get_name(cls):
         return "Nexus 1000V Network Profile"
@@ -121,6 +123,7 @@ class Nexus1000vNetworkProfile(extensions.ExtensionDescriptor):
 
 
 class Nexus1000vPolicyProfile(extensions.ExtensionDescriptor):
+
     @classmethod
     def get_name(cls):
         return "Nexus 1000V Policy Profile"

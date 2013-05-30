@@ -25,12 +25,14 @@ RESOURCE_ATTRIBUTE_MAP = {
         'multicast_ip_index': {'allow_post': False, 'allow_put': False,
                                'is_visible': False, 'default': '0'},
         'physical_network': {'allow_post': True, 'allow_put': True,
-                 'is_visible': True, 'default': ''},
+                             'is_visible': True, 'default': ''},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'is_visible': False, 'default': ''},
-        'add_tenant': {'allow_post': True, 'allow_put': True, 'is_visible': True, 'default': None},
-        'remove_tenant': {'allow_post': True, 'allow_put': True, 'is_visible': True, 'default': None},
-        },
+        'add_tenant': {'allow_post': True, 'allow_put': True,
+                       'is_visible': True, 'default': None},
+        'remove_tenant': {'allow_post': True, 'allow_put': True,
+                          'is_visible': True, 'default': None},
+    },
 }
 
 
@@ -64,4 +66,4 @@ class Network_profile(extensions.ExtensionDescriptor):
             RESOURCE_NAME,
             manager.QuantumManager.get_plugin(),
             RESOURCE_ATTRIBUTE_MAP.get(COLLECTION_NAME))
-        return [extensions.ResourceExtension(COLLECTION_NAME,controller)]
+        return [extensions.ResourceExtension(COLLECTION_NAME, controller)]

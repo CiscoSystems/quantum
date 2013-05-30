@@ -482,7 +482,7 @@ def remove_credential(credential_id):
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                   filter_by(credential_id=credential_id).one())
+                filter_by(credential_id=credential_id).one())
         session.delete(cred)
         session.flush()
         return cred
@@ -512,7 +512,7 @@ def get_all_n1kv_credentials():
     session = db.get_session()
     try:
         creds = (session.query(network_models_v2.Credential).
-                filter_by(type='n1kv').all())
+                 filter_by(type='n1kv').all())
         return creds
     except exc.NoResultFound:
         raise c_exc.CredentialNameNotFound(credential_name=credential_name)
@@ -528,7 +528,9 @@ def get_ovs_vlans():
         return []
     return [binding.vlan_id for binding in bindings]
 
+
 class Credential_db_mixin(object):
+
     """
     Mixin class for Cisco Credentials as a resource.
     """

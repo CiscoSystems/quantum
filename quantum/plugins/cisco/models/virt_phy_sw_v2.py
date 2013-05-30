@@ -72,7 +72,7 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
             plugin_obj = conf.CISCO_PLUGINS[key]
             if plugin_obj is not None:
                 self._plugins[key] = importutils.import_object(plugin_obj)
-                LOG.debug(_("Loaded device plugin %s\n"), 
+                LOG.debug(_("Loaded device plugin %s\n"),
                           conf.CISCO_PLUGINS[key])
 
         if ((const.VSWITCH_PLUGIN in self._plugins) and

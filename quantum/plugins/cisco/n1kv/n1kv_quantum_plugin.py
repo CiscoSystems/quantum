@@ -73,6 +73,7 @@ LOG = logging.getLogger(__name__)
 # Polling duration for the plugin retrieve policy profiles from VSM.
 POLL_DURATION = 10
 
+
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                        l3_rpc_base.L3RpcCallbackMixin,
                        sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
@@ -148,13 +149,14 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         entry['vxlans'] = vxlans
         # Notify all other listening agents
         self.notifier.vxlan_update(rpc_context, vxlan.ip_address,
-                                    vxlan.id)
+                                   vxlan.id)
         # Return the list of vxlans IP's to the agent
         return entry
 
 
 class AgentNotifierApi(proxy.RpcProxy,
                        sg_rpc.SecurityGroupAgentRpcApiMixin):
+
     '''Agent side of the N1kv rpc API.
 
     API version history:
@@ -174,8 +176,8 @@ class AgentNotifierApi(proxy.RpcProxy,
                                                        topics.PORT,
                                                        topics.UPDATE)
         self.topic_vxlan_update = topics.get_topic_name(topic,
-                                                         const.TUNNEL,
-                                                         topics.UPDATE)
+                                                        const.TUNNEL,
+                                                        topics.UPDATE)
 
     def network_delete(self, context, network_id):
         self.fanout_cast(context,
@@ -202,11 +204,12 @@ class AgentNotifierApi(proxy.RpcProxy,
 
 
 class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin,
-                         n1kv_db_v2.NetworkProfile_db_mixin,
-                         n1kv_db_v2.PolicyProfile_db_mixin,
-                         network_db_v2.Credential_db_mixin,
-                         agentschedulers_db.AgentSchedulerDbMixin):
+                          l3_db.L3_NAT_db_mixin,
+                          n1kv_db_v2.NetworkProfile_db_mixin,
+                          n1kv_db_v2.PolicyProfile_db_mixin,
+                          network_db_v2.Credential_db_mixin,
+                          agentschedulers_db.AgentSchedulerDbMixin):
+
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
@@ -266,7 +269,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _populate_policy_profiles(self):
         """
-        Populate all the policy profiles from VSM. 
+        Populate all the policy profiles from VSM.
         """
         LOG.debug('_populate_policy_profiles')
         n1kvclient = n1kv_client.Client()
@@ -277,7 +280,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 profile_name = profile[const.PROPERTIES][const.NAME]
                 self._add_policy_profile(profile_name, profile_id)
         self._remove_all_fake_policy_profiles()
-        
+
     def _poll_policies(self, event_type=None, epoch=None, tenant_id=None):
         """
         Poll for Policy Profiles from Cisco Nexus1000V for any updates/deletes
@@ -299,7 +302,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                             self._delete_policy_profile(p['id'])
                     elif const.ID in profile[const.PROPERTIES]:
                         profile_id = profile[const.PROPERTIES][const.ID]
-                        self._add_policy_profile(profile_name, profile_id, tenant_id)
+                        self._add_policy_profile(
+                            profile_name, profile_id, tenant_id)
             self._remove_all_fake_policy_profiles()
 
     def _add_network_vlan_range(self, physical_network, vlan_min, vlan_max):
@@ -315,19 +319,19 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _check_provider_view_auth(self, context, network):
         return policy.check(context,
-            "extension:provider_network:view",
-            network)
+                            "extension:provider_network:view",
+                            network)
 
     def _enforce_provider_set_auth(self, context, network):
         return policy.enforce(context,
-            "extension:provider_network:set",
-            network)
+                              "extension:provider_network:set",
+                              network)
 
     def _extend_network_dict_provider(self, context, network):
         """ Add extended network parameters """
 #        if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_network_binding(context.session,
-            network['id'])
+                                                 network['id'])
         network[provider.NETWORK_TYPE] = binding.network_type
         if binding.network_type == const.TYPE_VXLAN:
             network[provider.PHYSICAL_NETWORK] = None
@@ -425,9 +429,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_port_dict_profile(self, context, port):
         """ Add the extended parameter port profile to the port """
-        #if self._check_provider_view_auth(context, network):
+        # if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_port_binding(context.session,
-                port['id'])
+                                              port['id'])
         port[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _process_network_profile(self, context, attrs):
@@ -435,9 +439,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
-            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
+            raise cisco_exceptions.NetworkProfileIdNotFound(
+                profile_id=profile_id)
         if not self.network_profile_exists(context, profile_id):
-            raise cisco_exceptions.NetworkProfileIdNotFound(profile_id=profile_id)
+            raise cisco_exceptions.NetworkProfileIdNotFound(
+                profile_id=profile_id)
         return (profile_id)
 
     def _process_policy_profile(self, context, attrs):
@@ -453,7 +459,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         return (profile_id)
 
-    #TBD: remove added for compilation
+    # TBD: remove added for compilation
     def _send_register_request(self):
         LOG.debug('_send_register_request')
 
@@ -495,7 +501,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug('_send_create_network_request: %s', network['id'])
         profile = self.get_network_profile(context,
-                    network[n1kv_profile.PROFILE_ID])
+                                           network[n1kv_profile.PROFILE_ID])
         n1kvclient = n1kv_client.Client()
         if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
             n1kvclient.create_bridge_domain(network)
@@ -504,7 +510,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_update_network_request(self, network):
         """ Send Update network request to VSM """
         LOG.debug('_send_update_network_request: %s', network['id'])
-        profile = n1kv_db_v2.get_network_profile(network[n1kv_profile.PROFILE_ID])
+        profile = n1kv_db_v2.get_network_profile(
+            network[n1kv_profile.PROFILE_ID])
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': profile['name'],
@@ -546,24 +553,26 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Send Create Port request to VSM """
         LOG.debug('_send_create_port_request: %s', port)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
-                                                port['network_id'])
+                                               port['network_id'])
         if vm_network:
             vm_network_name = vm_network['name']
             n1kvclient = n1kv_client.Client()
             n1kvclient.create_n1kv_port(port, vm_network_name)
-            vm_network['port_count'] = self._update_port_count(vm_network['port_count'],
-                                                               action='increment')
-            n1kv_db_v2.update_vm_network(vm_network_name, vm_network['port_count'])
+            vm_network['port_count'] = \
+                self._update_port_count(vm_network['port_count'],
+                                        action='increment')
+            n1kv_db_v2.update_vm_network(
+                vm_network_name, vm_network['port_count'])
         else:
-            policy_profile = n1kv_db_v2.get_policy_profile(\
-                                port[n1kv_profile.PROFILE_ID])
+            policy_profile = n1kv_db_v2.get_policy_profile(
+                port[n1kv_profile.PROFILE_ID])
             vm_network_name = "vmn_" + str(port[n1kv_profile.PROFILE_ID]) +\
                               "_" + str(port['network_id'])
             port_count = 1
             n1kv_db_v2.add_vm_network(vm_network_name,
-                                     port[n1kv_profile.PROFILE_ID],
-                                     port['network_id'],
-                                     port_count)
+                                      port[n1kv_profile.PROFILE_ID],
+                                      port['network_id'],
+                                      port_count)
             n1kvclient = n1kv_client.Client()
             n1kvclient.create_vm_network(port, vm_network_name, policy_profile)
             n1kvclient.create_n1kv_port(port, vm_network_name)
@@ -586,15 +595,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             port_count = port_count - 1
         return port_count
 
-    def _send_delete_port_request(self, context,id):
+    def _send_delete_port_request(self, context, id):
         """ Send Delete Port request to VSM """
         LOG.debug('_send_delete_port_request: %s', id)
         port = self.get_port(context, id)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                port['network_id'])
-        vm_network['port_count'] = self._update_port_count(vm_network['port_count'],
-                                                           action='decrement')
-        n1kv_db_v2.update_vm_network(vm_network['name'], vm_network['port_count'])
+        vm_network[
+            'port_count'] = self._update_port_count(vm_network['port_count'],
+                                                    action='decrement')
+        n1kv_db_v2.update_vm_network(vm_network[
+                                     'name'], vm_network['port_count'])
         n1kvclient = n1kv_client.Client()
         n1kvclient.delete_n1kv_port(vm_network['name'], id)
         if vm_network['port_count'] == 0:
@@ -612,7 +623,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Create network based on Network Profile """
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
-            network['network'])
+                                                          network['network'])
         self._add_dummy_profile_for_test(network)
         profile_id = self._process_network_profile(context, network['network'])
 
@@ -633,19 +644,25 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 # provider network
                 if network_type == const.TYPE_VLAN:
                     n1kv_db_v2.reserve_specific_vlan(session, physical_network,
-                        segmentation_id)
+                                                     segmentation_id)
             net = super(N1kvQuantumPluginV2, self).create_network(context,
-                network)
-            n1kv_db_v2.add_network_binding(session, net['id'], network_type,
-                physical_network, segmentation_id, multicast_ip, profile_id)
+                                                                  network)
+            n1kv_db_v2.add_network_binding(session,
+                                           net['id'],
+                                           network_type,
+                                           physical_network,
+                                           segmentation_id,
+                                           multicast_ip,
+                                           profile_id)
 
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
 
-        #TODO: later move under port
+        # TODO: later move under port
         try:
             self._send_create_network_request(context, net)
-        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+        except(cisco_exceptions.VSMError,
+               cisco_exceptions.VSMConnectionFailed):
             self.delete_network(context, net['id'])
         else:
             # note - exception will rollback entire transaction
@@ -659,7 +676,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         session = context.session
         with session.begin(subtransactions=True):
             net = super(N1kvQuantumPluginV2, self).update_network(context, id,
-                network)
+                                                                  network)
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
         self._send_update_network_request(net)
@@ -675,11 +692,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             super(N1kvQuantumPluginV2, self).delete_network(context, id)
             if binding.network_type == const.TYPE_VXLAN:
                 n1kv_db_v2.release_vxlan(session, binding.segmentation_id,
-                    self.vxlan_id_ranges)
+                                         self.vxlan_id_ranges)
             elif binding.network_type == const.TYPE_VLAN:
                 n1kv_db_v2.release_vlan(session, binding.physical_network,
-                    binding.segmentation_id,
-                    self.network_vlan_ranges)
+                                        binding.segmentation_id,
+                                        self.network_vlan_ranges)
                 # the network_binding record is deleted via cascade from
                 # the network record, so explicit removal is not necessary
         if self.agent_vsm:
@@ -698,7 +715,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Read All Networks """
         LOG.debug("Get networks")
         nets = super(N1kvQuantumPluginV2, self).get_networks(context, filters,
-            None)
+                                                             None)
         for net in nets:
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
@@ -734,23 +751,24 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             session = context.session
             with session.begin(subtransactions=True):
                 pt = super(N1kvQuantumPluginV2, self).create_port(context,
-                    port)
+                                                                  port)
                 n1kv_db_v2.add_port_binding(session, pt['id'], profile_id)
                 self._extend_port_dict_profile(context, pt)
             try:
                 self._send_create_port_request(context, pt)
-            except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+            except(cisco_exceptions.VSMError,
+                   cisco_exceptions.VSMConnectionFailed):
                 self.delete_port(context, pt['id'])
             else:
                 LOG.debug("Created port: %s", pt)
                 return pt
         elif 'device_id' in port['port'].keys():
             if port['port']['device_owner'] == 'network:dhcp' or \
-                port['port']['device_owner'] == 'network:router_interface':
+                    port['port']['device_owner'] == 'network:router_interface':
                 # Grab profile id from the network
                 LOG.debug("create dhcp port")
                 p_profile_name = conf.CISCO_N1K.default_policy_profile
-                p_profile = self._get_policy_profile_by_name(p_profile_name) 
+                p_profile = self._get_policy_profile_by_name(p_profile_name)
                 port['port']['n1kv:profile_id'] = p_profile['id']
                 tenant_id = port['port']['tenant_id']
                 instance_id = port['port']['device_id']
@@ -783,9 +801,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _add_dummy_profile_for_test(self, obj):
         """
-        Method to be patched by the test_n1kv_plugin module to 
+        Method to be patched by the test_n1kv_plugin module to
         inject n1kv:profile_id into the network/port object, since the plugin
-        tests for its existence. This method does not affect 
+        tests for its existence. This method does not affect
         the plugin code in any way.
         """
         pass
@@ -811,13 +829,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Update port parameters """
         if self.agent_vsm:
             original_port = super(N1kvQuantumPluginV2, self).get_port(context,
-                id)
+                                                                      id)
         port = super(N1kvQuantumPluginV2, self).update_port(context, id, port)
         self._extend_port_dict_profile(context, port)
         if self.agent_vsm:
             if original_port['admin_state_up'] != port['admin_state_up']:
-                vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
-                                                port['network_id'])
+                vm_network = n1kv_db_v2.get_vm_network(
+                    port[n1kv_profile.PROFILE_ID],
+                    port['network_id'])
                 self._send_update_port_request(port, vm_network['name'])
         return port
 
@@ -837,7 +856,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Read all ports """
         LOG.debug("Get ports")
         ports = super(N1kvQuantumPluginV2, self).get_ports(context, filters,
-            fields)
+                                                           fields)
         for port in ports:
             self._extend_port_dict_profile(context, port)
 
@@ -849,7 +868,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         sub = super(N1kvQuantumPluginV2, self).create_subnet(context, subnet)
         try:
             self._send_create_subnet_request(context, sub)
-        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+        except(cisco_exceptions.VSMError,
+               cisco_exceptions.VSMConnectionFailed):
             self.delete_subnet(context, sub['id'])
         else:
             LOG.debug("Created subnet: %s", sub['id'])
@@ -874,7 +894,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Read a Subnet """
         LOG.debug("Get subnet: %s", id)
         subnet = super(N1kvQuantumPluginV2, self).get_subnet(context, id,
-                                                            fields)
+                                                             fields)
         return self._fields(subnet, fields)
 
     def get_subnets(self, context, filters=None, fields=None):
@@ -888,35 +908,41 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def create_network_profile(self, context, network_profile):
         self._replace_fake_tenant_id_with_real(context)
         _network_profile = super(N1kvQuantumPluginV2, self).\
-                                 create_network_profile(context, network_profile)
+            create_network_profile(
+                context, network_profile)
         self.network_vlan_ranges = {}
-        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        seg_min, seg_max = self.\
+            _get_segment_range(_network_profile['segment_range'])
         if _network_profile['segment_type'] == const.TYPE_VLAN:
             self._add_network_vlan_range(_network_profile['physical_network'],
-                            int(seg_min),
-                            int(seg_max))
+                                         int(seg_min),
+                                         int(seg_max))
             n1kv_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         elif _network_profile['segment_type'] == const.TYPE_VXLAN:
             self.vxlan_id_ranges = []
             self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
             n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
-        #TODO: VSM currently does not support fabric network creation.
+        # TODO: VSM currently does not support fabric network creation.
         #      Uncomment the following once VSM supports creation via REST api.
-        #self._send_create_fabric_network_request(_network_profile)
+        # self._send_create_fabric_network_request(_network_profile)
         try:
-            self._send_create_network_profile_request(context, _network_profile)
-        except(cisco_exceptions.VSMError, cisco_exceptions.VSMConnectionFailed):
+            self._send_create_network_profile_request(context,
+                                                      _network_profile)
+        except(cisco_exceptions.VSMError,
+               cisco_exceptions.VSMConnectionFailed):
             self.delete_network_profile(context, _network_profile['id'])
         else:
             return _network_profile
 
     def delete_network_profile(self, context, id):
-        _network_profile = super(N1kvQuantumPluginV2, self).delete_network_profile(context, id)
-        seg_min, seg_max = self._get_segment_range(_network_profile['segment_range'])
+        _network_profile = super(N1kvQuantumPluginV2, self).\
+            delete_network_profile(context, id)
+        seg_min, seg_max = self._get_segment_range(
+            _network_profile['segment_range'])
         if _network_profile['segment_type'] == const.TYPE_VLAN:
             self._add_network_vlan_range(_network_profile['physical_network'],
-                            int(seg_min),
-                            int(seg_max))
+                                         int(seg_min),
+                                         int(seg_max))
             n1kv_db_v2.delete_vlan_allocations(self.network_vlan_ranges)
         elif _network_profile['segment_type'] == const.TYPE_VXLAN:
             self.delete_vxlan_ranges = []
@@ -924,7 +950,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kv_db_v2.delete_vxlan_allocations(self.delete_vxlan_ranges)
         self._send_delete_network_profile_request(_network_profile)
 
+
 class PollVSM (threading.Thread, N1kvQuantumPluginV2):
+
     def run(self):
         while True:
             self._poll_policies(event_type="port_profile")

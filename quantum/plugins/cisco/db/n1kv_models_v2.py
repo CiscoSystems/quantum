@@ -36,12 +36,13 @@ TENANT_ID_NOT_SET = '01020304-0506-0708-0901-020304050607'
 
 
 class N1kvVlanAllocation(model_base.BASEV2):
+
     """Represents allocation state of vlan_id on physical network"""
     __tablename__ = 'n1kv_vlan_allocations'
 
     physical_network = Column(String(64), nullable=False, primary_key=True)
     vlan_id = Column(Integer, nullable=False, primary_key=True,
-        autoincrement=False)
+                     autoincrement=False)
     allocated = Column(Boolean, nullable=False)
 
     def __init__(self, physical_network, vlan_id):
@@ -55,11 +56,12 @@ class N1kvVlanAllocation(model_base.BASEV2):
 
 
 class N1kvVxlanAllocation(model_base.BASEV2):
+
     """Represents allocation state of vxlan_id"""
     __tablename__ = 'n1kv_vxlan_allocations'
 
     vxlan_id = Column(Integer, nullable=False, primary_key=True,
-        autoincrement=False)
+                      autoincrement=False)
     allocated = Column(Boolean, nullable=False)
 
     def __init__(self, vxlan_id):
@@ -71,12 +73,13 @@ class N1kvVxlanAllocation(model_base.BASEV2):
 
 
 class N1kvPortBinding(model_base.BASEV2):
+
     """Represents binding of ports"""
     __tablename__ = 'n1kv_port_bindings'
 
     port_id = Column(String(36),
-        ForeignKey('ports.id', ondelete="CASCADE"),
-        primary_key=True)
+                     ForeignKey('ports.id', ondelete="CASCADE"),
+                     primary_key=True)
     profile_id = Column(String(36))
 
     def __init__(self, port_id, profile_id):
@@ -89,12 +92,13 @@ class N1kvPortBinding(model_base.BASEV2):
 
 
 class N1kvNetworkBinding(model_base.BASEV2):
+
     """Represents binding of virtual network to physical realization"""
     __tablename__ = 'n1kv_network_bindings'
 
     network_id = Column(String(36),
-        ForeignKey('networks.id', ondelete="CASCADE"),
-        primary_key=True)
+                        ForeignKey('networks.id', ondelete="CASCADE"),
+                        primary_key=True)
     # 'vxlan', 'vlan'
     network_type = Column(String(32), nullable=False)
     physical_network = Column(String(64))
@@ -113,14 +117,15 @@ class N1kvNetworkBinding(model_base.BASEV2):
 
     def __repr__(self):
         return "<NetworkBinding(%s,%s,%s,%d %x %s)>" % (self.network_id,
-                                                  self.network_type,
-                                                  self.physical_network,
-                                                  self.segmentation_id,
-                                                  self.multicast_ip,
-                                                  self.profile_id)
+                                                        self.network_type,
+                                                        self.physical_network,
+                                                        self.segmentation_id,
+                                                        self.multicast_ip,
+                                                        self.profile_id)
 
 
 class N1kvVxlanIP(model_base.BASEV2):
+
     """Represents vxlan endpoint in DB mode"""
     __tablename__ = 'n1kv_vxlan_ips'
 
@@ -134,6 +139,7 @@ class N1kvVxlanIP(model_base.BASEV2):
 
 
 class N1kvVxlanEndpoint(model_base.BASEV2):
+
     """Represents vxlan endpoint in RPC mode"""
     __tablename__ = 'n1kv_vxlan_endpoints'
 
@@ -149,6 +155,7 @@ class N1kvVxlanEndpoint(model_base.BASEV2):
 
 
 class L2NetworkBase(object):
+
     """Base class for L2Network Models."""
     #__table_args__ = {'mysql_engine': 'InnoDB'}
 
@@ -190,6 +197,7 @@ class L2NetworkBase(object):
 
 
 class N1kVmNetwork(model_base.BASEV2):
+
     """Represents VM Network information"""
     __tablename__ = 'vmnetwork'
 
@@ -206,12 +214,13 @@ class N1kVmNetwork(model_base.BASEV2):
 
     def __repr__(self):
         return "<VmNetwork(%s,%s,%s,%s)>" % (self.name,
-                                          self.profile_id,
-                                          self.network_id,
-                                          self.port_count)
+                                             self.profile_id,
+                                             self.network_id,
+                                             self.port_count)
 
 
 class NetworkProfile(model_base.BASEV2, HasId):
+
     """
     Nexus1000V Network Profiles
 
@@ -264,7 +273,7 @@ class NetworkProfile(model_base.BASEV2, HasId):
     def _get_multicast_ip_range(self):
         # Assumption: ip range belongs to the same subnet
         # Assumption: ip range is already sorted
-        #min_ip, max_ip = sorted(self.multicast_ip_range.split('-'))
+        # min_ip, max_ip = sorted(self.multicast_ip_range.split('-'))
         min_ip, max_ip = self.multicast_ip_range.split('-')
         return (min_ip, max_ip)
 
@@ -285,6 +294,7 @@ class NetworkProfile(model_base.BASEV2, HasId):
 
 
 class PolicyProfile(model_base.BASEV2):
+
     """
     Nexus1000V Network Profiles
 
@@ -304,6 +314,7 @@ class PolicyProfile(model_base.BASEV2):
 
 
 class ProfileBinding(model_base.BASEV2):
+
     """Represents a binding of Network Profile
     or Policy Profile to tenant_id"""
     __tablename__ = 'profile_bindings'

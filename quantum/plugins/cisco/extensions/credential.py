@@ -35,16 +35,16 @@ from quantum.api import extensions
 RESOURCE_ATTRIBUTE_MAP = {
     'credentials': {
         'credential_id': {'allow_post': False, 'allow_put': False,
-               'validate': {'type:regex': attr.UUID_PATTERN},
-               'is_visible': True},
+                          'validate': {'type:regex': attr.UUID_PATTERN},
+                          'is_visible': True},
         'credential_name': {'allow_post': True, 'allow_put': True,
-                 'is_visible': True, 'default': ''},
+                            'is_visible': True, 'default': ''},
         'type': {'allow_post': True, 'allow_put': True,
                  'is_visible': True, 'default': ''},
         'user_name': {'allow_post': True, 'allow_put': True,
-                 'is_visible': True, 'default': ''},
+                      'is_visible': True, 'default': ''},
         'password': {'allow_post': True, 'allow_put': True,
-                 'is_visible': True, 'default': ''},
+                     'is_visible': True, 'default': ''},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'is_visible': False, 'default': ''},
     },
@@ -91,5 +91,3 @@ class Credential(extensions.ExtensionDescriptor):
                                           plugin, params)
         return [extensions.ResourceExtension(collection_name,
                                              controller)]
-
-

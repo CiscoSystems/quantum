@@ -30,7 +30,9 @@ from quantum.plugins.cisco.extensions import n1kv_profile
 
 LOG = logging.getLogger(__name__)
 
+
 class Client(object):
+
     """
     Client for the Cisco Nexus1000V Quantum Plugin
 
@@ -81,19 +83,19 @@ class Client(object):
 
     """
 
-    #Metadata for deserializing xml
+    # Metadata for deserializing xml
     _serialization_metadata = {
         "application/xml": {
             "attributes": {
                 "network": ["id", "name"],
                 "port": ["id", "mac_address"],
                 "subnet": ["id", "prefix"]},
-            },
-            "plurals": {
-                "networks": "network",
-                "ports": "port",
-                "set": "instance",
-                "subnets": "subnet", }, }
+        },
+        "plurals": {
+        "networks": "network",
+        "ports": "port",
+        "set": "instance",
+        "subnets": "subnet", }, }
 
     # Define paths here
     profiles_path = "/virtual-port-profile"
@@ -123,7 +125,7 @@ class Client(object):
         Fetches a list of events from the VSM.
         Event type: port_profile
         Event type of port_profile retrieves all updates/create/deletes
-        of port profiles from the VSM. 
+        of port profiles from the VSM.
         """
         if event_type:
             self.events_path = self.events_path + '?type=' + event_type
@@ -198,14 +200,14 @@ class Client(object):
         """
         Updates a Network Segment Pool on the VSM
         """
-        return self._post(self.network_segment_pool_path %\
+        return self._post(self.network_segment_pool_path %
                           (network_segment_pool), body=body)
 
     def delete_network_segment_pool(self, network_segment_pool, **_params):
         """
         Deletes a Network Segment Pool on the VSM
         """
-        return self._delete(self.network_segment_pool_path %\
+        return self._delete(self.network_segment_pool_path %
                             (network_segment_pool))
 
     def create_ip_pool(self, subnet, **_params):
@@ -244,11 +246,11 @@ class Client(object):
                 '29': '255.255.255.248',
                 '30': '255.255.255.252',
                 '31': '255.255.255.254',
-                '32': '255.255.255.255',}
+                '32': '255.255.255.255', }
 
         if subnet['cidr']:
             cidr_block = subnet['cidr'].split('/')[1]
-            if int(cidr_block) in range(0,32):
+            if int(cidr_block) in range(0, 32):
                 netmask = cidr[cidr_block]
             else:
                 netmask = ''
@@ -257,10 +259,10 @@ class Client(object):
 
         if subnet['allocation_pools']:
             address_range_start = subnet['allocation_pools'][0]['start']
-            address_range_end   = subnet['allocation_pools'][0]['end']
+            address_range_end = subnet['allocation_pools'][0]['end']
         else:
             address_range_start = None
-            address_range_end   = None
+            address_range_end = None
 
         body = {'dhcp': subnet['enable_dhcp'],
                 'addressRangeStart': address_range_start,
@@ -276,7 +278,7 @@ class Client(object):
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
-    # TODO: Removing tenantId from the request as a temp fix to allow 
+    # TODO: Removing tenantId from the request as a temp fix to allow
     #       port create. VSM CLI needs to be fixed. Should not interfere
     #       since VSM is not using tenantId as of now.
     def create_vm_network(self, port, name, policy_profile, **_params):
@@ -315,7 +317,8 @@ class Client(object):
         """
         Updates a Port on the VSM
         """
-        return self._post(self.port_path % ((vm_network_name), (port_id)), body=body)
+        return self._post(self.port_path % ((vm_network_name), (port_id)),
+                          body=body)
 
     def delete_n1kv_port(self, vm_network_name, port_id, **_params):
         """
@@ -341,7 +344,7 @@ class Client(object):
         Perform the HTTP request
         """
         action = self.action_prefix + action
-        if headers is None  and  self.hosts:
+        if headers is None and self.hosts:
             headers = self._get_header(self.hosts[0])
         if body:
             body = self._serialize(body)
@@ -393,7 +396,7 @@ class Client(object):
         if status_code == 204:
             return data
         return Serializer(self._serialization_metadata).deserialize(
-                          data, self._set_content_type('xml'))
+            data, self._set_content_type('xml'))
 
     def _set_content_type(self, format=None):
         """
@@ -406,19 +409,19 @@ class Client(object):
 
     def _delete(self, action, body=None, headers=None, params=None):
         return self._do_request("DELETE", action, body=body,
-                               headers=headers, params=params)
+                                headers=headers, params=params)
 
     def _get(self, action, body=None, headers=None, params=None):
         return self._do_request("GET", action, body=body,
-                                  headers=headers, params=params)
+                                headers=headers, params=params)
 
     def _post(self, action, body=None, headers=None, params=None):
         return self._do_request("POST", action, body=body,
-                               headers=headers, params=params)
+                                headers=headers, params=params)
 
     def _put(self, action, body=None, headers=None, params=None):
         return self._do_request("PUT", action, body=body,
-                                  headers=headers, params=params)
+                                headers=headers, params=params)
 
     def _get_vsm_hosts(self):
         """

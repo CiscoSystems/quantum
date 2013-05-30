@@ -38,6 +38,7 @@ LOG = logging.getLogger(__name__)
 
 
 class N1kvProfile_db(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
+
     """Represents N1kv profiles"""
     __tablename__ = 'profiles'
 
@@ -83,12 +84,13 @@ class N1kvProfile_db(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     def _get_multicast_ip_range(self):
         # Assumption: ip range belongs to the same subnet
         # Assumption: ip range is already sorted
-        #min_ip, max_ip = sorted(self.multicast_ip_range.split('-'))
+        # min_ip, max_ip = sorted(self.multicast_ip_range.split('-'))
         min_ip, max_ip = self.multicast_ip_range.split('-')
         return (min_ip, max_ip)
 
 
 class N1kvProfile_db_mixin(profile.ProfileBase):
+
     """Mixin class to add N1kv Profile methods to db_plugin_base_v2"""
 
     def create_profile(self, context, profile):
@@ -101,19 +103,19 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         try:
             with context.session.begin(subtransactions=True):
                 profile_db = N1kvProfile_db(
-                        id=p['profile_id'],
-                        tenant_id=tenant_id,
-                        name=p['name'],
-                        profile_type=p['profile_type'],
-                        profile_id=p['profile_id'],
-                        segment_type=p['segment_type'].lower(),
-                        segment_range=p['segment_range'],
-                        multicast_ip_range=p['multicast_ip_range'],
-                        multicast_ip_index=0)
+                    id=p['profile_id'],
+                    tenant_id=tenant_id,
+                    name=p['name'],
+                    profile_type=p['profile_type'],
+                    profile_id=p['profile_id'],
+                    segment_type=p['segment_type'].lower(),
+                    segment_range=p['segment_range'],
+                    multicast_ip_range=p['multicast_ip_range'],
+                    multicast_ip_index=0)
                 context.session.add(profile_db)
         except q_exc.BadRequest:
             LOG.exception("Unable to create profile due to a"
-                    "malformed request")
+                          "malformed request")
         return self._make_profile_dict(profile_db)
 
     def delete_profile(self, context, id):
@@ -150,7 +152,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         session = db.get_session()
         try:
             profiledb = (session.query(N1kvProfile_db).
-                    filter_by(profile_id=profile_id).one())
+                         filter_by(profile_id=profile_id).one())
             LOG.debug("Add N1kvProfile_db failed: Profile %s already exists",
                       profile_id)
         except exc.NoResultFound:
@@ -170,7 +172,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
         try:
             profile = (session.query(N1kvProfile_db).
                        filter_by(id=profile_id).one())
-                       #filter_by(profile_id=profile_id).one())   @@@@@@
+                       # filter_by(profile_id=profile_id).one())   @@@@@@
             return profile
         except exc.NoResultFound:
             raise cisco_exceptions.ProfileId
@@ -192,7 +194,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
                'segment_type': profile['segment_type'],
                'segment_range': profile['segment_range'],
                'multicast_ip_range': profile['multicast_ip_range']
-              }
+               }
         LOG.debug("ABS DB %s\n", res)
         return self._fields(res, fields)
 
@@ -298,7 +300,7 @@ class N1kvProfile_db_mixin(profile.ProfileBase):
                 LOG.exception(msg)
                 raise q_exc.InvalidInput(error_message=msg)
             if (p['profile_type'] == 'network') and (prfl['profile_type'] ==
-                'network'):
+                                                     'network'):
                 seg_min, seg_max = self._get_segment_range(p['segment_range'])
                 prfl_seg_min, prfl_seg_max = self._get_segment_range(
                     prfl['segment_range'])

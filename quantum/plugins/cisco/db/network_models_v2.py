@@ -25,6 +25,7 @@ from quantum.openstack.common import uuidutils
 
 
 class L2NetworkBase(object):
+
     """Base class for L2Network Models."""
     #__table_args__ = {'mysql_engine': 'InnoDB'}
 
@@ -66,6 +67,7 @@ class L2NetworkBase(object):
 
 
 class VlanID(model_base.BASEV2, L2NetworkBase):
+
     """Represents a vlan_id usage"""
     __tablename__ = 'cisco_vlan_ids'
 
@@ -81,6 +83,7 @@ class VlanID(model_base.BASEV2, L2NetworkBase):
 
 
 class Vlan_Binding(model_base.BASEV2, L2NetworkBase):
+
     """Represents a binding of vlan_id to network_id"""
     __tablename__ = 'cisco_vlan_bindings'
 
@@ -101,6 +104,7 @@ class Vlan_Binding(model_base.BASEV2, L2NetworkBase):
 
 
 class QoS(model_base.BASEV2, L2NetworkBase):
+
     """Represents QoS for a tenant"""
     __tablename__ = 'qoss'
 
@@ -121,6 +125,7 @@ class QoS(model_base.BASEV2, L2NetworkBase):
 
 
 class Credential(model_base.BASEV2, L2NetworkBase):
+
     """Represents credentials for a tenant"""
     __tablename__ = 'credentials'
 
@@ -139,7 +144,7 @@ class Credential(model_base.BASEV2, L2NetworkBase):
 
     def __repr__(self):
         return "<Credentials(%s,%s,%s,%s, %s)>" % (self.credential_id,
-                                                  self.credential_name,
-                                                  self.user_name,
-                                                  self.password,
-                                                  self.type)
+                                                   self.credential_name,
+                                                   self.user_name,
+                                                   self.password,
+                                                   self.type)
