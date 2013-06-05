@@ -74,7 +74,7 @@ class N1kvVxlanAllocation(model_base.BASEV2):
 
 class N1kvPortBinding(model_base.BASEV2):
 
-    """Represents binding of ports"""
+    """Represents binding of ports to policy profile"""
     __tablename__ = 'n1kv_port_bindings'
 
     port_id = Column(String(36),
@@ -315,8 +315,10 @@ class PolicyProfile(model_base.BASEV2):
 
 class ProfileBinding(model_base.BASEV2):
 
-    """Represents a binding of Network Profile
-    or Policy Profile to tenant_id"""
+    """
+    Represents a binding of Network Profile
+    or Policy Profile to tenant_id
+    """
     __tablename__ = 'profile_bindings'
 
     profile_type = Column(PROFILE_TYPE)

@@ -20,7 +20,6 @@ from mock import patch
 
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
-from quantum.plugins.cisco.db import n1kv_profile_db
 from quantum.tests.unit import test_db_plugin as test_plugin
 from quantum.plugins.cisco.extensions import n1kv_profile
 

@@ -92,10 +92,10 @@ class Client(object):
                 "subnet": ["id", "prefix"]},
         },
         "plurals": {
-        "networks": "network",
-        "ports": "port",
-        "set": "instance",
-        "subnets": "subnet", }, }
+            "networks": "network",
+            "ports": "port",
+            "set": "instance",
+            "subnets": "subnet", }, }
 
     # Define paths here
     profiles_path = "/virtual-port-profile"
@@ -116,7 +116,7 @@ class Client(object):
 
     def list_profiles(self, **_params):
         """
-        Fetches a list of all profiles
+        Fetches a list of all policy profiles from VSM.
         """
         return self._get(self.profiles_path, params=_params)
 
@@ -143,9 +143,6 @@ class Client(object):
     def delete_bridge_domain(self, name, **_params):
         """
         Deletes a Bridge Domain on VSM
-        :param network:
-        :param _params:
-        :return:
         """
         return self._delete(self.bridge_domain_path % (name))
 
@@ -284,10 +281,6 @@ class Client(object):
     def create_vm_network(self, port, name, policy_profile, **_params):
         """
         Creates a VM Network on the VSM
-        :param port:
-        :param name:
-        :param policy_profile:
-        :return:
         """
         body = {'name': name,
                 #'tenantId': port['tenant_id'],
@@ -300,8 +293,6 @@ class Client(object):
     def delete_vm_network(self, vm_network_name):
         """
         Deletes a VM Network on the VSM
-        :param vm_network_name:
-        :return:
         """
         return self._delete(self.vm_network_path % (vm_network_name))
 
@@ -333,6 +324,10 @@ class Client(object):
         self.hosts = self._get_vsm_hosts()
 
     def _handle_fault_response(self, status_code, replybody):
+        """
+        VSM responds with a INTERNAL SERVER ERRROR code (500) when VSM fails
+        to fulfill the http request.
+        """
         if status_code == httplib.INTERNAL_SERVER_ERROR:
             raise exc.VSMError(reason=_(replybody))
         elif status_code == httplib.SERVICE_UNAVAILABLE:
@@ -344,7 +339,7 @@ class Client(object):
         Perform the HTTP request
         """
         action = self.action_prefix + action
-        if headers is None and self.hosts:
+        if not headers and self.hosts:
             headers = self._get_header(self.hosts[0])
         if body:
             body = self._serialize(body)
@@ -392,6 +387,7 @@ class Client(object):
     def _deserialize(self, data, status_code):
         """
         Deserializes an xml string into a dictionary
+        We choose xml since VSM returns an xml.
         """
         if status_code == 204:
             return data

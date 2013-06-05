@@ -140,7 +140,6 @@ def delete_vlan_allocations(network_vlan_ranges):
             for alloc in allocs:
                 if alloc.vlan_id in vlan_ids:
                     if not alloc.allocated:
-                        # it's not allocated, so remove it from table
                         LOG.debug("removing vlan %s on physical network "
                                   "%s from pool" %
                                  (alloc.vlan_id, physical_network))
@@ -265,7 +264,6 @@ def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
 def sync_vxlan_allocations(vxlan_id_ranges):
     """Synchronize vxlan_allocations table with configured vxlan ranges"""
 
-    # determine current configured allocatable vxlans
     vxlan_ids = set()
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
@@ -277,7 +275,6 @@ def sync_vxlan_allocations(vxlan_id_ranges):
 
     session = db.get_session()
     with session.begin():
-        # add missing allocatable vxlans to table
         for vxlan_id in sorted(vxlan_ids):
             try:
                 alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
@@ -289,7 +286,6 @@ def sync_vxlan_allocations(vxlan_id_ranges):
 
 def delete_vxlan_allocations(vxlan_id_ranges):
     """Delete vxlan_allocations for deleted network profile range"""
-    # determine current configured allocatable vxlans
     vxlan_ids = set()
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
@@ -305,7 +301,6 @@ def delete_vxlan_allocations(vxlan_id_ranges):
         for alloc in allocs:
             if alloc.vxlan_id in vxlan_ids:
                 if not alloc.allocated:
-                    # it's not, so remove it from table
                     LOG.debug("removing vxlan %s from pool" %
                               alloc.vxlan_id)
                     session.delete(alloc)
@@ -429,6 +424,12 @@ def get_vm_network(profile_id, network_id):
 
 
 def add_vm_network(name, profile_id, network_id, port_count):
+    """
+    Add a vm_network for a unique combination of network and
+    policy profile. All ports having the same policy profile
+    on one network will be associated with one vm network.
+    Port count represents the number ports on one vm network.
+    """
     session = db.get_session()
     try:
         vm_network = (session.query(n1kv_models_v2.N1kVmNetwork).
@@ -471,10 +472,7 @@ def delete_vm_network(profile_id, network_id):
 
 def create_network_profile(profile):
     """
-     Create Network Profile
-
-    :param profile:
-    :return:
+    Create Network Profile
     """
     LOG.debug("create_network_profile()")
     session = db.get_session()
@@ -499,9 +497,6 @@ def create_network_profile(profile):
 def delete_network_profile(id):
     """
     Delete Network Profile
-
-    :param id:
-    :return:
     """
     LOG.debug("delete_network_profile()")
     session = db.get_session()
@@ -516,10 +511,6 @@ def delete_network_profile(id):
 def update_network_profile(id, profile):
     """
     Update Network Profile
-
-    :param id:
-    :param profile:
-    :return:
     """
     LOG.debug("update_network_profile()")
     session = db.get_session()
@@ -533,9 +524,6 @@ def update_network_profile(id, profile):
 def get_network_profile(id, fields=None):
     """
     Get Network Profile
-    :param id:
-    :param fields:
-    :return:
     """
     LOG.debug("get_network_profile()")
     session = db.get_session()
@@ -563,9 +551,9 @@ def get_network_profile_by_name(name):
 
 def _get_network_profiles(**kwargs):
     """
-    Get Network Profiles
-
-    :return:
+    Get Network Profiles on a particular physical network, if physical
+    network is specified. If no physical network is specified, return
+    all network profiles.
     """
     session = db.get_session()
     if "physical_network" in kwargs:
@@ -582,10 +570,7 @@ def _get_network_profiles(**kwargs):
 
 def create_policy_profile(profile):
     """
-     Create Policy Profile
-
-    :param profile:
-    :return:
+    Create Policy Profile
     """
     LOG.debug("create_policy_profile()")
     session = db.get_session()
@@ -599,9 +584,6 @@ def create_policy_profile(profile):
 def delete_policy_profile(id):
     """
     Delete Policy Profile
-
-    :param id:
-    :return:
     """
     LOG.debug("delete_policy_profile()")
     session = db.get_session()
@@ -612,10 +594,7 @@ def delete_policy_profile(id):
 
 def update_policy_profile(id, profile):
     """
-
-    :param id:
-    :param profile:
-    :return:
+    Update a policy profile.
     """
     LOG.debug("update_policy_profile()")
     session = db.get_session()
@@ -629,10 +608,6 @@ def update_policy_profile(id, profile):
 def get_policy_profile(id, fields=None):
     """
     Get Policy Profile
-
-    :param id:
-    :param fields:
-    :return:
     """
     LOG.debug("get_policy_profile()")
     session = db.get_session()
@@ -646,11 +621,7 @@ def get_policy_profile(id, fields=None):
 
 def create_profile_binding(tenant_id, profile_id, profile_type):
     """
-    Create Network/Policy Profile binding
-    :param tenant_id:
-    :param profile_id:
-    :param profile_type:
-    :return:
+    Create Network/Policy Profile association with a tenant.
     """
     if profile_type not in ['network', 'policy']:
         raise q_exc.QuantumException("Invalid profile type")
@@ -690,9 +661,6 @@ def _get_profile_binding(tenant_id, profile_id):
 def get_profile_binding(tenant_id, profile_id):
     """
     Get Network/Policy Profile - Tenant binding
-    :param tenant_id:
-    :param profile_id:
-    :return:
     """
     LOG.debug("get_profile_binding()")
     try:
@@ -706,15 +674,31 @@ def get_profile_binding(tenant_id, profile_id):
 def delete_profile_binding(tenant_id, profile_id):
     """
     Delete Policy Binding
-    :param tenant_id:
-    :param profile_id:
-    :return:
     """
     LOG.debug("delete_profile_binding()")
     session = db.get_session()
     binding = get_profile_binding(tenant_id, profile_id)
     with session.begin(subtransactions=True):
         session.delete(binding)
+
+
+def _get_profile_bindings(profile_type=None):
+    """
+    Get all profile-tenant bindings based on profile type.
+    If profile type is None, return profile-tenant binding for all
+    profile types.
+    """
+    LOG.debug("_get_profile_bindings()")
+    session = db.get_session()
+    if profile_type:
+        try:
+            profile_bindings = session.query(n1kv_models_v2.ProfileBinding).\
+                filter_by(profile_type=profile_type).all()
+            return profile_bindings
+        except exc.NoResultFound:
+            return None
+    else:
+        return session.query(n1kv_models_v2.ProfileBinding).all()
 
 
 class NetworkProfile_db_mixin(object):
@@ -797,9 +781,6 @@ class NetworkProfile_db_mixin(object):
     def add_network_profile_tenant(self, profile_id, tenant_id):
         """
         Add a tenant to a network profile
-        :param profile_id:
-        :param tenant_id:
-        :return:
         """
         return create_profile_binding(tenant_id, profile_id, 'network')
 
@@ -818,9 +799,6 @@ class NetworkProfile_db_mixin(object):
     def _validate_network_profile_args(self, context, p):
         """
         Validate completeness of Nexus1000V network profile arguments.
-        :param context:
-        :param p:
-        :return:
         """
         # TODO Cleanup validation logic
         self._validate_network_profile(p)
@@ -915,7 +893,6 @@ class NetworkProfile_db_mixin(object):
         :param p:
         :return:
         """
-        # self.get_network_profiles(context)
         _segment_type = p['segment_type'].lower()
         if _segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
             profiles = _get_network_profiles(
@@ -969,6 +946,11 @@ class PolicyProfile_db_mixin(object):
         res = {'id': profile['id'], 'name': profile['name']}
         return self._fields(res, fields)
 
+    def _make_profile_bindings_dict(self, profile_binding, fields=None):
+        res = {'profile_id': profile_binding['profile_id'],
+               'tenant_id': profile_binding['tenant_id']}
+        return self._fields(res, fields)
+
     def _policy_profile_exists(self, id):
         session = db.get_session()
         return session.query(n1kv_models_v2.PolicyProfile).\
@@ -999,6 +981,12 @@ class PolicyProfile_db_mixin(object):
                                                           PolicyProfile,
                                                           context.tenant_id)
 
+    def get_policy_profile_bindings(self, context, filters=None, fields=None):
+        if context.is_admin:
+            profile_bindings = _get_profile_bindings(profile_type='policy')
+            return [self._make_profile_bindings_dict(pb)
+                    for pb in profile_bindings]
+
     def update_policy_profile(self, context, id, policy_profile):
         p = policy_profile['policy_profile']
         if context.is_admin and 'add_tenant' in p:
@@ -1021,9 +1009,6 @@ class PolicyProfile_db_mixin(object):
     def add_policy_profile_tenant(self, profile_id, tenant_id):
         """
         Add tenant to a policy profile
-        :param profile_id:
-        :param tenant_id:
-        :return:
         """
         return create_profile_binding(tenant_id, profile_id, 'policy')
 
@@ -1033,9 +1018,6 @@ class PolicyProfile_db_mixin(object):
     def _delete_policy_profile(self, profile_id):
         """
         Delete policy profile and associated binding
-
-        :param profile_id:
-        :return:
         """
         session = db.get_session()
         with session.begin(subtransactions=True):
@@ -1093,9 +1075,6 @@ class PolicyProfile_db_mixin(object):
         """
         Replace fake tenant id for all Policy Profile
         binding with real admin tenant ID
-
-        :param context:
-        :return:
         """
         if context.is_admin and context.tenant_id:
             tenant_id = context.tenant_id
@@ -1108,10 +1087,6 @@ class PolicyProfile_db_mixin(object):
     def _add_policy_profile(self, profile_name, profile_id, tenant_id=None):
         """
         Add Policy profile and tenant binding
-        :param profile_name:
-        :param profile_id:
-        :param tenant_id:
-        :return:
         """
         profile = {'id': profile_id, 'name': profile_name}
         tenant_id = tenant_id or n1kv_models_v2.TENANT_ID_NOT_SET

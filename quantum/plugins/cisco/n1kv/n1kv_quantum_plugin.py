@@ -22,7 +22,6 @@
 
 import logging
 import sys
-import itertools
 import threading
 import time
 
@@ -55,7 +54,7 @@ from quantum.openstack.common.rpc import proxy
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
 
-from quantum.plugins.cisco.extensions import n1kv_profile as n1kv_profile
+from quantum.plugins.cisco.extensions import n1kv_profile
 from quantum.plugins.cisco.extensions import network_profile
 from quantum.plugins.cisco.extensions import policy_profile
 from quantum.plugins.cisco.extensions import credential
@@ -70,7 +69,7 @@ from quantum.plugins.cisco.n1kv import n1kv_client
 
 LOG = logging.getLogger(__name__)
 
-# Polling duration for the plugin retrieve policy profiles from VSM.
+# Polling duration (in sec) for the plugin to retrieve policy profiles from VSM
 POLL_DURATION = 10
 
 
@@ -219,10 +218,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     """
 
     # This attribute specifies whether the plugin supports or not
-    # bulk operations. Name mangling is used in order to ensure it
-    # is qualified by class
+    # bulk operations.
     __native_bulk_support = False
     supported_extension_aliases = ["provider", "agent",
+                                   "policy_profile_binding",
                                    "n1kv_profile", "network_profile",
                                    "policy_profile", "router", "credential"]
 
@@ -230,7 +229,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         Initialize Nexus1000V Quantum plugin
 
-        1. Initialize DB
+        1. Initialize Nexus1000v and Credential DB
         2. Establish communication with Cisco Nexus1000V
         3. Retrieve port-profiles
         """
@@ -264,7 +263,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         self._send_register_request()
+        # Retrieve all the policy profiles from VSM.
         self._populate_policy_profiles()
+        # Continue to poll VSM for any create/delete of policy profiles.
         PollVSM().start()
 
     def _populate_policy_profiles(self):
@@ -296,6 +297,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     cmdwords = cmds[1].split()
                     time = profile[const.PROPERTIES]['time']
                     profile_name = profile[const.PROPERTIES][const.NAME]
+                    # Delete the policy profile from db if it's deleted on VSM
                     if 'no' in cmdwords[0]:
                         p = self._get_policy_profile_by_name(profile_name)
                         if p:
