@@ -1,0 +1,13 @@
+This plugin is a tweaked version of the openvswitch plugin used for
+development purposes of the CSR1kv as router in Quantum.
+
+The plugin is not intended to be made available outside Cisco.
+
+------
+
+The Open vSwitch (OVS) Quantum plugin is a simple plugin to manage OVS
+features using a local agent running on each hypervisor.
+
+For details on how to configure and use the plugin, see:
+
+http://openvswitch.org/openstack/documentation/
