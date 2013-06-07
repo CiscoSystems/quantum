@@ -21,14 +21,10 @@ from quantum.api.v2 import base
 from quantum.api import extensions
 from quantum import manager
 
-RESOURCE_NAME = "network_profile"
-COLLECTION_NAME = "%ss" % RESOURCE_NAME
-EXT_ALIAS = RESOURCE_NAME
-
 
 # Attribute Map
 RESOURCE_ATTRIBUTE_MAP = {
-    COLLECTION_NAME: {
+    'network_profiles': {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:regex': attributes.UUID_PATTERN},
                'is_visible': True},
@@ -51,6 +47,13 @@ RESOURCE_ATTRIBUTE_MAP = {
         'remove_tenant': {'allow_post': True, 'allow_put': True,
                           'is_visible': True, 'default': None},
     },
+    'network_profile_bindings': {
+        'profile_id': {'allow_post': False, 'allow_put': False,
+                       'validate': {'type:regex': attributes.UUID_PATTERN},
+                       'is_visible': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'is_visible': True},
+    },
 }
 
 
@@ -62,7 +65,7 @@ class Network_profile(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_alias(cls):
-        return EXT_ALIAS
+        return 'network_profile'
 
     @classmethod
     def get_description(cls):
@@ -79,9 +82,16 @@ class Network_profile(extensions.ExtensionDescriptor):
     @classmethod
     def get_resources(cls):
         """ Returns Ext Resources """
-        controller = base.create_resource(
-            COLLECTION_NAME,
-            RESOURCE_NAME,
-            manager.QuantumManager.get_plugin(),
-            RESOURCE_ATTRIBUTE_MAP.get(COLLECTION_NAME))
-        return [extensions.ResourceExtension(COLLECTION_NAME, controller)]
+        exts = []
+        plugin = manager.QuantumManager.get_plugin()
+        for resource_name in ['network_profile', 'network_profile_binding']:
+            collection_name = resource_name + "s"
+            controller = base.create_resource(
+                collection_name,
+                resource_name,
+                plugin,
+                RESOURCE_ATTRIBUTE_MAP.get(collection_name))
+            ex = extensions.ResourceExtension(collection_name,
+                                              controller)
+            exts.append(ex)
+        return exts
