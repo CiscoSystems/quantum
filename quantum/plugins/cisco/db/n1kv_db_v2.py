@@ -721,6 +721,11 @@ class NetworkProfile_db_mixin(object):
                 return []
         return [self._make_network_profile_dict(p) for p in profiles]
 
+    def _make_profile_bindings_dict(self, profile_binding, fields=None):
+        res = {'profile_id': profile_binding['profile_id'],
+               'tenant_id': profile_binding['tenant_id']}
+        return self._fields(res, fields)
+
     def _make_network_profile_dict(self, profile, fields=None):
         res = {'id': profile['id'],
                'name': profile['name'],
@@ -730,6 +735,12 @@ class NetworkProfile_db_mixin(object):
                'multicast_ip_range': profile['multicast_ip_range'],
                'physical_network': profile['physical_network']}
         return self._fields(res, fields)
+
+    def get_network_profile_bindings(self, context, filters=None, fields=None):
+        if context.is_admin:
+            profile_bindings = _get_profile_bindings(profile_type='network')
+            return [self._make_profile_bindings_dict(pb)
+                    for pb in profile_bindings]
 
     def create_network_profile(self, context, network_profile):
         p = network_profile['network_profile']

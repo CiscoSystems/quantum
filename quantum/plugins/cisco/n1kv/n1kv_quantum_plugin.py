@@ -222,6 +222,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     __native_bulk_support = False
     supported_extension_aliases = ["provider", "agent",
                                    "policy_profile_binding",
+                                   "network_profile_binding",
                                    "n1kv_profile", "network_profile",
                                    "policy_profile", "router", "credential"]
 
