@@ -35,12 +35,9 @@ from quantum.agent.linux import ovs_lib
 from quantum.agent.linux.ovs_lib import VifPort
 from quantum.agent.linux import utils
 from quantum.agent import rpc as agent_rpc
-from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.common import config as logging_config
-from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum import context as q_context
-from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.opendaylight import config  # noqa
@@ -175,6 +172,7 @@ class ODLPluginApi(agent_rpc.PluginApi, object):
                                        port_id=port_id),
                          topic=self.topic)
 
+
 class OVSQuantumOFPODLAgent(object):
 
     RPC_API_VERSION = '1.1'
@@ -283,10 +281,10 @@ class OVSQuantumOFPODLAgent(object):
             self.ports[port] = vif_port
             # Get segmentation id for the port
             seg_id = self.plugin_rpc.get_segmentation_id(self.context,
-                                                        str(port))
+                                                         str(port))
             # Set port tag to vlan
-            self.int_br.set_db_attribute("Port", str(vif_port.port_name), "tag",
-                                         str(seg_id))
+            self.int_br.set_db_attribute("Port", str(vif_port.port_name),
+                                         "tag", str(seg_id))
             # update plugin about port status
             self.plugin_rpc.odl_port_create(
                 self.context,
@@ -301,7 +299,7 @@ class OVSQuantumOFPODLAgent(object):
                 self.context,
                 str(port),
                 str(vif_port),
-                str(switch_id))    
+                str(switch_id))
             del self.ports[port]
 
     def daemon_loop(self):

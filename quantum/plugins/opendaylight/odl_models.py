@@ -2,8 +2,9 @@ from sqlalchemy import Column, ForeignKey, Integer, String
 
 from quantum.db.models_v2 import model_base
 
+
 class NetworkBinding(model_base.BASEV2):
-    """Represents binding of virtual network to physical realization"""
+    """Represents binding of virtual network to physical realization."""
     __tablename__ = 'odl_network_bindings'
 
     network_id = Column(String(36),
@@ -22,6 +23,7 @@ class NetworkBinding(model_base.BASEV2):
         return "<NetworkBinding(%s,%s,%d)>" % (self.network_id,
                                                self.network_type,
                                                self.segmentation_id)
+
 
 class Flow(model_base.BASEV2):
     """Represents a flow installed on the ODL controller"""
@@ -45,8 +47,9 @@ class Flow(model_base.BASEV2):
                                          self.flow_type,
                                          self.sec_group_rule)
 
+
 class OvsPort(model_base.BASEV2):
-    """Represents openvswitch port information"""
+    """Represents openvswitch port information."""
     __tablename__ = 'odl_ovs_ports'
 
     port_id = Column(String(36),

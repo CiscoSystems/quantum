@@ -1,21 +1,20 @@
 from oslo.config import cfg
 
 from quantum.agent.common import config
-from quantum import scheduler
 
-DEFAULT_TUNNEL_RANGES='5000:10000'
+DEFAULT_TUNNEL_RANGES = '5000:10000'
 
 odl_opts = [
     cfg.StrOpt('controllers',
-                help=_("List of controller uri's")),
+               help=_("List of controller uri's")),
     cfg.StrOpt('integration_bridge', default='br-int',
                help=_("Integration bridge to use")),
     cfg.StrOpt('network_vlan_ranges',
-                help=_("Range of VLAN Ids")),
+               help=_("Range of VLAN Ids")),
     cfg.IntOpt('ovsdb_port', default=6634,
                help=_("OVSDB port to connect to")),
     cfg.StrOpt('tenant_network_type',
-                help=_("Type of tenant network: vlan | gre")),
+               help=_("Type of tenant network: vlan | gre")),
     cfg.StrOpt('tunnel_bridge', default='br-tun',
                help=_("Tunnel bridge to use")),
     cfg.StrOpt('int_peer_patch_port', default='patch-tun',
@@ -28,8 +27,8 @@ odl_opts = [
                 default=DEFAULT_TUNNEL_RANGES,
                 help=_("List of <tun_min>:<tun_max>")),
     cfg.StrOpt('physical_bridge',
-                default='int-br-eth1',
-                help=_("Interface Id of the veth interface on the bridge"))
+               default='int-br-eth1',
+               help=_("Interface Id of the veth interface on the bridge"))
 ]
 
 agent_opts = [

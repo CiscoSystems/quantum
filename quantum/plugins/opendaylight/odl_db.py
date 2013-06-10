@@ -1,9 +1,8 @@
 from sqlalchemy.orm import exc
 
-from quantum import manager
-from quantum.common import exceptions as q_exc
-from quantum.db import models_v2
 import quantum.db.api as db
+from quantum import manager
+from quantum.db import models_v2
 from quantum.db import securitygroups_db as sg_db
 from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
@@ -46,7 +45,7 @@ def del_network_binding(session, network_id):
         session.delete(binding)
     except exc.NoResultFound:
         LOG.debug(_("Segmentation binding not found"))
-    except:
+    except Exception:
         raise
 
 
@@ -54,8 +53,8 @@ def allocate_network_segment(session, network_id, network_type, seg_range):
     session = session or db.get_session()
     # Get a free network segment in the range specified
     bindings = session.query(odl_models.NetworkBinding).\
-               filter_by(network_type=network_type).\
-               all()
+        filter_by(network_type=network_type).\
+        all()
 
     allocated_ids = []
     for binding in bindings:
@@ -70,7 +69,8 @@ def allocate_network_segment(session, network_id, network_type, seg_range):
             break
 
     if allocated_segment:
-        add_network_binding(session, network_id, network_type, allocated_segment)
+        add_network_binding(session, network_id, network_type,
+                            allocated_segment)
     else:
         raise "No usable segment id found"
 
@@ -108,7 +108,7 @@ def add_port_flow(session, flow_id, port_id, flow_type, sec_group_rule=None):
     session.add(binding)
     session.flush()
 
-    
+
 def del_port_flow(session, flow_id):
     session = session or db.get_session()
 
@@ -118,7 +118,7 @@ def del_port_flow(session, flow_id):
                    one())
         session.delete(binding)
         session.flush()
-    except:
+    except Exception:
         raise
 
 
@@ -127,11 +127,11 @@ def get_port_flows(session, port_id):
 
     try:
         bindings = (session.query(odl_models.Flow).
-                   filter_by(port_id=port_id).
-                   all())
+                    filter_by(port_id=port_id).
+                    all())
         return bindings
-    except:
-        raise 
+    except Exception:
+        raise
 
 
 def add_ovs_port(session, port_id, of_port_id, vif_id):
@@ -140,7 +140,7 @@ def add_ovs_port(session, port_id, of_port_id, vif_id):
         binding = odl_models.OvsPort(port_id, int(of_port_id), vif_id)
         session.add(binding)
         session.flush()
-    except:
+    except Exception:
         raise
 
 
@@ -153,8 +153,8 @@ def del_ovs_port(session, port_id):
                    one())
         session.delete(binding)
         session.flush()
-    except:
-        raise 
+    except Exception:
+        raise
 
 
 def get_ovs_port(session, port_id):
