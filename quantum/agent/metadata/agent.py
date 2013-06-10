@@ -53,6 +53,10 @@ class MetadataProxyHandler(object):
                    help=_("The type of authentication to use")),
         cfg.StrOpt('auth_region',
                    help=_("Authentication region")),
+        cfg.StrOpt('endpoint_type',
+                   default='adminURL',
+                   help=_("Network service endpoint type to pull from "
+                          "the keystone catalog")),
         cfg.StrOpt('nova_metadata_ip', default='127.0.0.1',
                    help=_("IP address used by Nova metadata server.")),
         cfg.IntOpt('nova_metadata_port',
@@ -78,6 +82,7 @@ class MetadataProxyHandler(object):
             region_name=self.conf.auth_region,
             auth_token=self.auth_info.get('auth_token'),
             endpoint_url=self.auth_info.get('endpoint_url'),
+            endpoint_type=self.conf.endpoint_type
         )
         return qclient
 
@@ -139,7 +144,8 @@ class MetadataProxyHandler(object):
             ''))
 
         h = httplib2.Http()
-        resp, content = h.request(url, headers=headers)
+        resp, content = h.request(url, method=req.method, headers=headers,
+                                  body=req.body)
 
         if resp.status == 200:
             LOG.debug(str(resp))
@@ -153,6 +159,8 @@ class MetadataProxyHandler(object):
             return webob.exc.HTTPForbidden()
         elif resp.status == 404:
             return webob.exc.HTTPNotFound()
+        elif resp.status == 409:
+            return webob.exc.HTTPConflict()
         elif resp.status == 500:
             msg = _(
                 'Remote metadata server experienced an internal server error.'

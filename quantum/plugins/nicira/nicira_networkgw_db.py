@@ -26,7 +26,6 @@ from webob import exc as web_exc
 from quantum.api.v2 import attributes
 from quantum.api.v2 import base
 from quantum.common import exceptions
-from quantum.db import db_base_plugin_v2
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.openstack.common import log as logging
@@ -123,7 +122,7 @@ class NetworkGateway(model_base.BASEV2, models_v2.HasId,
     devices = orm.relationship(NetworkGatewayDevice,
                                backref='networkgateways',
                                cascade='all,delete')
-    network_connections = orm.relationship(NetworkConnection)
+    network_connections = orm.relationship(NetworkConnection, lazy='joined')
 
 
 class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
@@ -132,6 +131,11 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
 
     def _get_network_gateway(self, context, gw_id):
         return self._get_by_id(context, NetworkGateway, gw_id)
+
+    def _make_gw_connection_dict(self, gw_conn):
+        return {'port_id': gw_conn['port_id'],
+                'segmentation_type': gw_conn['segmentation_type'],
+                'segmentation_id': gw_conn['segmentation_id']}
 
     def _make_network_gateway_dict(self, network_gateway, fields=None):
         device_list = []
@@ -143,7 +147,10 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
                'default': network_gateway['default'],
                'devices': device_list,
                'tenant_id': network_gateway['tenant_id']}
-        # NOTE(salvatore-orlando):perhaps return list of connected networks
+        # Query gateway connections only if needed
+        if (fields and 'ports' in fields) or not fields:
+            res['ports'] = [self._make_gw_connection_dict(conn)
+                            for conn in network_gateway.network_connections]
         return self._fields(res, fields)
 
     def _validate_network_mapping_info(self, network_mapping_info):
@@ -171,8 +178,8 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
             raise exceptions.InvalidInput(error_message=msg)
         return network_id
 
-    def _retrieve_gateway_connections(self, context, gateway_id, mapping_info,
-                                      only_one=False):
+    def _retrieve_gateway_connections(self, context, gateway_id,
+                                      mapping_info={}, only_one=False):
         filters = {'network_gateway_id': [gateway_id]}
         for k, v in mapping_info.iteritems():
             if v and k != NETWORK_ID:
@@ -225,8 +232,7 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
             if gw_db.default:
                 raise NetworkGatewayUnchangeable(gateway_id=id)
             # Ensure there is something to update before doing it
-            db_values_set = set([v for (k, v) in gw_db.iteritems()])
-            if not set(gw_data.values()).issubset(db_values_set):
+            if any([gw_db[k] != gw_data[k] for k in gw_data]):
                 gw_db.update(gw_data)
         LOG.debug(_("Updated network gateway with id:%s"), id)
         return self._make_network_gateway_dict(gw_db)
@@ -267,7 +273,7 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
                                                   network_mapping_info):
                 raise GatewayConnectionInUse(mapping=network_mapping_info,
                                              gateway_id=network_gateway_id)
-            # TODO(salvatore-orlando): This will give the port a fixed_ip,
+            # TODO(salvatore-orlando): Creating a port will give it an IP,
             # but we actually do not need any. Instead of wasting an IP we
             # should have a way to say a port shall not be associated with
             # any subnet
@@ -313,12 +319,11 @@ class NetworkGatewayMixin(nvp_networkgw.NetworkGatewayPluginBase):
             gw_db.network_connections.append(
                 NetworkConnection(**network_mapping_info))
             port_id = port['id']
-            # now deallocate the ip from the port
+            # now deallocate and recycle ip from the port
             for fixed_ip in port.get('fixed_ips', []):
-                db_base_plugin_v2.QuantumDbPluginV2._delete_ip_allocation(
-                    context, network_id,
-                    fixed_ip['subnet_id'],
-                    fixed_ip['ip_address'])
+                self._recycle_ip(context, network_id,
+                                 fixed_ip['subnet_id'],
+                                 fixed_ip['ip_address'])
             LOG.debug(_("Ensured no Ip addresses are configured on port %s"),
                       port_id)
             return {'connection_info':

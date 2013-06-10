@@ -45,7 +45,11 @@ class NVPSecurityGroups(object):
             elif param == 'remote_group_id':
                 nvp_rule['profile_uuid'] = rule['remote_group_id']
             elif param == 'protocol':
-                nvp_rule['protocol'] = protocol_num_look_up[rule['protocol']]
+                try:
+                    nvp_rule['protocol'] = int(rule['protocol'])
+                except (ValueError, TypeError):
+                    nvp_rule['protocol'] = (
+                        protocol_num_look_up[rule['protocol']])
             else:
                 nvp_rule[param] = value
         return nvp_rule
@@ -63,8 +67,7 @@ class NVPSecurityGroups(object):
 
     def _get_security_group_rules_nvp_format(self, context, security_group_id,
                                              with_id=False):
-        """Query quantum db for security group rules.
-        """
+        """Query quantum db for security group rules."""
         fields = ['remote_ip_prefix', 'remote_group_id', 'protocol',
                   'port_range_min', 'port_range_max', 'protocol', 'ethertype']
         if with_id:
@@ -106,7 +109,9 @@ class NVPSecurityGroups(object):
         return merged_rules
 
     def _remove_security_group_with_id_and_id_field(self, rules, rule_id):
-        """This function receives all of the current rule associated with a
+        """Remove rule by rule_id.
+
+        This function receives all of the current rule associated with a
         security group and then removes the rule that matches the rule_id. In
         addition it removes the id field in the dict with each rule since that
         should not be passed to nvp.

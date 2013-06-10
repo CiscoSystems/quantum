@@ -20,6 +20,7 @@
 
 import re
 
+from quantum.agent.linux import ip_lib
 from quantum.agent.linux import utils
 from quantum.openstack.common import log as logging
 
@@ -64,7 +65,7 @@ class OVSBridge:
         full_args = ["ovs-vsctl", "--timeout=2"] + args
         try:
             return utils.execute(full_args, root_helper=self.root_helper)
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': full_args, 'exception': e})
 
@@ -93,7 +94,7 @@ class OVSBridge:
         full_args = ["ovs-ofctl", cmd, self.br_name] + args
         try:
             return utils.execute(full_args, root_helper=self.root_helper)
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': full_args, 'exception': e})
 
@@ -215,7 +216,7 @@ class OVSBridge:
                 "param-key=nicira-iface-id", "uuid=%s" % xs_vif_uuid]
         try:
             return utils.execute(args, root_helper=self.root_helper).strip()
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': args, 'exception': e})
 
@@ -270,7 +271,7 @@ class OVSBridge:
             port_name = match.group('port_name')
             ofport = int(match.group('ofport'))
             return VifPort(port_name, ofport, vif_id, vif_mac, self)
-        except Exception, e:
+        except Exception as e:
             LOG.info(_("Unable to parse regex results. Exception: %s"), e)
             return
 
@@ -282,6 +283,15 @@ class OVSBridge:
 
         for port_name in port_names:
             self.delete_port(port_name)
+
+    def get_local_port_mac(self):
+        """Retrieve the mac of the bridge's local port."""
+        address = ip_lib.IPDevice(self.br_name, self.root_helper).link.address
+        if address:
+            return address
+        else:
+            msg = _('Unable to determine mac address for %s') % self.br_name
+            raise Exception(msg)
 
 
 def get_bridge_for_iface(root_helper, iface):
@@ -297,6 +307,6 @@ def get_bridges(root_helper):
     args = ["ovs-vsctl", "--timeout=2", "list-br"]
     try:
         return utils.execute(args, root_helper=root_helper).strip().split("\n")
-    except Exception, e:
+    except Exception as e:
         LOG.exception(_("Unable to retrieve bridges. Exception: %s"), e)
         return []

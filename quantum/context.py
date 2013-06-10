@@ -24,6 +24,7 @@ from datetime import datetime
 from quantum.db import api as db_api
 from quantum.openstack.common import context as common_context
 from quantum.openstack.common import log as logging
+from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
@@ -38,7 +39,8 @@ class ContextBase(common_context.RequestContext):
 
     def __init__(self, user_id, tenant_id, is_admin=None, read_deleted="no",
                  roles=None, timestamp=None, **kwargs):
-        """
+        """Object initialization.
+
         :param read_deleted: 'no' indicates deleted records are hidden, 'yes'
             indicates deleted records are visible, 'only' indicates that
             *only* deleted records are visible.
@@ -48,16 +50,22 @@ class ContextBase(common_context.RequestContext):
                        'context: %s'), kwargs)
         super(ContextBase, self).__init__(user=user_id, tenant=tenant_id,
                                           is_admin=is_admin)
-        self.roles = roles or []
-        if self.is_admin is None:
-            self.is_admin = 'admin' in [x.lower() for x in self.roles]
-        elif self.is_admin and 'admin' not in [x.lower() for x in self.roles]:
-            self.roles.append('admin')
         self.read_deleted = read_deleted
         if not timestamp:
             timestamp = datetime.utcnow()
         self.timestamp = timestamp
         self._session = None
+        self.roles = roles or []
+        if self.is_admin is None:
+            self.is_admin = policy.check_is_admin(self)
+        elif self.is_admin:
+            # Ensure context is populated with admin roles
+            # TODO(salvatore-orlando): It should not be necessary
+            # to populate roles in artificially-generated contexts
+            # address in bp/make-authz-orthogonal
+            admin_roles = policy.get_admin_roles()
+            if admin_roles:
+                self.roles = list(set(self.roles) | set(admin_roles))
 
     @property
     def project_id(self):

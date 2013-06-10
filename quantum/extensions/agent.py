@@ -112,7 +112,10 @@ class Agent(object):
         return [ex]
 
     def get_extended_resources(self, version):
-        return {}
+        if version == "2.0":
+            return RESOURCE_ATTRIBUTE_MAP
+        else:
+            return {}
 
 
 class AgentPluginBase(object):
@@ -132,6 +135,7 @@ class AgentPluginBase(object):
     @abstractmethod
     def delete_agent(self, context, id):
         """Delete agent.
+
         Agents register themselves on reporting state.
         But if a agent does not report its status
         for a long time (for example, it is dead for ever. ),
@@ -143,11 +147,9 @@ class AgentPluginBase(object):
     @abstractmethod
     def update_agent(self, context, agent):
         """Disable or Enable the agent.
-        Discription also can be updated.
 
-        Some agents cannot be disabled,
-        such as plugins, services.
-        An error code should be reported in this case.
+        Discription also can be updated. Some agents cannot be disabled, such
+        as plugins, services. An error code should be reported in this case.
         @raise exceptions.BadRequest:
         """
         pass

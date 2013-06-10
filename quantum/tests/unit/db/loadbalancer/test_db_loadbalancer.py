@@ -38,7 +38,8 @@ LOG = logging.getLogger(__name__)
 
 DB_CORE_PLUGIN_KLASS = 'quantum.db.db_base_plugin_v2.QuantumDbPluginV2'
 DB_LB_PLUGIN_KLASS = (
-    "quantum.plugins.services.agent_loadbalancer.plugin.LoadBalancerPlugin"
+    "quantum.plugins.services.agent_loadbalancer."
+    "lbaas_plugin.LoadBalancerPlugin"
 )
 ROOTDIR = os.path.dirname(__file__) + '../../../..'
 ETCDIR = os.path.join(ROOTDIR, 'etc')
@@ -174,10 +175,13 @@ class LoadBalancerPluginDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                        admin_state_up,
                                        subnet_id=tmp_subnet['subnet']['id'],
                                        **kwargs)
-                vip = self.deserialize(fmt or self.fmt, res)
                 if res.status_int >= 400:
-                    raise webob.exc.HTTPClientError(code=res.status_int)
+                    raise webob.exc.HTTPClientError(
+                        explanation=_("Unexpected error code: %s") %
+                        res.status_int
+                    )
                 try:
+                    vip = self.deserialize(fmt or self.fmt, res)
                     yield vip
                 finally:
                     if not no_delete:
@@ -195,10 +199,12 @@ class LoadBalancerPluginDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                 protocol,
                                 admin_state_up,
                                 **kwargs)
-        pool = self.deserialize(fmt or self.fmt, res)
         if res.status_int >= 400:
-            raise webob.exc.HTTPClientError(code=res.status_int)
+            raise webob.exc.HTTPClientError(
+                explanation=_("Unexpected error code: %s") % res.status_int
+            )
         try:
+            pool = self.deserialize(fmt or self.fmt, res)
             yield pool
         finally:
             if not no_delete:
@@ -214,10 +220,12 @@ class LoadBalancerPluginDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                   protocol_port,
                                   admin_state_up,
                                   **kwargs)
-        member = self.deserialize(fmt or self.fmt, res)
         if res.status_int >= 400:
-            raise webob.exc.HTTPClientError(code=res.status_int)
+            raise webob.exc.HTTPClientError(
+                explanation=_("Unexpected error code: %s") % res.status_int
+            )
         try:
+            member = self.deserialize(fmt or self.fmt, res)
             yield member
         finally:
             if not no_delete:
@@ -237,10 +245,12 @@ class LoadBalancerPluginDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                           max_retries,
                                           admin_state_up,
                                           **kwargs)
+        if res.status_int >= 400:
+            raise webob.exc.HTTPClientError(
+                explanation=_("Unexpected error code: %s") % res.status_int
+            )
         health_monitor = self.deserialize(fmt or self.fmt, res)
         the_health_monitor = health_monitor['health_monitor']
-        if res.status_int >= 400:
-            raise webob.exc.HTTPClientError(code=res.status_int)
         # make sure:
         # 1. When the type is HTTP/S we have HTTP related attributes in
         #    the result
@@ -836,6 +846,42 @@ class TestLoadBalancer(LoadBalancerPluginDbTestCase):
             res = req.get_response(self.ext_api)
             self.assertEqual(res.status_int, 204)
 
+    def test_delete_healthmonitor_cascade_deletion_of_associations(self):
+        with self.health_monitor(type='HTTP', no_delete=True) as monitor:
+            with self.pool() as pool:
+                data = {
+                    'health_monitor': {
+                        'id': monitor['health_monitor']['id'],
+                        'tenant_id': self._tenant_id
+                    }
+                }
+                req = self.new_create_request(
+                    'pools',
+                    data,
+                    fmt=self.fmt,
+                    id=pool['pool']['id'],
+                    subresource='health_monitors')
+                res = req.get_response(self.ext_api)
+                self.assertEqual(res.status_int, 201)
+
+                ctx = context.get_admin_context()
+
+                # check if we actually have corresponding Pool associations
+                qry = ctx.session.query(ldb.PoolMonitorAssociation)
+                qry = qry.filter_by(monitor_id=monitor['health_monitor']['id'])
+                self.assertTrue(qry.all())
+                # delete the HealthMonitor instance
+                req = self.new_delete_request(
+                    'health_monitors',
+                    monitor['health_monitor']['id']
+                )
+                res = req.get_response(self.ext_api)
+                self.assertEqual(res.status_int, 204)
+                # check if all corresponding Pool associations are deleted
+                qry = ctx.session.query(ldb.PoolMonitorAssociation)
+                qry = qry.filter_by(monitor_id=monitor['health_monitor']['id'])
+                self.assertFalse(qry.all())
+
     def test_show_healthmonitor(self):
         with self.health_monitor() as monitor:
             keys = [('type', "TCP"),
@@ -877,6 +923,31 @@ class TestLoadBalancer(LoadBalancerPluginDbTestCase):
             self._test_list_with_pagination_reverse('health_monitor',
                                                     (m1, m2, m3),
                                                     ('delay', 'asc'), 2, 2)
+
+    def test_update_pool_stats_with_no_stats(self):
+        keys = ["bytes_in", "bytes_out",
+                "active_connections",
+                "total_connections"]
+        with self.pool() as pool:
+            pool_id = pool['pool']['id']
+            ctx = context.get_admin_context()
+            self.plugin._update_pool_stats(ctx, pool_id)
+            pool_obj = ctx.session.query(ldb.Pool).filter_by(id=pool_id).one()
+            for key in keys:
+                self.assertEqual(pool_obj.stats.__dict__[key], 0)
+
+    def test_update_pool_stats(self):
+        stats_data = {"bytes_in": 1,
+                      "bytes_out": 2,
+                      "active_connections": 3,
+                      "total_connections": 4}
+        with self.pool() as pool:
+            pool_id = pool['pool']['id']
+            ctx = context.get_admin_context()
+            self.plugin._update_pool_stats(ctx, pool_id, stats_data)
+            pool_obj = ctx.session.query(ldb.Pool).filter_by(id=pool_id).one()
+            for k, v in stats_data.items():
+                self.assertEqual(pool_obj.stats.__dict__[k], v)
 
     def test_get_pool_stats(self):
         keys = [("bytes_in", 0),
@@ -1060,6 +1131,38 @@ class TestLoadBalancer(LoadBalancerPluginDbTestCase):
                              health_monitor['health_monitor']['id'])
                 self._delete('members', member1['member']['id'])
                 self._delete('members', member2['member']['id'])
+
+    def test_create_pool_health_monitor(self):
+        with contextlib.nested(
+            self.pool(name="pool"),
+            self.health_monitor(),
+            self.health_monitor()
+        ) as (pool, health_mon1, health_mon2):
+                res = self.plugin.create_pool_health_monitor(
+                    context.get_admin_context(),
+                    health_mon1, pool['pool']['id']
+                )
+                self.assertEqual({'health_monitor':
+                                  [health_mon1['health_monitor']['id']]},
+                                 res)
+
+                res = self.plugin.create_pool_health_monitor(
+                    context.get_admin_context(),
+                    health_mon2, pool['pool']['id']
+                )
+                self.assertEqual({'health_monitor':
+                                  [health_mon1['health_monitor']['id'],
+                                   health_mon2['health_monitor']['id']]},
+                                 res)
+
+    def test_create_pool_healthmon_invalid_pool_id(self):
+        with self.health_monitor() as healthmon:
+            self.assertRaises(loadbalancer.PoolNotFound,
+                              self.plugin.create_pool_health_monitor,
+                              context.get_admin_context(),
+                              healthmon,
+                              "123-456-789"
+                              )
 
 
 class TestLoadBalancerXML(TestLoadBalancer):
