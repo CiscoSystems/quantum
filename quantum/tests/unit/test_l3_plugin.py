@@ -24,7 +24,6 @@ import itertools
 
 import mock
 from oslo.config import cfg
-import testtools
 from webob import exc
 import webtest
 
@@ -60,6 +59,12 @@ _get_path = test_api_v2._get_path
 class L3TestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            l3.RESOURCE_ATTRIBUTE_MAP)
         return l3.L3.get_resources()
 
     def get_actions(self):
@@ -337,10 +342,14 @@ class L3NatTestCaseMixin(object):
 
         return router_req.get_response(self.ext_api)
 
-    def _make_router(self, fmt, tenant_id, name=None,
-                     admin_state_up=None, set_context=False):
+    def _make_router(self, fmt, tenant_id, name=None, admin_state_up=None,
+                     external_gateway_info=None, set_context=False):
+        arg_list = (external_gateway_info and
+                    ('external_gateway_info', ) or None)
         res = self._create_router(fmt, tenant_id, name,
-                                  admin_state_up, set_context)
+                                  admin_state_up, set_context,
+                                  arg_list=arg_list,
+                                  external_gateway_info=external_gateway_info)
         return self.deserialize(fmt, res)
 
     def _add_external_gateway_to_router(self, router_id, network_id,
@@ -360,7 +369,8 @@ class L3NatTestCaseMixin(object):
                             expected_code=expected_code)
 
     def _router_interface_action(self, action, router_id, subnet_id, port_id,
-                                 expected_code=exc.HTTPOk.code):
+                                 expected_code=exc.HTTPOk.code,
+                                 expected_body=None):
         interface_data = {}
         if subnet_id:
             interface_data.update({'subnet_id': subnet_id})
@@ -371,13 +381,18 @@ class L3NatTestCaseMixin(object):
                                       "%s_router_interface" % action)
         res = req.get_response(self.ext_api)
         self.assertEqual(res.status_int, expected_code)
-        return self.deserialize(self.fmt, res)
+        response = self.deserialize(self.fmt, res)
+        if expected_body:
+            self.assertEqual(response, expected_body)
+        return response
 
     @contextlib.contextmanager
     def router(self, name='router1', admin_state_up=True,
-               fmt=None, tenant_id=_uuid(), set_context=False):
+               fmt=None, tenant_id=_uuid(),
+               external_gateway_info=None, set_context=False):
         router = self._make_router(fmt or self.fmt, tenant_id, name,
-                                   admin_state_up, set_context)
+                                   admin_state_up, external_gateway_info,
+                                   set_context)
         try:
             yield router
         finally:
@@ -1015,6 +1030,19 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                                   None,
                                                   p['port']['id'])
 
+    def test_router_remove_interface_returns_200(self):
+        with self.router() as r:
+            with self.port(no_delete=True) as p:
+                body = self._router_interface_action('add',
+                                                     r['router']['id'],
+                                                     None,
+                                                     p['port']['id'])
+                self._router_interface_action('remove',
+                                              r['router']['id'],
+                                              None,
+                                              p['port']['id'],
+                                              expected_body=body)
+
     def test_router_remove_interface_wrong_port_returns_404(self):
         with self.router() as r:
             with self.subnet():
@@ -1165,6 +1193,43 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                             public_sub['subnet']['network_id'],
                             port_id=private_port['port']['id'])
                         self.assertEqual(res.status_int, 400)
+                    for p in self._list('ports')['ports']:
+                        if p['device_owner'] == 'network:floatingip':
+                            self.fail('garbage port is not deleted')
+                    self._remove_external_gateway_from_router(
+                        r['router']['id'],
+                        public_sub['subnet']['network_id'])
+                    self._router_interface_action('remove',
+                                                  r['router']['id'],
+                                                  private_sub['subnet']['id'],
+                                                  None)
+
+    def test_floatingip_with_assoc_fails(self):
+        self._test_floatingip_with_assoc_fails(
+            'quantum.db.l3_db.L3_NAT_db_mixin')
+
+    def _test_floatingip_with_ip_generation_failure(self, plugin_class):
+        with self.subnet(cidr='200.0.0.1/24') as public_sub:
+            self._set_net_external(public_sub['subnet']['network_id'])
+            with self.port() as private_port:
+                with self.router() as r:
+                    sid = private_port['port']['fixed_ips'][0]['subnet_id']
+                    private_sub = {'subnet': {'id': sid}}
+                    self._add_external_gateway_to_router(
+                        r['router']['id'],
+                        public_sub['subnet']['network_id'])
+                    self._router_interface_action('add', r['router']['id'],
+                                                  private_sub['subnet']['id'],
+                                                  None)
+                    method = plugin_class + '._update_fip_assoc'
+                    with mock.patch(method) as pl:
+                        pl.side_effect = q_exc.IpAddressGenerationFailure(
+                            net_id='netid')
+                        res = self._create_floatingip(
+                            self.fmt,
+                            public_sub['subnet']['network_id'],
+                            port_id=private_port['port']['id'])
+                        self.assertEqual(res.status_int, exc.HTTPConflict.code)
 
                     for p in self._list('ports')['ports']:
                         if p['device_owner'] == 'network:floatingip':
@@ -1177,10 +1242,6 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                                   r['router']['id'],
                                                   private_sub['subnet']['id'],
                                                   None)
-
-    def test_floatingip_with_assoc_fails(self):
-        self._test_floatingip_with_assoc_fails(
-            'quantum.db.l3_db.L3_NAT_db_mixin')
 
     def test_floatingip_update(self):
         with self.port() as p:
@@ -1243,6 +1304,40 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                  expected_code=exc.HTTPConflict.code)
                     found = True
         self.assertTrue(found)
+
+    def _test_floatingip_with_invalid_create_port(self, plugin_class):
+        with self.port() as p:
+            private_sub = {'subnet': {'id':
+                                      p['port']['fixed_ips'][0]['subnet_id']}}
+            with self.subnet(cidr='12.0.0.0/24') as public_sub:
+                self._set_net_external(public_sub['subnet']['network_id'])
+                res = self._create_router(self.fmt, _uuid())
+                r = self.deserialize(self.fmt, res)
+                self._add_external_gateway_to_router(
+                    r['router']['id'],
+                    public_sub['subnet']['network_id'])
+                self._router_interface_action(
+                    'add', r['router']['id'],
+                    private_sub['subnet']['id'],
+                    None)
+
+                with mock.patch(plugin_class + '.create_port') as createport:
+                    createport.return_value = {'fixed_ips': []}
+                    res = self._create_floatingip(
+                        self.fmt, public_sub['subnet']['network_id'],
+                        port_id=p['port']['id'])
+                    self.assertEqual(res.status_int,
+                                     exc.HTTPBadRequest.code)
+                    self._router_interface_action('remove',
+                                                  r['router']['id'],
+                                                  private_sub
+                                                  ['subnet']['id'],
+                                                  None)
+                    self._delete('routers', r['router']['id'])
+
+    def test_floatingip_with_invalid_create_port(self):
+        self._test_floatingip_with_invalid_create_port(
+            'quantum.db.db_base_plugin_v2.QuantumDbPluginV2')
 
     def test_create_floatingip_no_ext_gateway_return_404(self):
         with self.subnet() as public_sub:
@@ -1327,6 +1422,15 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                 self._delete('floatingips', fp1['floatingip']['id'])
                 self._delete('floatingips', fp2['floatingip']['id'])
                 self._delete('floatingips', fp3['floatingip']['id'])
+
+    def test_floatingip_list_with_port_id(self):
+        with self.floatingip_with_assoc() as fip:
+            port_id = fip['floatingip']['port_id']
+            res = self._list('floatingips',
+                             query_params="port_id=%s" % port_id)
+            self.assertEqual(len(res['floatingips']), 1)
+            res = self._list('floatingips', query_params="port_id=aaa")
+            self.assertEqual(len(res['floatingips']), 0)
 
     def test_floatingip_list_with_pagination(self):
         with contextlib.nested(self.subnet(cidr="10.0.0.0/24"),
@@ -1458,13 +1562,13 @@ class L3NatDBTestCase(L3NatTestCaseBase):
     def test_create_port_external_network_non_admin_fails(self):
         with self.network(router__external=True) as ext_net:
             with self.subnet(network=ext_net) as ext_subnet:
-                with testtools.ExpectedException(
+                with testlib_api.ExpectedException(
                         exc.HTTPClientError) as ctx_manager:
                     with self.port(subnet=ext_subnet,
                                    set_context='True',
                                    tenant_id='noadmin'):
                         pass
-                    self.assertEqual(ctx_manager.exception.code, 403)
+                self.assertEqual(ctx_manager.exception.code, 403)
 
     def test_create_port_external_network_admin_suceeds(self):
         with self.network(router__external=True) as ext_net:
@@ -1474,12 +1578,12 @@ class L3NatDBTestCase(L3NatTestCaseBase):
                                          ext_net['network']['id'])
 
     def test_create_external_network_non_admin_fails(self):
-        with testtools.ExpectedException(exc.HTTPClientError) as ctx_manager:
+        with testlib_api.ExpectedException(exc.HTTPClientError) as ctx_manager:
             with self.network(router__external=True,
                               set_context='True',
                               tenant_id='noadmin'):
                 pass
-            self.assertEqual(ctx_manager.exception.code, 403)
+        self.assertEqual(ctx_manager.exception.code, 403)
 
     def test_create_external_network_admin_suceeds(self):
         with self.network(router__external=True) as ext_net:

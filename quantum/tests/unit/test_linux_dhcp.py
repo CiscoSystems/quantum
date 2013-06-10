@@ -140,6 +140,10 @@ class TestDhcpBase(base.BaseTestCase):
                           dhcp.DhcpBase.existing_dhcp_networks,
                           None, None)
 
+    def test_check_version_abstract_error(self):
+        self.assertRaises(NotImplementedError,
+                          dhcp.DhcpBase.check_version)
+
     def test_base_abc_error(self):
         self.assertRaises(TypeError, dhcp.DhcpBase, None)
 
@@ -444,7 +448,8 @@ class TestDnsmasq(TestBase):
                 argv.__getitem__.side_effect = fake_argv
                 dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork(),
                                   device_delegate=delegate,
-                                  namespace='qdhcp-ns')
+                                  namespace='qdhcp-ns',
+                                  version=float(2.59))
                 dm.spawn_process()
                 self.assertTrue(mocks['_output_opts_file'].called)
                 self.execute.assert_called_once_with(expected,
@@ -482,7 +487,8 @@ tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
 
         with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
             conf_fn.return_value = '/foo/opts'
-            dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork())
+            dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork(),
+                              version=float(2.59))
             dm._output_opts_file()
 
         self.safe.assert_called_once_with('/foo/opts', expected)
@@ -494,7 +500,21 @@ tag:tag0,option:classless-static-route,20.0.0.1/24,20.0.0.1
 tag:tag0,option:router,192.168.0.1""".lstrip()
         with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
             conf_fn.return_value = '/foo/opts'
-            dm = dhcp.Dnsmasq(self.conf, FakeDualNetworkSingleDHCP())
+            dm = dhcp.Dnsmasq(self.conf, FakeDualNetworkSingleDHCP(),
+                              version=float(2.59))
+            dm._output_opts_file()
+
+        self.safe.assert_called_once_with('/foo/opts', expected)
+
+    def test_output_opts_file_single_dhcp_ver2_48(self):
+        expected = """
+tag0,option:dns-server,8.8.8.8
+tag0,option:classless-static-route,20.0.0.1/24,20.0.0.1
+tag0,option:router,192.168.0.1""".lstrip()
+        with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
+            conf_fn.return_value = '/foo/opts'
+            dm = dhcp.Dnsmasq(self.conf, FakeDualNetworkSingleDHCP(),
+                              version=float(2.48))
             dm._output_opts_file()
 
         self.safe.assert_called_once_with('/foo/opts', expected)
@@ -506,7 +526,8 @@ tag:tag0,option:router""".lstrip()
 
         with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
             conf_fn.return_value = '/foo/opts'
-            dm = dhcp.Dnsmasq(self.conf, FakeV4NoGatewayNetwork())
+            dm = dhcp.Dnsmasq(self.conf, FakeV4NoGatewayNetwork(),
+                              version=float(2.59))
             with mock.patch.object(dm, '_make_subnet_interface_ip_map') as ipm:
                 ipm.return_value = {FakeV4SubnetNoGateway.id: '192.168.1.1'}
 
@@ -540,10 +561,54 @@ tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
 
         with mock.patch('os.path.isdir') as isdir:
             isdir.return_value = True
+            with mock.patch.object(dhcp.Dnsmasq, 'active') as active:
+                active.__get__ = mock.Mock(return_value=True)
+                with mock.patch.object(dhcp.Dnsmasq, 'pid') as pid:
+                    pid.__get__ = mock.Mock(return_value=5)
+                    dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork(),
+                                      namespace='qdhcp-ns',
+                                      version=float(2.59))
+
+                    method_name = '_make_subnet_interface_ip_map'
+                    with mock.patch.object(dhcp.Dnsmasq,
+                                           method_name) as ip_map:
+                        ip_map.return_value = {}
+                        dm.reload_allocations()
+                        self.assertTrue(ip_map.called)
+
+        self.safe.assert_has_calls([mock.call(exp_host_name, exp_host_data),
+                                    mock.call(exp_opt_name, exp_opt_data)])
+        self.execute.assert_called_once_with(exp_args, 'sudo')
+
+    def test_reload_allocations_stale_pid(self):
+        exp_host_name = '/dhcp/cccccccc-cccc-cccc-cccc-cccccccccccc/host'
+        exp_host_data = """
+00:00:80:aa:bb:cc,192-168-0-2.openstacklocal,192.168.0.2
+00:00:f3:aa:bb:cc,fdca-3ba5-a17a-4ba3--2.openstacklocal,fdca:3ba5:a17a:4ba3::2
+00:00:0f:aa:bb:cc,192-168-0-3.openstacklocal,192.168.0.3
+00:00:0f:aa:bb:cc,fdca-3ba5-a17a-4ba3--3.openstacklocal,fdca:3ba5:a17a:4ba3::3
+""".lstrip()
+        exp_opt_name = '/dhcp/cccccccc-cccc-cccc-cccc-cccccccccccc/opts'
+        exp_opt_data = "tag:tag0,option:router,192.168.0.1"
+        fake_v6 = 'gdca:3ba5:a17a:4ba3::1'
+        fake_v6_cidr = 'gdca:3ba5:a17a:4ba3::/64'
+        exp_opt_data = """
+tag:tag0,option:dns-server,8.8.8.8
+tag:tag0,option:classless-static-route,20.0.0.1/24,20.0.0.1
+tag:tag0,option:router,192.168.0.1
+tag:tag1,option:dns-server,%s
+tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
+                                                            fake_v6_cidr,
+                                                            fake_v6)
+
+        exp_args = ['cat', '/proc/5/cmdline']
+
+        with mock.patch('os.path.isdir') as isdir:
+            isdir.return_value = True
             with mock.patch.object(dhcp.Dnsmasq, 'pid') as pid:
                 pid.__get__ = mock.Mock(return_value=5)
                 dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork(),
-                                  namespace='qdhcp-ns')
+                                  namespace='qdhcp-ns', version=float(2.59))
 
                 method_name = '_make_subnet_interface_ip_map'
                 with mock.patch.object(dhcp.Dnsmasq, method_name) as ip_map:
@@ -669,3 +734,24 @@ tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
                 mock_listdir.assert_called_once_with(path)
                 self.assertEquals(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
                                   result)
+
+    def _check_version(self, cmd_out, expected_value):
+        with mock.patch('quantum.agent.linux.utils.execute') as cmd:
+            cmd.return_value = cmd_out
+            result = dhcp.Dnsmasq.check_version()
+            self.assertEqual(result, expected_value)
+
+    def test_check_minimum_version(self):
+        self._check_version('Dnsmasq version 2.59 Copyright (c)...',
+                            float(2.59))
+
+    def test_check_future_version(self):
+        self._check_version('Dnsmasq version 2.65 Copyright (c)...',
+                            float(2.65))
+
+    def test_check_fail_version(self):
+        self._check_version('Dnsmasq version 2.48 Copyright (c)...',
+                            float(2.48))
+
+    def test_check_version_failed_cmd_execution(self):
+        self._check_version('Error while executing command', 0)

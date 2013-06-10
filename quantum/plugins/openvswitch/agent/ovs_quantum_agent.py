@@ -28,7 +28,6 @@ from oslo.config import cfg
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import ovs_lib
-from quantum.agent.linux import utils
 from quantum.agent import rpc as agent_rpc
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.common import config as logging_config
@@ -39,6 +38,7 @@ from quantum import context
 from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import loopingcall
+from quantum.openstack.common.rpc import common as rpc_common
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.openvswitch.common import config  # noqa
 from quantum.plugins.openvswitch.common import constants
@@ -47,7 +47,7 @@ from quantum.plugins.openvswitch.common import constants
 LOG = logging.getLogger(__name__)
 
 # A placeholder for dead vlans.
-DEAD_VLAN_TAG = "4095"
+DEAD_VLAN_TAG = str(q_const.MAX_VLAN_TAG + 1)
 
 
 # A class to represent a VIF (i.e., a port that has 'iface-id' and 'vif-mac'
@@ -139,12 +139,6 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
     modifying, or stripping VLAN tags as necessary.
     '''
 
-    # Lower bound on available vlans.
-    MIN_VLAN_TAG = 1
-
-    # Upper bound on available vlans.
-    MAX_VLAN_TAG = 4094
-
     # history
     #   1.0 Initial version
     #   1.1 Support Security Group RPC
@@ -164,9 +158,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         :param enable_tunneling: if True enable GRE networks.
         '''
         self.root_helper = root_helper
-        self.available_local_vlans = set(
-            xrange(OVSQuantumAgent.MIN_VLAN_TAG,
-                   OVSQuantumAgent.MAX_VLAN_TAG))
+        self.available_local_vlans = set(xrange(q_const.MIN_VLAN_TAG,
+                                                q_const.MAX_VLAN_TAG))
         self.int_br = self.setup_integration_br(integ_br)
         self.setup_physical_bridges(bridge_mappings)
         self.local_vlan_map = {}
@@ -185,7 +178,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             'configurations': bridge_mappings,
             'agent_type': q_const.AGENT_TYPE_OVS,
             'start_flag': True}
-        self.setup_rpc(integ_br)
+        self.setup_rpc()
 
         # Security group agent supprot
         self.sg_agent = OVSSecurityGroupAgent(self.context,
@@ -204,8 +197,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         except Exception:
             LOG.exception(_("Failed reporting state!"))
 
-    def setup_rpc(self, integ_br):
-        mac = utils.get_interface_mac(integ_br)
+    def setup_rpc(self):
+        mac = self.int_br.get_local_port_mac()
         self.agent_id = '%s%s' % ('ovs', (mac.replace(":", "")))
         self.topic = topics.AGENT
         self.plugin_rpc = OVSPluginApi(topics.PLUGIN)
@@ -261,14 +254,17 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.treat_vif_port(vif_port, port['id'], port['network_id'],
                             network_type, physical_network,
                             segmentation_id, port['admin_state_up'])
-        if port['admin_state_up']:
-            # update plugin about port status
-            self.plugin_rpc.update_device_up(self.context, port['id'],
-                                             self.agent_id)
-        else:
-            # update plugin about port status
-            self.plugin_rpc.update_device_down(self.context, port['id'],
-                                               self.agent_id)
+        try:
+            if port['admin_state_up']:
+                # update plugin about port status
+                self.plugin_rpc.update_device_up(self.context, port['id'],
+                                                 self.agent_id)
+            else:
+                # update plugin about port status
+                self.plugin_rpc.update_device_down(self.context, port['id'],
+                                                   self.agent_id)
+        except rpc_common.Timeout:
+            LOG.error(_("RPC timeout while updating port %s"), port['id'])
 
     def tunnel_update(self, context, **kwargs):
         LOG.debug(_("tunnel_update received"))
@@ -472,14 +468,13 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                      net_uuid)
             return
         lvm = self.local_vlan_map[net_uuid]
-        if lvm.network_type == 'gre':
-            if self.enable_tunneling:
+
+        vif_port = lvm.vif_ports.pop(vif_id, None)
+        if vif_port:
+            if self.enable_tunneling and lvm.network_type == 'gre':
                 # remove inbound unicast flow
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id,
-                                         dl_dst=lvm.vif_ports[vif_id].vif_mac)
-
-        if vif_id in lvm.vif_ports:
-            del lvm.vif_ports[vif_id]
+                                         dl_dst=vif_port.vif_mac)
         else:
             LOG.info(_('port_unbound: vif_id %s not in local_vlan_map'),
                      vif_id)
@@ -764,6 +759,7 @@ def create_agent_config_map(config):
 def main():
     eventlet.monkey_patch()
     cfg.CONF(project='quantum')
+    cfg.CONF.register_opts(ip_lib.OPTS)
     logging_config.setup_logging(cfg.CONF)
 
     try:
@@ -771,6 +767,12 @@ def main():
     except ValueError as e:
         LOG.error(_('%s Agent terminated!'), e)
         sys.exit(1)
+
+    is_xen_compute_host = 'rootwrap-xen-dom0' in agent_config['root_helper']
+    if is_xen_compute_host:
+        # Force ip_lib to always use the root helper to ensure that ip
+        # commands target xen dom0 rather than domU.
+        cfg.CONF.set_default('ip_lib_force_root', True)
 
     plugin = OVSQuantumAgent(**agent_config)
 

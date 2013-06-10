@@ -25,12 +25,11 @@ from quantum.openstack.common.exception import OpenstackException
 
 
 class QuantumException(OpenstackException):
-    """Base Quantum Exception
+    """Base Quantum Exception.
 
     To correctly use this class, inherit from it and define
     a 'message' property. That message will get printf'd
     with the keyword arguments provided to the constructor.
-
     """
     message = _("An unknown exception occurred.")
 
@@ -63,10 +62,6 @@ class PolicyNotAuthorized(NotAuthorized):
     message = _("Policy doesn't allow %(action)s to be performed.")
 
 
-class ClassNotFound(NotFound):
-    message = _("Class %(class_name)s could not be found")
-
-
 class NetworkNotFound(NotFound):
     message = _("Network %(net_id)s could not be found")
 
@@ -80,8 +75,12 @@ class PortNotFound(NotFound):
                 "on network %(net_id)s")
 
 
-class PolicyNotFound(NotFound):
+class PolicyFileNotFound(NotFound):
     message = _("Policy configuration policy.json could not be found")
+
+
+class PolicyRuleNotFound(NotFound):
+    message = _("Requested rule:%(rule)s cannot be found")
 
 
 class StateInvalid(BadRequest):
@@ -246,6 +245,11 @@ class InvalidExtensionEnv(BadRequest):
     message = _("Invalid extension environment: %(reason)s")
 
 
+class ExternalIpAddressExhausted(BadRequest):
+    message = _("Unable to find any IP address on external "
+                "network %(net_id)s.")
+
+
 class TooManyExternalNetworks(QuantumException):
     message = _("More than one external network exists")
 
@@ -258,3 +262,13 @@ class InvalidConfigurationOption(QuantumException):
 class GatewayConflictWithAllocationPools(InUse):
     message = _("Gateway ip %(ip_address)s conflicts with "
                 "allocation pool %(pool)s")
+
+
+class NetworkVlanRangeError(QuantumException):
+    message = _("Invalid network VLAN range: '%(vlan_range)s' - '%(error)s'")
+
+    def __init__(self, **kwargs):
+        # Convert vlan_range tuple to 'start:end' format for display
+        if isinstance(kwargs['vlan_range'], tuple):
+            kwargs['vlan_range'] = "%d:%d" % kwargs['vlan_range']
+        super(NetworkVlanRangeError, self).__init__(**kwargs)

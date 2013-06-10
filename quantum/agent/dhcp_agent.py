@@ -32,11 +32,11 @@ from quantum.agent import rpc as agent_rpc
 from quantum.common import constants
 from quantum.common import exceptions
 from quantum.common import topics
+from quantum.common import utils
 from quantum import context
 from quantum import manager
 from quantum.openstack.common import importutils
 from quantum.openstack.common import jsonutils
-from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import loopingcall
 from quantum.openstack.common.rpc import proxy
@@ -64,8 +64,8 @@ class DhcpAgent(manager.Manager):
                     help=_("Support Metadata requests on isolated networks.")),
         cfg.BoolOpt('enable_metadata_network', default=False,
                     help=_("Allows for serving metadata requests from a "
-                           "dedicate network. Requires "
-                           "enable isolated_metadata = True ")),
+                           "dedicated network. Requires "
+                           "enable_isolated_metadata = True")),
     ]
 
     def __init__(self, host=None):
@@ -80,6 +80,7 @@ class DhcpAgent(manager.Manager):
         self.device_manager = DeviceManager(self.conf, self.plugin_rpc)
         self.lease_relay = DhcpLeaseRelay(self.update_lease)
 
+        self.dhcp_version = self.dhcp_driver_cls.check_version()
         self._populate_networks_cache()
 
     def _populate_networks_cache(self):
@@ -125,7 +126,8 @@ class DhcpAgent(manager.Manager):
                                           network,
                                           self.root_helper,
                                           self.device_manager,
-                                          self._ns_name(network))
+                                          self._ns_name(network),
+                                          self.dhcp_version)
             getattr(driver, action)()
             return True
 
@@ -184,7 +186,8 @@ class DhcpAgent(manager.Manager):
         for subnet in network.subnets:
             if subnet.enable_dhcp:
                 if self.call_driver('enable', network):
-                    if self.conf.use_namespaces:
+                    if (self.conf.use_namespaces and
+                        self.conf.enable_isolated_metadata):
                         self.enable_isolated_metadata_proxy(network)
                     self.cache.put(network)
                 break
@@ -193,7 +196,8 @@ class DhcpAgent(manager.Manager):
         """Disable DHCP for a network known to the agent."""
         network = self.cache.get_network_by_id(network_id)
         if network:
-            if self.conf.use_namespaces:
+            if (self.conf.use_namespaces and
+                self.conf.enable_isolated_metadata):
                 self.disable_isolated_metadata_proxy(network)
             if self.call_driver('disable', network):
                 self.cache.remove(network)
@@ -201,7 +205,6 @@ class DhcpAgent(manager.Manager):
     def refresh_dhcp_helper(self, network_id):
         """Refresh or disable DHCP for a network depending on the current state
         of the network.
-
         """
         old_network = self.cache.get_network_by_id(network_id)
         if not old_network:
@@ -227,13 +230,13 @@ class DhcpAgent(manager.Manager):
         else:
             self.disable_dhcp_helper(network.id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def network_create_end(self, context, payload):
         """Handle the network.create.end notification event."""
         network_id = payload['network']['id']
         self.enable_dhcp_helper(network_id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def network_update_end(self, context, payload):
         """Handle the network.update.end notification event."""
         network_id = payload['network']['id']
@@ -242,12 +245,12 @@ class DhcpAgent(manager.Manager):
         else:
             self.disable_dhcp_helper(network_id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def network_delete_end(self, context, payload):
         """Handle the network.delete.end notification event."""
         self.disable_dhcp_helper(payload['network_id'])
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def subnet_update_end(self, context, payload):
         """Handle the subnet.update.end notification event."""
         network_id = payload['subnet']['network_id']
@@ -256,7 +259,7 @@ class DhcpAgent(manager.Manager):
     # Use the update handler for the subnet create event.
     subnet_create_end = subnet_update_end
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def subnet_delete_end(self, context, payload):
         """Handle the subnet.delete.end notification event."""
         subnet_id = payload['subnet_id']
@@ -264,7 +267,7 @@ class DhcpAgent(manager.Manager):
         if network:
             self.refresh_dhcp_helper(network.id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def port_update_end(self, context, payload):
         """Handle the port.update.end notification event."""
         port = DictModel(payload['port'])
@@ -276,7 +279,7 @@ class DhcpAgent(manager.Manager):
     # Use the update handler for the port create event.
     port_create_end = port_update_end
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def port_delete_end(self, context, payload):
         """Handle the port.delete.end notification event."""
         port = self.cache.get_port_by_id(payload['port_id'])
@@ -324,7 +327,7 @@ class DhcpAgent(manager.Manager):
         pm = external_process.ProcessManager(
             self.conf,
             network.id,
-            self.conf.root_helper,
+            self.root_helper,
             self._ns_name(network))
         pm.enable(callback)
 
@@ -332,7 +335,7 @@ class DhcpAgent(manager.Manager):
         pm = external_process.ProcessManager(
             self.conf,
             network.id,
-            self.conf.root_helper,
+            self.root_helper,
             self._ns_name(network))
         pm.disable()
 
@@ -656,11 +659,11 @@ class DhcpLeaseRelay(object):
             ip_address = str(netaddr.IPAddress(data['ip_address']))
             lease_remaining = int(data['lease_remaining'])
             self.callback(network_id, ip_address, lease_remaining)
-        except ValueError, e:
+        except ValueError as e:
             LOG.warn(_('Unable to parse lease relay msg to dict.'))
             LOG.warn(_('Exception value: %s'), e)
             LOG.warn(_('Message representation: %s'), repr(msg))
-        except Exception, e:
+        except Exception as e:
             LOG.exception(_('Unable update lease. Exception'))
 
     def start(self):

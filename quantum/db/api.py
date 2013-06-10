@@ -64,9 +64,17 @@ database_opts = [
                 default=False,
                 help=_("Enable the use of eventlet's db_pool for MySQL")),
     cfg.IntOpt('sqlalchemy_pool_size',
-               default=5,
+               default=None,
                help=_("Maximum number of SQL connections to keep open in a "
                       "QueuePool in SQLAlchemy")),
+    cfg.IntOpt('sqlalchemy_max_overflow',
+               default=None,
+               help=_("If set, use this value for max_overflow with "
+                      "sqlalchemy")),
+    cfg.IntOpt('sqlalchemy_pool_timeout',
+               default=None,
+               help=_("If set, use this value for pool_timeout with "
+                      "sqlalchemy")),
 ]
 
 cfg.CONF.register_opts(database_opts, "DATABASE")
@@ -77,10 +85,7 @@ BASE = model_base.BASEV2
 
 
 class MySQLPingListener(object):
-
-    """
-    Ensures that MySQL connections checked out of the
-    pool are alive.
+    """Ensures that MySQL connections checked out of the pool are alive.
 
     Borrowed from:
     http://groups.google.com/group/sqlalchemy/msg/a4ce563d802c929f
@@ -89,7 +94,7 @@ class MySQLPingListener(object):
     def checkout(self, dbapi_con, con_record, con_proxy):
         try:
             dbapi_con.cursor().execute('select 1')
-        except dbapi_con.OperationalError, ex:
+        except dbapi_con.OperationalError as ex:
             if ex.args[0] in (2006, 2013, 2014, 2045, 2055):
                 LOG.warn(_('Got mysql server has gone away: %s'), ex)
                 raise DisconnectionError(_("Database server went away"))
@@ -98,8 +103,7 @@ class MySQLPingListener(object):
 
 
 class SqliteForeignKeysListener(PoolListener):
-    """
-    Ensures that the foreign key constraints are enforced in SQLite.
+    """Ensures that the foreign key constraints are enforced in SQLite.
 
     The foreign key constraints are disabled by default in SQLite,
     so the foreign key constraints will be enabled here for every
@@ -110,9 +114,10 @@ class SqliteForeignKeysListener(PoolListener):
 
 
 def configure_db():
-    """
-    Establish the database, create an engine if needed, and
-    register the models.
+    """Configure database.
+
+    Establish the database, create an engine if needed, and register
+    the models.
     """
     global _ENGINE
     if not _ENGINE:
@@ -127,8 +132,17 @@ def configure_db():
             'pool_recycle': 3600,
             'echo': False,
             'convert_unicode': True,
-            'pool_size': cfg.CONF.DATABASE.sqlalchemy_pool_size,
         }
+
+        if cfg.CONF.DATABASE.sqlalchemy_pool_size is not None:
+            pool_size = cfg.CONF.DATABASE.sqlalchemy_pool_size
+            engine_args['pool_size'] = pool_size
+        if cfg.CONF.DATABASE.sqlalchemy_max_overflow is not None:
+            max_overflow = cfg.CONF.DATABASE.sqlalchemy_max_overflow
+            engine_args['max_overflow'] = max_overflow
+        if cfg.CONF.DATABASE.sqlalchemy_pool_timeout is not None:
+            pool_timeout = cfg.CONF.DATABASE.sqlalchemy_pool_timeout
+            engine_args['pool_timeout'] = pool_timeout
 
         if 'mysql' in connection_dict.drivername:
             engine_args['listeners'] = [MySQLPingListener()]
@@ -233,10 +247,11 @@ def unregister_models(base=BASE):
 
 
 def greenthread_yield(dbapi_con, con_record):
-    """
-    Ensure other greenthreads get a chance to execute by forcing a context
-    switch. With common database backends (eg MySQLdb and sqlite), there is
-    no implicit yield caused by network I/O since they are implemented by
-    C libraries that eventlet cannot monkey patch.
+    """Ensure other greenthreads get a chance to execute.
+
+    This is done by forcing a context switch. With common database
+    backends (eg MySQLdb and sqlite), there is no implicit yield caused
+    by network I/O since they are implemented by C libraries that
+    eventlet cannot monkey patch.
     """
     greenthread.sleep(0)

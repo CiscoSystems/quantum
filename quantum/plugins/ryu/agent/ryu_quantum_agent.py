@@ -52,8 +52,7 @@ LOG = log.getLogger(__name__)
 # This is copied of nova.flags._get_my_ip()
 # Agent shouldn't depend on nova module
 def _get_my_ip():
-    """
-    Returns the actual ip of the local machine.
+    """Return the actual ip of the local machine.
 
     This code figures out what source address would be used if some traffic
     were to be sent out to some well known address on the Internet. In this
@@ -293,7 +292,7 @@ def main():
         agent = OVSQuantumOFPRyuAgent(integ_br, tunnel_ip, ovsdb_ip,
                                       ovsdb_port, polling_interval,
                                       root_helper)
-    except httplib.HTTPException, e:
+    except httplib.HTTPException as e:
         LOG.error(_("Initialization failed: %s"), e)
         sys.exit(1)
 

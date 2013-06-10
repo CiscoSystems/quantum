@@ -57,7 +57,7 @@ class LoadBalancerCallbacks(object):
             up = True  # makes pep8 and sqlalchemy happy
             qry = qry.filter(loadbalancer_db.Vip.admin_state_up == up)
             qry = qry.filter(loadbalancer_db.Pool.admin_state_up == up)
-            return [id for id, in qry.all()]
+            return [id for id, in qry]
 
     def get_logical_device(self, context, pool_id=None, activate=True,
                            **kwargs):
@@ -79,12 +79,12 @@ class LoadBalancerCallbacks(object):
                         m.status = constants.ACTIVE
 
                 for hm in pool.monitors:
-                    if hm.monitor.status in ACTIVE_PENDING:
-                        hm.monitor.status = constants.ACTIVE
+                    if hm.healthmonitor.status in ACTIVE_PENDING:
+                        hm.healthmonitor.status = constants.ACTIVE
 
             if (pool.status != constants.ACTIVE
                 or pool.vip.status != constants.ACTIVE):
-                raise Exception(_('Expected active pool and vip'))
+                raise q_exc.Invalid(_('Expected active pool and vip'))
 
             retval = {}
             retval['pool'] = self.plugin._make_pool_dict(pool)
@@ -104,9 +104,9 @@ class LoadBalancerCallbacks(object):
                 for m in pool.members if m.status == constants.ACTIVE
             ]
             retval['healthmonitors'] = [
-                self.plugin._make_health_monitor_dict(hm.monitor)
+                self.plugin._make_health_monitor_dict(hm.healthmonitor)
                 for hm in pool.monitors
-                if hm.monitor.status == constants.ACTIVE
+                if hm.healthmonitor.status == constants.ACTIVE
             ]
 
             return retval
@@ -114,8 +114,8 @@ class LoadBalancerCallbacks(object):
     def pool_destroyed(self, context, pool_id=None, host=None):
         """Agent confirmation hook that a pool has been destroyed.
 
-           This method exists for subclasses to change the deletion
-           behavior.
+        This method exists for subclasses to change the deletion
+        behavior.
         """
         pass
 
@@ -212,8 +212,7 @@ class LoadBalancerAgentApi(proxy.RpcProxy):
 
 class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
 
-    """
-    Implementation of the Quantum Loadbalancer Service Plugin.
+    """Implementation of the Quantum Loadbalancer Service Plugin.
 
     This class manages the workflow of LBaaS request/response.
     Most DB related works are implemented in class
@@ -222,9 +221,7 @@ class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
     supported_extension_aliases = ["lbaas"]
 
     def __init__(self):
-        """
-        Do the initialization for the loadbalancer service plugin here.
-        """
+        """Do the initialization for the loadbalancer service plugin here."""
         qdbapi.register_models()
 
         self.callbacks = LoadBalancerCallbacks(self)
@@ -278,7 +275,8 @@ class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
             pool['pool']['status'] = constants.PENDING_UPDATE
         p = super(LoadBalancerPlugin, self).update_pool(context, id, pool)
         if p['status'] in ACTIVE_PENDING:
-            self.agent_rpc.reload_pool(context, p['id'])
+            if p['vip_id'] is not None:
+                self.agent_rpc.reload_pool(context, p['id'])
         else:
             self.agent_rpc.destroy_pool(context, p['id'])
         return p
@@ -321,7 +319,7 @@ class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
             )
             qry = qry.filter_by(monitor_id=hm['id'])
 
-            for assoc in qry.all():
+            for assoc in qry:
                 self.agent_rpc.modify_pool(context, assoc['pool_id'])
         return hm
 
@@ -332,7 +330,7 @@ class LoadBalancerPlugin(loadbalancer_db.LoadBalancerPluginDb):
             )
             qry = qry.filter_by(monitor_id=id)
 
-            pool_ids = [a['pool_id'] for a in qry.all()]
+            pool_ids = [a['pool_id'] for a in qry]
             super(LoadBalancerPlugin, self).delete_health_monitor(context, id)
         for pid in pool_ids:
             self.agent_rpc.modify_pool(context, pid)

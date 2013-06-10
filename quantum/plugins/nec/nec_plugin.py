@@ -19,12 +19,14 @@
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
+from quantum.common import exceptions as q_exc
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.db import agents_db
 from quantum.db import agentschedulers_db
 from quantum.db import dhcp_rpc_base
 from quantum.db import extraroute_db
+from quantum.db import l3_gwmode_db
 from quantum.db import l3_rpc_base
 from quantum.db import quota_db  # noqa
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
@@ -38,7 +40,6 @@ from quantum.plugins.nec.common import exceptions as nexc
 from quantum.plugins.nec.db import api as ndb
 from quantum.plugins.nec.db import nec_plugin_base
 from quantum.plugins.nec import ofc_manager
-from quantum import policy
 
 LOG = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class OperationalStatus:
 
 class NECPluginV2(nec_plugin_base.NECPluginV2Base,
                   extraroute_db.ExtraRoute_db_mixin,
+                  l3_gwmode_db.L3_NAT_db_mixin,
                   sg_db_rpc.SecurityGroupServerRpcMixin,
                   agentschedulers_db.AgentSchedulerDbMixin):
     """NECPluginV2 controls an OpenFlow Controller.
@@ -74,10 +76,9 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
     The port binding extension enables an external application relay
     information to and from the plugin.
     """
-    _supported_extension_aliases = ["router", "quotas", "binding",
-                                    "security-group", "extraroute",
-                                    "agent", "agent_scheduler",
-                                    ]
+    _supported_extension_aliases = ["router", "ext-gw-mode", "quotas",
+                                    "binding", "security-group",
+                                    "extraroute", "agent", "agent_scheduler"]
 
     @property
     def supported_extension_aliases(self):
@@ -86,9 +87,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             sg_rpc.disable_security_group_extension_if_noop_driver(aliases)
             self._aliases = aliases
         return self._aliases
-
-    binding_view = "extension:port_binding:view"
-    binding_set = "extension:port_binding:set"
 
     def __init__(self):
         ndb.initialize()
@@ -120,8 +118,9 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
 
         # NOTE: callback_sg is referred to from the sg unit test.
+        self.callback_nec = NECPluginV2RPCCallbacks(self)
         self.callback_sg = SecurityGroupServerRpcCallback()
-        callbacks = [NECPluginV2RPCCallbacks(self),
+        callbacks = [self.callback_nec,
                      DhcpRpcCallback(), L3RpcCallback(),
                      self.callback_sg,
                      agents_db.AgentExtRpcCallback()]
@@ -129,12 +128,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         self.conn.create_consumer(self.topic, self.dispatcher, fanout=False)
         # Consume from all consumers in a thread
         self.conn.consume_in_thread()
-
-    def _check_view_auth(self, context, resource, action):
-        return policy.check(context, action, resource)
-
-    def _enforce_set_auth(self, context, resource, action):
-        policy.enforce(context, action, resource)
 
     def _update_resource_status(self, context, resource, id, status):
         """Update status of specified resource."""
@@ -368,11 +361,10 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
         return [self._fields(net, fields) for net in nets]
 
     def _extend_port_dict_binding(self, context, port):
-        if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
-            port[portbindings.CAPABILITIES] = {
-                portbindings.CAP_PORT_FILTER:
-                'security-group' in self.supported_extension_aliases}
+        port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
+        port[portbindings.CAPABILITIES] = {
+            portbindings.CAP_PORT_FILTER:
+            'security-group' in self.supported_extension_aliases}
         return port
 
     def create_port(self, context, port):
@@ -383,8 +375,7 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             sgids = self._get_security_groups_on_port(context, port)
             port = super(NECPluginV2, self).create_port(context, port)
             self._process_port_create_security_group(
-                context, port['id'], sgids)
-            self._extend_port_dict_security_group(context, port)
+                context, port, sgids)
         self.notify_security_groups_member_updated(context, port)
         self._update_resource_status(context, "port", port['id'],
                                      OperationalStatus.BUILD)
@@ -419,9 +410,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
             else:
                 self.deactivate_port(context, old_port)
 
-        # NOTE: _extend_port_dict_security_group() is called in
-        # update_security_group_on_port() above, so we don't need to
-        # call it here.
         return self._extend_port_dict_binding(context, new_port)
 
     def delete_port(self, context, id, l3_port_check=True):
@@ -455,7 +443,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
     def get_port(self, context, id, fields=None):
         with context.session.begin(subtransactions=True):
             port = super(NECPluginV2, self).get_port(context, id, fields)
-            self._extend_port_dict_security_group(context, port)
             self._extend_port_dict_binding(context, port)
         return self._fields(port, fields)
 
@@ -465,7 +452,6 @@ class NECPluginV2(nec_plugin_base.NECPluginV2Base,
                                                        fields)
             # TODO(amotoki) filter by security group
             for port in ports:
-                self._extend_port_dict_security_group(context, port)
                 self._extend_port_dict_binding(context, port)
         return [self._fields(port, fields) for port in ports]
 
@@ -669,13 +655,16 @@ class NECPluginV2RPCCallbacks(object):
         session = rpc_context.session
         for p in kwargs.get('port_added', []):
             id = p['id']
-            port = self.plugin.get_port(rpc_context, id)
-            if port and ndb.get_portinfo(session, id):
+            portinfo = ndb.get_portinfo(session, id)
+            if portinfo:
                 ndb.del_portinfo(session, id)
-                self.plugin.deactivate_port(rpc_context, port)
             ndb.add_portinfo(session, id, datapath_id, p['port_no'],
                              mac=p.get('mac', ''))
-            self.plugin.activate_port_if_ready(rpc_context, port)
+            port = self._get_port(rpc_context, id)
+            if port:
+                if portinfo:
+                    self.plugin.deactivate_port(rpc_context, port)
+                self.plugin.activate_port_if_ready(rpc_context, port)
         for id in kwargs.get('port_removed', []):
             portinfo = ndb.get_portinfo(session, id)
             if not portinfo:
@@ -683,7 +672,7 @@ class NECPluginV2RPCCallbacks(object):
                             "due to portinfo for port_id=%s was not "
                             "registered"), id)
                 continue
-            if portinfo.datapath_id is not datapath_id:
+            if portinfo.datapath_id != datapath_id:
                 LOG.debug(_("update_ports(): ignore port_removed message "
                             "received from different host "
                             "(registered_datapath_id=%(registered)s, "
@@ -691,7 +680,13 @@ class NECPluginV2RPCCallbacks(object):
                           {'registered': portinfo.datapath_id,
                            'received': datapath_id})
                 continue
-            port = self.plugin.get_port(rpc_context, id)
+            ndb.del_portinfo(session, id)
+            port = self._get_port(rpc_context, id)
             if port:
-                ndb.del_portinfo(session, id)
                 self.plugin.deactivate_port(rpc_context, port)
+
+    def _get_port(self, context, port_id):
+        try:
+            return self.plugin.get_port(context, port_id)
+        except q_exc.PortNotFound:
+            return None
