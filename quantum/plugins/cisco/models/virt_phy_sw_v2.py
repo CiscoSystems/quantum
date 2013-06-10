@@ -158,7 +158,7 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
                 return func(*args)
 
     def _get_segmentation_id(self, *args, **kwargs):
-        vswitch_driver = cfg.CONF.CISCO.vswitch_driver
+        vswitch_driver = cfg.CONF.CISCO_PLUGINS.vswitch_plugin
         if vswitch_driver.endswith('OVSQuantumPluginV2'):
             binding_seg_id = odb.get_network_binding(None, network_id)
             return binding_seg_id.segmentation_id
