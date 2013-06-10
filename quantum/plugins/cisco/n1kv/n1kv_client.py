@@ -21,11 +21,11 @@ import logging
 import base64
 
 from quantum.wsgi import Serializer
-from quantum.extensions import providernet as provider
-from quantum.plugins.cisco.db import network_db_v2 as cdb
-from quantum.plugins.cisco.common import cisco_constants as const
-from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.common import cisco_exceptions as exc
+from quantum.extensions import providernet
+from quantum.plugins.cisco.db import network_db_v2
+from quantum.plugins.cisco.common import cisco_constants
+from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
+from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.extensions import n1kv_profile
 
 LOG = logging.getLogger(__name__)
@@ -39,46 +39,57 @@ class Client(object):
     This client implements functions to communicate with
     Cisco Nexus1000V VSM.
 
-    For every Quantum objects Cisco Nexus1000V Quantum Plugin
+    For every Quantum objects, Cisco Nexus1000V Quantum Plugin
     creates a corresponding object in the controller (Cisco
     Nexus1000V VSM).
 
     CONCEPTS:
 
-    Following are few concepts used in Nexus1000V VSM
+    Following are few concepts used in Nexus1000V VSM:
 
     network-segment:
-
-    Each network-segment represents a broadcast domain
+    Each network-segment represents a broadcast domain.
 
     network-segment-pool:
-
-    A network-segment-pool contains one or more network-segments
+    A network-segment-pool contains one or more network-segments.
 
     logical-network:
+    A logical-network contains one or more network-segment-pools.
 
-    A logical-network contains one or more network-segment-pool
+    bridge-domain:
+    A bridge-domain is created when the network-segment is of type VXLAN.
+    Each VXLAN <--> VLAN combination can be thought of as a bridge domain.
+
+    ip-pool:
+    Each ip-pool represents a subnet on the Nexus1000V VSM.
 
     vm-network:
+    vm-network refers to a network-segment and policy-profile.
+    It maintains a list of ports that uses the network-segment and
+    policy-profile this vm-network refers to.
 
-    vm-network refers to a network and port-profile
-    It also has a list of ports that uses the network and
-    port-profile this vm-network refers to.
+    events:
+    Events correspond to commands that are logged on Nexus1000V VSM.
+    Events are used to poll for a certain resource on Nexus1000V VSM.
+    Events of type "port-profile" will fetch any create/update/deletes
+    of policy-profiles from the VSM. Plugin polls the VSM for policy-profiles
+    regularly, in order to sync Quantum Controller with Nexus1000V VSM.
 
     WORK FLOW:
 
     For every network profile a corresponding logical-network and
-    network-segment-pool under this logical-network will be created
+    a network-segment-pool, under this logical-network, will be created.
 
-    For every network created from a given network profile a
-    network-segment will be added to that network-segment-pool that
-    corresponds to the network profile
+    For every network created from a given network profile, a
+    network-segment will be added to the network-segment-pool corresponding
+    to that network profile.
 
-    A port uses a network and port-profile. Hence for every unique
-    combination of a network and a port-profile a unique vm-network
-    will be created, and a reference to the port will be added. If
-    the same combination is used by another port, the refernce to
-    that port will be added to the same vm-network.
+    A port is created on a network and associated with a policy-profile.
+    Hence for every unique combination of a network and a policy-profile, a
+    unique vm-network will be created and a reference to the port will be
+    added. If the same combination of network and policy-profile is used by
+    another port, the refernce to that port will be added to the same
+    vm-network.
 
 
     """
@@ -89,15 +100,18 @@ class Client(object):
             "attributes": {
                 "network": ["id", "name"],
                 "port": ["id", "mac_address"],
-                "subnet": ["id", "prefix"]},
+                "subnet": ["id", "prefix"]
+            },
         },
         "plurals": {
             "networks": "network",
             "ports": "port",
             "set": "instance",
-            "subnets": "subnet", }, }
+            "subnets": "subnet"
+        }
+    }
 
-    # Define paths here
+    # Define paths for the URI where the client connects for HTTP requests.
     profiles_path = "/virtual-port-profile"
     network_segments_path = "/vm-network-definition"
     network_segment_path = "/vm-network-definition/%s"
@@ -111,34 +125,44 @@ class Client(object):
     vm_network_path = "/vm-network/%s"
     bridge_domains_path = "/bridge-domain"
     bridge_domain_path = "/bridge-domain/%s"
-    fabric_networks_path = "/fabric-network"
+    logical_networks_path = "/fabric-network"
     events_path = "/events"
 
     def list_profiles(self, **_params):
         """
-        Fetches a list of all policy profiles from VSM.
+        Fetch a list of all policy profiles from VSM. VSM returns this
+        list of policy profiles in XML format.
         """
-        return self._get(self.profiles_path, params=_params)
+        return self._get(self.profiles_path,
+                         params=_params)
 
     def list_events(self, event_type=None, epoch=None, **_params):
         """
-        Fetches a list of events from the VSM.
+        Fetch a list of events from the VSM.
         Event type: port_profile
-        Event type of port_profile retrieves all updates/create/deletes
+        Event type of port_profile: Return all updates/create/deletes
         of port profiles from the VSM.
+        Event type of port_profile_update: Return updates regarding
+        policy-profiles only.
+        Event type of port_profile_delete: Return deleted policy profiles
+        only.
+        All events 
         """
         if event_type:
             self.events_path = self.events_path + '?type=' + event_type
-        return self._get(self.events_path, params=_params)
+        return self._get(self.events_path,
+                         params=_params)
 
     def create_bridge_domain(self, network, **_params):
         """
         Creates a Bridge Domain on VSM
         """
         body = {'name': network['name'] + '_bd',
-                'segmentId': network[provider.SEGMENTATION_ID],
+                'segmentId': network[providernet.SEGMENTATION_ID],
                 'groupIp': network[n1kv_profile.MULTICAST_IP], }
-        return self._post(self.bridge_domains_path, body=body, params=_params)
+        return self._post(self.bridge_domains_path,
+                          body=body,
+                          params=_params)
 
     def delete_bridge_domain(self, name, **_params):
         """
@@ -154,11 +178,12 @@ class Client(object):
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': profile['name'], }
-        if network[provider.NETWORK_TYPE] == const.TYPE_VLAN:
-            body.update({'vlan': network[provider.SEGMENTATION_ID]})
-        if network[provider.NETWORK_TYPE] == const.TYPE_VXLAN:
+        if network[providernet.NETWORK_TYPE] == cisco_constants.TYPE_VLAN:
+            body.update({'vlan': network[providernet.SEGMENTATION_ID]})
+        if network[providernet.NETWORK_TYPE] == cisco_constants.TYPE_VXLAN:
             body.update({'bridgeDomain': network['name'] + '_bd'})
-        return self._post(self.network_segments_path, body=body,
+        return self._post(self.network_segments_path,
+                          body=body,
                           params=_params)
 
     def update_network_segment(self, network_segment, body):
@@ -174,13 +199,15 @@ class Client(object):
         """
         return self._delete(self.network_segment_path % (network_segment))
 
-    def create_fabric_network(self, profile, **_params):
+    def create_logical_network(self, profile, **_params):
         """
-        Creates a Fabric Network on the VSM
+        Creates a Logical Network on the VSM
         """
-        LOG.debug("fabric network")
+        LOG.debug("logical network")
         body = {'name': profile['name']}
-        return self._post(self.fabric_networks_path, body=body, params=_params)
+        return self._post(self.logical_networks_path,
+                          body=body,
+                          params=_params)
 
     def create_network_segment_pool(self, profile, **_params):
         """
@@ -190,7 +217,8 @@ class Client(object):
         body = {'name': profile['name'],
                 'id': profile['id'],
                 'fabricNetworkName': 'test'}
-        return self._post(self.network_segment_pools_path, body=body,
+        return self._post(self.network_segment_pools_path,
+                          body=body,
                           params=_params)
 
     def update_network_segment_pool(self, network_segment_pool, body):
@@ -198,7 +226,8 @@ class Client(object):
         Updates a Network Segment Pool on the VSM
         """
         return self._post(self.network_segment_pool_path %
-                          (network_segment_pool), body=body)
+                          (network_segment_pool),
+                          body=body)
 
     def delete_network_segment_pool(self, network_segment_pool, **_params):
         """
@@ -267,7 +296,9 @@ class Client(object):
                 'ipAddressSubnet': netmask,
                 'name': subnet['name'],
                 'gateway': subnet['gateway_ip'], }
-        return self._post(self.ip_pools_path, body=body, params=_params)
+        return self._post(self.ip_pools_path,
+                          body=body,
+                          params=_params)
 
     def delete_ip_pool(self, subnet_name):
         """
@@ -288,7 +319,9 @@ class Client(object):
                 'portProfile': policy_profile['name'],
                 'portProfileId': policy_profile['id'],
                 }
-        return self._post(self.vm_networks_path, body=body, params=_params)
+        return self._post(self.vm_networks_path,
+                          body=body,
+                          params=_params)
 
     def delete_vm_network(self, vm_network_name):
         """
@@ -302,7 +335,9 @@ class Client(object):
         """
         body = {'id': port['id'],
                 'macAddress': port['mac_address']}
-        return self._post(self.ports_path % (name), body=body, params=_params)
+        return self._post(self.ports_path % (name),
+                          body=body,
+                          params=_params)
 
     def update_n1kv_port(self, vm_network_name, port_id, body):
         """
@@ -329,9 +364,9 @@ class Client(object):
         to fulfill the http request.
         """
         if status_code == httplib.INTERNAL_SERVER_ERROR:
-            raise exc.VSMError(reason=_(replybody))
+            raise c_exc.VSMError(reason=_(replybody))
         elif status_code == httplib.SERVICE_UNAVAILABLE:
-            raise exc.VSMConnectionFailed
+            raise c_exc.VSMConnectionFailed
 
     def _do_request(self, method, action, body=None,
                     headers=None, params=None):
@@ -426,17 +461,17 @@ class Client(object):
         ip address.
         """
         host_list = []
-        credentials = cdb.get_all_n1kv_credentials()
+        credentials = network_db_v2.get_all_n1kv_credentials()
         for cr in credentials:
-            host_list.append(cr[const.CREDENTIAL_NAME])
+            host_list.append(cr[cisco_constants.CREDENTIAL_NAME])
         return host_list
 
     def _get_header(self, host_ip):
         """
         Returns a header with auth info for the VSM
         """
-        username = cred.Store.get_username(host_ip)
-        password = cred.Store.get_password(host_ip)
+        username = c_cred.Store.get_username(host_ip)
+        password = c_cred.Store.get_password(host_ip)
         auth = base64.encodestring("%s:%s" % (username, password))
         headers = {"Authorization": "Basic %s" % auth,
                    "Content-Type": "application/json"}

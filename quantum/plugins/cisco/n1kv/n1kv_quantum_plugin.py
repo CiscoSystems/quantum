@@ -466,13 +466,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _send_register_request(self):
         LOG.debug('_send_register_request')
 
-    def _send_create_fabric_network_request(self, profile):
+    def _send_create_logical_network_request(self, profile):
         """
-        Send Create fabric network request to VSM.
+        Send Create logical network request to VSM.
         """
-        LOG.debug('_send_create_fabric_network')
+        LOG.debug('_send_create_logical_network')
         n1kvclient = n1kv_client.Client()
-        n1kvclient.create_fabric_network(profile)
+        n1kvclient.create_logical_network(profile)
 
     def _send_create_network_profile_request(self, context, profile):
         """
@@ -888,9 +888,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.vxlan_id_ranges = []
             self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
             n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
-        # TODO: VSM currently does not support fabric network creation.
+        # TODO: VSM currently does not support logical network creation.
         #      Uncomment the following once VSM supports creation via REST api.
-        # self._send_create_fabric_network_request(_network_profile)
+        # self._send_create_logical_network_request(_network_profile)
         try:
             self._send_create_network_profile_request(context,
                                                       _network_profile)
