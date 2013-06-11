@@ -1,10 +1,10 @@
 from sqlalchemy.orm import exc
 
 import quantum.db.api as db
-from quantum import manager
 from quantum.db import models_v2
 from quantum.db import securitygroups_db as sg_db
 from quantum.extensions import securitygroup as ext_sg
+from quantum import manager
 from quantum.openstack.common import log as logging
 from quantum.plugins.opendaylight import odl_models
 

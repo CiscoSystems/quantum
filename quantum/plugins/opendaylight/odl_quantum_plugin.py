@@ -12,11 +12,11 @@ from quantum.common import constants as q_const
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.db import agents_db
+from quantum.db.db_base_plugin_v2 import QuantumDbPluginV2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_rpc_base
-from quantum.db import securitygroups_rpc_base as sg_db_rpc
-from quantum.db.db_base_plugin_v2 import QuantumDbPluginV2
 from quantum.db.securitygroups_db import SecurityGroupDbMixin
+from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
@@ -57,6 +57,7 @@ class SegmentationManager(object):
             segment_id = odl_db.allocate_network_segment(
                 session, network_id, 'gre',
                 cfg.CONF.ODL.network_tunnel_ranges)
+            LOG.debug(_("GRE segment_id: %d") % segment_id)
 
     def delete_segment_binding(self, session, network_id):
         LOG.debug(_("Deleting segment allocation"))
