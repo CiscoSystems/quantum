@@ -84,11 +84,11 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         self.notifier = notifier
 
     def create_rpc_dispatcher(self):
-        '''Get the rpc dispatcher for this manager.
+        """Get the rpc dispatcher for this manager.
 
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
-        '''
+        """
         return q_rpc.PluginRpcDispatcher([self,
                                           agents_db.AgentExtRpcCallback()])
 
@@ -232,7 +232,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         1. Initialize Nexus1000v and Credential DB
         2. Establish communication with Cisco Nexus1000V
-        3. Retrieve port-profiles
         """
         n1kv_db_v2.initialize()
         cred.Store.initialize()
@@ -243,9 +242,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'extensions:quantum/plugins/cisco/extensions')
         self._setup_vsm()
         # TBD : Temporary change to enabld dhcp. To be removed
-        self.setup_rpc()
+        self._setup_rpc()
 
-    def setup_rpc(self):
+    def _setup_rpc(self):
         # RPC support
         self.topic = topics.PLUGIN
         self.conn = rpc.create_connection(new=True)
@@ -263,7 +262,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """ Establish Communication with Cisco Nexus1000V VSM """
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
-        self._send_register_request()
         # Retrieve all the policy profiles from VSM.
         self._populate_policy_profiles()
         # Continue to poll VSM for any create/delete of policy profiles.
@@ -461,10 +459,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             raise q_exc.InvalidInput(error_message=msg)
 
         return (profile_id)
-
-    # TBD: remove added for compilation
-    def _send_register_request(self):
-        LOG.debug('_send_register_request')
 
     def _send_create_logical_network_request(self, profile):
         """

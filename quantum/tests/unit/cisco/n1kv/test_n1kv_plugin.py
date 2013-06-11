@@ -84,7 +84,6 @@ def _fake_add_dummy_profile_for_test(self, obj):
 def _fake_setup_vsm(self):
     """ Fake establish Communication with Cisco Nexus1000V VSM """
     self.agent_vsm = True
-    self._send_register_request()
     self._poll_policies(event_type="port_profile")
 
 
