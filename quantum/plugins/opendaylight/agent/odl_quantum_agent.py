@@ -20,7 +20,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-# @author: Kyle Mestery
+# @author: Kyle Mestery, Cisco Systems, Inc.
 
 import httplib
 import socket
