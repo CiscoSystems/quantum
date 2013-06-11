@@ -39,6 +39,7 @@ from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
+from quantum.plugins.opendaylight import config  # noqa
 from quantum.plugins.opendaylight import odl_db
 from quantum.plugins.opendaylight import odl_xml_snippets
 
