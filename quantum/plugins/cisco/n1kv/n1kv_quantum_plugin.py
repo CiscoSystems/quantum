@@ -275,7 +275,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug('_populate_policy_profiles')
         n1kvclient = n1kv_client.Client()
-        policy_profiles = n1kvclient.list_profiles()
+        policy_profiles = n1kvclient.list_port_profiles()
         for profile in policy_profiles['body'][const.SET]:
             if const.ID and const.NAME in profile:
                 profile_id = profile[const.PROPERTIES][const.ID]

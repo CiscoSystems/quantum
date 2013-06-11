@@ -47,6 +47,11 @@ class Client(object):
 
     Following are few concepts used in Nexus1000V VSM:
 
+    port-profiles:
+    Policy profiles correspond to port profiles on Nexus1000V VSM.
+    Port profiles are the primary mechanism by which network policy is
+    defined and applied to switch interfaces in a Nexus 1000V system.
+
     network-segment:
     Each network-segment represents a broadcast domain.
 
@@ -71,9 +76,12 @@ class Client(object):
     events:
     Events correspond to commands that are logged on Nexus1000V VSM.
     Events are used to poll for a certain resource on Nexus1000V VSM.
-    Events of type "port-profile" will fetch any create/update/deletes
-    of policy-profiles from the VSM. Plugin polls the VSM for policy-profiles
-    regularly, in order to sync Quantum Controller with Nexus1000V VSM.
+    Event type of port_profile: Return all updates/create/deletes
+    of port profiles from the VSM.
+    Event type of port_profile_update: Return only updates regarding
+    policy-profiles.
+    Event type of port_profile_delete: Return only deleted policy profiles.
+
 
     WORK FLOW:
 
@@ -94,6 +102,19 @@ class Client(object):
 
     """
 
+    def __init__(self, **kwargs):
+        """ Initialize a new client for the plugin """
+        self.format = 'json'
+        self.action_prefix = '/api/hyper-v'
+        self.hosts = self._get_vsm_hosts()
+        netmask_to_str = lambda b: "%d.%d.%d.%d" % ((b & 0xff000000) >> 24,
+                                                    (b & 0xff0000) >> 16,
+                                                    (b & 0xff00) >> 8,
+                                                    (b & 0xff))
+        self.cidr_lookup_table = \
+            dict([(i, netmask_to_str((2 ** 32) - (2 ** (32 - i))))
+                  for i in xrange(33)])
+
     # Metadata for deserializing xml
     _serialization_metadata = {
         "application/xml": {
@@ -112,7 +133,7 @@ class Client(object):
     }
 
     # Define paths for the URI where the client connects for HTTP requests.
-    profiles_path = "/virtual-port-profile"
+    port_profiles_path = "/virtual-port-profile"
     network_segments_path = "/vm-network-definition"
     network_segment_path = "/vm-network-definition/%s"
     network_segment_pools_path = "/fabric-network-definition"
@@ -128,160 +149,129 @@ class Client(object):
     logical_networks_path = "/fabric-network"
     events_path = "/events"
 
-    def list_profiles(self, **_params):
+    def list_port_profiles(self):
         """
-        Fetch a list of all policy profiles from VSM. VSM returns this
-        list of policy profiles in XML format.
-        """
-        return self._get(self.profiles_path,
-                         params=_params)
+        Fetch all policy profiles from the VSM.
 
-    def list_events(self, event_type=None, epoch=None, **_params):
+        :returns: XML string
         """
-        Fetch a list of events from the VSM.
-        Event type: port_profile
-        Event type of port_profile: Return all updates/create/deletes
-        of port profiles from the VSM.
-        Event type of port_profile_update: Return updates regarding
-        policy-profiles only.
-        Event type of port_profile_delete: Return deleted policy profiles
-        only.
-        All events 
+        return self._get(self.port_profiles_path)
+
+    def list_events(self, event_type=None, epoch=None):
+        """
+        Fetch all events of event_type from the VSM.
+
+        :param event_type: type of event to be listed.
+        :param epoch: timestamp after which the events occurred to be listed.
+        :returns: XML string
         """
         if event_type:
             self.events_path = self.events_path + '?type=' + event_type
-        return self._get(self.events_path,
-                         params=_params)
+        return self._get(self.events_path)
 
-    def create_bridge_domain(self, network, **_params):
+    def create_bridge_domain(self, network):
         """
-        Creates a Bridge Domain on VSM
+        Create a bridge domain on VSM.
+
+        :param network: network dict
         """
         body = {'name': network['name'] + '_bd',
                 'segmentId': network[providernet.SEGMENTATION_ID],
                 'groupIp': network[n1kv_profile.MULTICAST_IP], }
         return self._post(self.bridge_domains_path,
-                          body=body,
-                          params=_params)
+                          body=body)
 
-    def delete_bridge_domain(self, name, **_params):
+    def delete_bridge_domain(self, name):
         """
-        Deletes a Bridge Domain on VSM
+        Delete a bridge domain on VSM
+
+        :param name: name of the bridge domain to be deleted
         """
         return self._delete(self.bridge_domain_path % (name))
 
-    def create_network_segment(self, network, profile, **_params):
+    def create_network_segment(self, network, network_profile):
         """
-        Creates a Nework Segment on the VSM
+        Create a network segment on the VSM
+
+        :param network: network dict
+        :param network_profile: network profile dict
         """
-        LOG.debug("seg id %s\n", profile['name'])
+        LOG.debug("seg id %s\n", network_profile['name'])
         body = {'name': network['name'],
                 'id': network['id'],
-                'networkDefinition': profile['name'], }
+                'networkDefinition': network_profile['name'], }
         if network[providernet.NETWORK_TYPE] == cisco_constants.TYPE_VLAN:
             body.update({'vlan': network[providernet.SEGMENTATION_ID]})
         if network[providernet.NETWORK_TYPE] == cisco_constants.TYPE_VXLAN:
             body.update({'bridgeDomain': network['name'] + '_bd'})
         return self._post(self.network_segments_path,
-                          body=body,
-                          params=_params)
-
-    def update_network_segment(self, network_segment, body):
-        """
-        Updates a Nework Segment on the VSM
-        """
-        return self._post(self.network_segment_path % (network_segment),
                           body=body)
 
-    def delete_network_segment(self, network_segment, **_params):
+    def update_network_segment(self, network_segment_name, body):
         """
-        Deletes a Nework Segment on the VSM
-        """
-        return self._delete(self.network_segment_path % (network_segment))
+        Update a network segment on the VSM
 
-    def create_logical_network(self, profile, **_params):
+        Network segment on VSM can be updated to associate it with an ip-pool
+        or update its description and segment id.
+
+        :param network_segment_name: name of the network segment
+        :param body: dict of arguments to be updated
         """
-        Creates a Logical Network on the VSM
+        return self._post(self.network_segment_path % (network_segment_name),
+                          body=body)
+
+    def delete_network_segment(self, network_segment_name):
+        """
+        Delete a network segment on the VSM
+
+        :param network_segment_name: name of the network segment
+        """
+        return self._delete(self.network_segment_path % (network_segment_name))
+
+    def create_logical_network(self, network_profile):
+        """
+        Create a logical network on the VSM
+
+        :param network_profile: network profile dict
         """
         LOG.debug("logical network")
-        body = {'name': profile['name']}
+        body = {'name': network_profile['name']}
         return self._post(self.logical_networks_path,
-                          body=body,
-                          params=_params)
-
-    def create_network_segment_pool(self, profile, **_params):
-        """
-        Creates a Network Segment Pool on the VSM
-        """
-        LOG.debug("network_segment_pool")
-        body = {'name': profile['name'],
-                'id': profile['id'],
-                'fabricNetworkName': 'test'}
-        return self._post(self.network_segment_pools_path,
-                          body=body,
-                          params=_params)
-
-    def update_network_segment_pool(self, network_segment_pool, body):
-        """
-        Updates a Network Segment Pool on the VSM
-        """
-        return self._post(self.network_segment_pool_path %
-                          (network_segment_pool),
                           body=body)
 
-    def delete_network_segment_pool(self, network_segment_pool, **_params):
+    def create_network_segment_pool(self, network_profile):
         """
-        Deletes a Network Segment Pool on the VSM
+        Create a network segment pool on the VSM
+
+        :param network_profile: network profile dict
+        """
+        LOG.debug("network_segment_pool")
+        body = {'name': network_profile['name'],
+                'id': network_profile['id'],
+                'fabricNetworkName': 'test'}
+        return self._post(self.network_segment_pools_path,
+                          body=body)
+
+    def delete_network_segment_pool(self, network_segment_pool_name):
+        """
+        Delete a network segment pool on the VSM
+
+        :param network_segment_pool_name: name of the network segment pool
         """
         return self._delete(self.network_segment_pool_path %
-                            (network_segment_pool))
+                            (network_segment_pool_name))
 
-    def create_ip_pool(self, subnet, **_params):
+    def create_ip_pool(self, subnet):
         """
-        Creates an ip-pool on the VSM
-        """
-        cidr = {'0': '0.0.0.0',
-                '1': '128.0.0.0',
-                '2': '192.0.0.0',
-                '3': '224.0.0.0',
-                '4': '240.0.0.0',
-                '5': '248.0.0.0',
-                '6': '252.0.0.0',
-                '7': '254.0.0.0',
-                '8': '255.0.0.0',
-                '9': '255.128.0.0',
-                '10': '255.192.0.0',
-                '11': '255.224.0.0',
-                '12': '255.240.0.0',
-                '13': '255.248.0.0',
-                '14': '255.252.0.0',
-                '15': '255.254.0.0',
-                '16': '255.255.0.0',
-                '17': '255.255.128.0',
-                '18': '255.255.192.0',
-                '19': '255.255.224.0',
-                '20': '255.255.240.0',
-                '21': '255.255.248.0',
-                '22': '255.255.252.0',
-                '23': '255.255.254.0',
-                '24': '255.255.255.0',
-                '25': '255.255.255.128',
-                '26': '255.255.255.192',
-                '27': '255.255.255.224',
-                '28': '255.255.255.240',
-                '29': '255.255.255.248',
-                '30': '255.255.255.252',
-                '31': '255.255.255.254',
-                '32': '255.255.255.255', }
+        Create an ip-pool on the VSM
 
+        :param subnet: subnet dict
+        """
         if subnet['cidr']:
-            cidr_block = subnet['cidr'].split('/')[1]
-            if int(cidr_block) in range(0, 32):
-                netmask = cidr[cidr_block]
-            else:
-                netmask = ''
+            mask_len = subnet['cidr'].split('/')[1]
+            netmask = self.cidr_lookup_table.get(int(mask_len), "")
         else:
-            netmask = ''
+            netmask = ""
 
         if subnet['allocation_pools']:
             address_range_start = subnet['allocation_pools'][0]['start']
@@ -297,71 +287,82 @@ class Client(object):
                 'name': subnet['name'],
                 'gateway': subnet['gateway_ip'], }
         return self._post(self.ip_pools_path,
-                          body=body,
-                          params=_params)
+                          body=body)
 
     def delete_ip_pool(self, subnet_name):
         """
-        Deletes an ip-pool on the VSM
+        Delete an ip-pool on the VSM
+
+        :param subnet_name: name of the subnet
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
     # TODO: Removing tenantId from the request as a temp fix to allow
     #       port create. VSM CLI needs to be fixed. Should not interfere
     #       since VSM is not using tenantId as of now.
-    def create_vm_network(self, port, name, policy_profile, **_params):
+    def create_vm_network(self, port, vm_network_name, policy_profile):
         """
-        Creates a VM Network on the VSM
+        Create a VM network on the VSM
+
+        :param port: port dict
+        :param vm_network_name: name of the VM network
+        :param policy_profile: policy profile dict
         """
-        body = {'name': name,
+        body = {'name': vm_network_name,
                 #'tenantId': port['tenant_id'],
                 'vmNetworkDefinition': port['network_id'],
                 'portProfile': policy_profile['name'],
                 'portProfileId': policy_profile['id'],
                 }
         return self._post(self.vm_networks_path,
-                          body=body,
-                          params=_params)
+                          body=body)
 
     def delete_vm_network(self, vm_network_name):
         """
-        Deletes a VM Network on the VSM
+        Delete a VM network on the VSM
+
+        :param vm_network_name: name of the VM network
         """
         return self._delete(self.vm_network_path % (vm_network_name))
 
-    def create_n1kv_port(self, port, name, **_params):
+    def create_n1kv_port(self, port, vm_network_name):
         """
-        Creates a Port on the VSM
+        Create a port on the VSM
+
+        :param port: port dict
+        :param vm_network_name: name of the VM network which imports this port
         """
         body = {'id': port['id'],
                 'macAddress': port['mac_address']}
-        return self._post(self.ports_path % (name),
-                          body=body,
-                          params=_params)
+        return self._post(self.ports_path % (vm_network_name),
+                          body=body)
 
     def update_n1kv_port(self, vm_network_name, port_id, body):
         """
-        Updates a Port on the VSM
+        Update a port on the VSM
+
+        Update the mac address associated with the port
+
+        :param vm_network_name: name of the VM network which imports this port
+        :param port_id: UUID of the port
+        :param body: dict of the arguments to be updated
         """
         return self._post(self.port_path % ((vm_network_name), (port_id)),
                           body=body)
 
-    def delete_n1kv_port(self, vm_network_name, port_id, **_params):
+    def delete_n1kv_port(self, vm_network_name, port_id):
         """
-        Deletes a Port on the VSM
+        Delete a port on the VSM
+
+        :param vm_network_name: name of the VM network which imports this port
+        :param port_id: UUID of the port
         """
         return self._delete(self.port_path % ((vm_network_name), (port_id)))
-
-    def __init__(self, **kwargs):
-        """ Initialize a new client for the Plugin v2.0. """
-        self.format = 'json'
-        self.action_prefix = '/api/hyper-v'
-        self.hosts = self._get_vsm_hosts()
 
     def _handle_fault_response(self, status_code, replybody):
         """
         VSM responds with a INTERNAL SERVER ERRROR code (500) when VSM fails
-        to fulfill the http request.
+        to fulfill the HTTP request.
         """
         if status_code == httplib.INTERNAL_SERVER_ERROR:
             raise c_exc.VSMError(reason=_(replybody))
@@ -369,16 +370,29 @@ class Client(object):
             raise c_exc.VSMConnectionFailed
 
     def _do_request(self, method, action, body=None,
-                    headers=None, params=None):
+                    headers=None):
         """
         Perform the HTTP request
+
+        The response is in either XML format or plain text. A GET method will
+        invoke a XML response while a PUT/POST/DELETE returns message from the
+        VSM in plain text format.
+        Exception is raised when VSM replies with an INTERNAL SERVER ERROR HTTP
+        status code (500) i.e. an error has occurred on the VSM or SERVICE
+        UNAVAILABLE (503) i.e. VSM is not reachable.
+
+        :param method: type of the HTTP request. POST, GET, PUT or DELETE
+        :param action: path to which the client makes request
+        :param body: dict for arguments which are sent as part of the request
+        :param headers: header for the HTTP request
+        :returns: XML or plain text in HTTP response
         """
         action = self.action_prefix + action
         if not headers and self.hosts:
-            headers = self._get_header(self.hosts[0])
+            headers = self._get_auth_header(self.hosts[0])
+        headers.update({'Content-Type': self._set_content_type('json')})
         if body:
-            body = self._serialize(body)
-            body = body + '  '
+            body = "%s  " % self._serialize(body)
             LOG.debug("req: %s", body)
         conn = httplib.HTTPConnection(self.hosts[0])
         conn.request(method, action, body, headers)
@@ -387,19 +401,22 @@ class Client(object):
         replybody = resp.read()
         status_code = self._get_status_code(resp)
         LOG.debug("status_code %s\n", status_code)
-        if status_code == httplib.OK and 'application/xml' in _content_type:
-            return self._deserialize(replybody, status_code)
-        elif status_code == httplib.OK and 'text/plain' in _content_type:
-            LOG.debug("VSM: %s", replybody)
-        elif status_code in (httplib.INTERNAL_SERVER_ERROR,
-                             httplib.NOT_FOUND,
-                             httplib.SERVICE_UNAVAILABLE):
-            self._handle_fault_response(status_code, replybody)
+        if status_code == httplib.OK:
+            if 'application/xml' in _content_type:
+                return self._deserialize(replybody, status_code)
+            elif 'text/plain' in _content_type:
+                LOG.debug("VSM: %s", replybody)
+        elif status_code == httplib.INTERNAL_SERVER_ERROR:
+            raise c_exc.VSMError(reason=_(replybody))
+        elif status_code == httplib.SERVICE_UNAVAILABLE:
+            raise c_exc.VSMConnectionFailed
 
     def _get_status_code(self, response):
         """
-        Returns the integer status code from the response, which
-        can be either a Webob.Response (used in testing) or httplib.Response
+        Return status code from the HTTP response.
+
+        :param response: HTTP response string
+        :returns: HTTP status code in integer format
         """
         if hasattr(response, 'status_int'):
             return response.status_int
@@ -408,8 +425,9 @@ class Client(object):
 
     def _serialize(self, data):
         """
-        Serializes a dictionary with a single key (which can contain any
-        structure) into either xml or json
+        Serialize a dictionary with a single key into either xml or json
+
+        :param data: data in the form of dict
         """
         if data is None:
             return None
@@ -421,8 +439,11 @@ class Client(object):
 
     def _deserialize(self, data, status_code):
         """
-        Deserializes an xml string into a dictionary
-        We choose xml since VSM returns an xml.
+        Deserialize an XML string into a dictionary
+
+        :param data: XML string from the HTTP response
+        :param status_code: integer status code from the HTTP response
+        :return: data in the form of dict
         """
         if status_code == 204:
             return data
@@ -431,34 +452,36 @@ class Client(object):
 
     def _set_content_type(self, format=None):
         """
-        Returns the mime-type for either 'xml' or 'json'.  Defaults to the
-        currently set format
+        Set the mime-type to either 'xml' or 'json'.
+
+        :param format: format to be set.
+        :return: mime-type string
         """
         if not format:
             format = self.format
         return "application/%s" % (format)
 
-    def _delete(self, action, body=None, headers=None, params=None):
+    def _delete(self, action, body=None, headers=None):
         return self._do_request("DELETE", action, body=body,
-                                headers=headers, params=params)
+                                headers=headers)
 
-    def _get(self, action, body=None, headers=None, params=None):
+    def _get(self, action, body=None, headers=None):
         return self._do_request("GET", action, body=body,
-                                headers=headers, params=params)
+                                headers=headers)
 
-    def _post(self, action, body=None, headers=None, params=None):
+    def _post(self, action, body=None, headers=None):
         return self._do_request("POST", action, body=body,
-                                headers=headers, params=params)
+                                headers=headers)
 
-    def _put(self, action, body=None, headers=None, params=None):
+    def _put(self, action, body=None, headers=None):
         return self._do_request("PUT", action, body=body,
-                                headers=headers, params=params)
+                                headers=headers)
 
     def _get_vsm_hosts(self):
         """
-        Returns a list of VSM ip addresses.
-        CREDENTIAL_NAME in the credentials object corresponds to an
-        ip address.
+        Retreive a list of VSM ip addresses.
+
+        :return: list of host ip addresses.
         """
         host_list = []
         credentials = network_db_v2.get_all_n1kv_credentials()
@@ -466,13 +489,15 @@ class Client(object):
             host_list.append(cr[cisco_constants.CREDENTIAL_NAME])
         return host_list
 
-    def _get_header(self, host_ip):
+    def _get_auth_header(self, host_ip):
         """
-        Returns a header with auth info for the VSM
+        Retreive header with auth info for the VSM
+
+        :param host_ip: IP address of the VSM
+        :return: authorization header dict
         """
         username = c_cred.Store.get_username(host_ip)
         password = c_cred.Store.get_password(host_ip)
         auth = base64.encodestring("%s:%s" % (username, password))
-        headers = {"Authorization": "Basic %s" % auth,
-                   "Content-Type": "application/json"}
-        return headers
+        header = {"Authorization": "Basic %s" % auth}
+        return header
