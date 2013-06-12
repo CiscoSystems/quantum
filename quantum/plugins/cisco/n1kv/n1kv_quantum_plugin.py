@@ -76,7 +76,7 @@ POLL_DURATION = 10
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                        l3_rpc_base.L3RpcCallbackMixin,
                        sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
-
+    """Class to handle agent RPC calls."""
     # Set RPC API version to 1.0 by default.
     RPC_API_VERSION = '1.0'
 
@@ -84,55 +84,13 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         self.notifier = notifier
 
     def create_rpc_dispatcher(self):
-        """Get the rpc dispatcher for this manager.
+        """Get the rpc dispatcher for this rpc manager.
 
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
         """
         return q_rpc.PluginRpcDispatcher([self,
                                           agents_db.AgentExtRpcCallback()])
-
-    def get_device_details(self, rpc_context, **kwargs):
-        """Agent requests device details"""
-        agent_id = kwargs.get('agent_id')
-        device = kwargs.get('device')
-        LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
-                  locals())
-        port = n1kv_db_v2.get_port(device)
-        if port:
-            binding = n1kv_db_v2.get_network_binding(None, port['network_id'])
-            entry = {'device': device,
-                     'network_id': port['network_id'],
-                     'port_id': port['id'],
-                     'admin_state_up': port['admin_state_up'],
-                     'network_type': binding.network_type,
-                     'segmentation_id': binding.segmentation_id,
-                     'physical_network': binding.physical_network}
-            # Set the port status to UP
-            n1kv_db_v2.set_port_status(port['id'], q_const.PORT_STATUS_ACTIVE)
-        else:
-            entry = {'device': device}
-            LOG.debug(_("%s can not be found in database"), device)
-        return entry
-
-    def update_device_down(self, rpc_context, **kwargs):
-        """Device no longer exists on agent"""
-        # (TODO) garyk - live migration and port status
-        agent_id = kwargs.get('agent_id')
-        device = kwargs.get('device')
-        LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
-                  locals())
-        port = n1kv_db_v2.get_port(device)
-        if port:
-            entry = {'device': device,
-                     'exists': True}
-            # Set port status to DOWN
-            n1kv_db_v2.set_port_status(port['id'], q_const.PORT_STATUS_DOWN)
-        else:
-            entry = {'device': device,
-                     'exists': False}
-            LOG.debug(_("%s can not be found in database"), device)
-        return entry
 
     def vxlan_sync(self, rpc_context, **kwargs):
         """Update new vxlan.
