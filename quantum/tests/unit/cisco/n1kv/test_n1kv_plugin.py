@@ -205,7 +205,8 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         # Patch a dummy profile creation into the N1K plugin code. The original
         # function in the plugin is a noop for production, but during test, we
         # need it to return a dummy network profile.
-        n1kv_quantum_plugin.N1kvQuantumPluginV2._add_dummy_profile_for_test = \
+        n1kv_quantum_plugin.N1kvQuantumPluginV2.\
+            _add_dummy_profile_only_if_testing = \
             _fake_add_dummy_profile_for_test
 
         n1kv_quantum_plugin.N1kvQuantumPluginV2._setup_vsm = _fake_setup_vsm

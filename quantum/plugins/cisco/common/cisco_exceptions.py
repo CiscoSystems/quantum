@@ -188,9 +188,7 @@ class VMNetworkNotFound(exceptions.QuantumException):
 
 
 class VxlanIdInUse(exceptions.QuantumException):
-    """
-    VXLAN Id is in use
-    """
+    """VXLAN Id is in use"""
     message = _("Unable to create the network. "
                 "The VXLAN ID %(vxlan_id)s is in use.")
 
@@ -203,3 +201,13 @@ class VSMConnectionFailed(exceptions.QuantumException):
 class VSMError(exceptions.QuantumException):
     """Internal VSM error"""
     message = _("Internal VSM Error: %(reason)s")
+
+class N1kvNetworkBindingNotFound(exceptions.QuantumException):
+    """Network Binding for network cannot be found"""
+    message = _("Network Binding for network %(network_id)s could "
+                "not be found.")
+
+class N1kvPortBindingNotFound(exceptions.QuantumException):
+    """Port Binding for port cannot be found"""
+    message = _("Port Binding for port %(port_id)s could "
+                "not be found.")

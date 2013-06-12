@@ -30,10 +30,9 @@ from sqlalchemy.sql import and_
 from quantum.common import exceptions as q_exc
 from quantum.db import models_v2
 import quantum.db.api as db
-from quantum.plugins.cisco.common import cisco_constants as const
+from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
-from quantum.plugins.cisco.common import config as conf
 from quantum.api.v2.attributes import _validate_ip_address
 
 LOG = logging.getLogger(__name__)
@@ -51,12 +50,11 @@ def get_network_binding(session, network_id):
                    one())
         return binding
     except exc.NoResultFound:
-        return
-
+        raise c_exc.N1kvNetworkBindingNotFound(network_id=network_id)
 
 def add_network_binding(session, network_id, network_type,
                         physical_network, segmentation_id,
-                        multicast_ip, profile_id):
+                        multicast_ip, network_profile_id):
     """
     Explanation for the parameters
 
@@ -67,7 +65,8 @@ def add_network_binding(session, network_id, network_type,
     multicast IP : VXLAN technology needs a multicast IP to be associated
                    with every VXLAN ID to deal with broadcast packets. A
                    single Multicast IP can be shared by multiple VXLAN IDs.
-    profile_id : Network Profile ID based by which this network is created
+    network_profile_id : Network Profile ID based by which this network is
+                         created
     """
     with session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kvNetworkBinding(network_id,
@@ -75,7 +74,7 @@ def add_network_binding(session, network_id, network_type,
                                                     physical_network,
                                                     segmentation_id,
                                                     multicast_ip,
-                                                    profile_id)
+                                                    network_profile_id)
         session.add(binding)
 
 
@@ -87,12 +86,12 @@ def get_port_binding(session, port_id):
                    one())
         return binding
     except exc.NoResultFound:
-        return
+        raise c_exc.N1kvPortBindingNotFound(port_id=port_id)
 
 
-def add_port_binding(session, port_id, profile_id):
+def add_port_binding(session, port_id, policy_profile_id):
     with session.begin(subtransactions=True):
-        binding = n1kv_models_v2.N1kvPortBinding(port_id, profile_id)
+        binding = n1kv_models_v2.N1kvPortBinding(port_id, policy_profile_id)
         session.add(binding)
 
 
@@ -146,20 +145,8 @@ def delete_vlan_allocations(network_vlan_ranges):
                         session.delete(alloc)
 
 
-def get_vlan_allocation(physical_network, vlan_id):
-    session = db.get_session()
-    try:
-        alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
-                 filter_by(physical_network=physical_network,
-                           vlan_id=vlan_id).
-                 one())
-        return alloc
-    except exc.NoResultFound:
-        return
-
-
-def reserve_vlan(session, profile):
-    seg_min, seg_max = profile.get_segment_range(session)
+def reserve_vlan(session, network_profile):
+    seg_min, seg_max = network_profile.get_segment_range(session)
     segment_type = 'vlan'
 
     with session.begin(subtransactions=True):
@@ -177,8 +164,8 @@ def reserve_vlan(session, profile):
         raise q_exc.NoNetworkAvailable()
 
 
-def reserve_vxlan(session, profile):
-    seg_min, seg_max = profile.get_segment_range(session)
+def reserve_vxlan(session, network_profile):
+    seg_min, seg_max = network_profile.get_segment_range(session)
     segment_type = 'vxlan'
     physical_network = ""
 
@@ -195,19 +182,19 @@ def reserve_vxlan(session, profile):
             segment_id = alloc.vxlan_id
             alloc.allocated = True
             return (physical_network, segment_type,
-                    segment_id, profile.get_multicast_ip(session))
+                    segment_id, network_profile.get_multicast_ip(session))
         raise q_exc.NoNetworkAvailable()
 
 
-def alloc_network(session, profile_id):
+def alloc_network(session, network_profile_id):
     with session.begin(subtransactions=True):
         try:
-            profile = get_network_profile(profile_id)
-            if profile:
-                if profile.segment_type == 'vlan':
-                    return reserve_vlan(session, profile)
+            network_profile = get_network_profile(network_profile_id)
+            if network_profile:
+                if network_profile.segment_type == 'vlan':
+                    return reserve_vlan(session, network_profile)
                 else:
-                    return reserve_vxlan(session, profile)
+                    return reserve_vxlan(session, network_profile)
         except q_exc.NotFound:
             LOG.debug("NetworkProfile not found")
 
@@ -220,7 +207,7 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
                                vlan_id=vlan_id).
                      one())
             if alloc.allocated:
-                if vlan_id == const.FLAT_VLAN_ID:
+                if vlan_id == c_const.FLAT_VLAN_ID:
                     raise q_exc.FlatNetworkInUse(
                         physical_network=physical_network)
                 else:
@@ -411,19 +398,19 @@ def add_vxlan_endpoint(ip):
     return vxlan
 
 
-def get_vm_network(profile_id, network_id):
-    """Retrieve a vm_network based on profile and network id"""
+def get_vm_network(policy_profile_id, network_id):
+    """Retrieve a vm_network based on policy profile and network id"""
     session = db.get_session()
     try:
         vm_network = (session.query(n1kv_models_v2.N1kVmNetwork).
-                      filter_by(profile_id=profile_id).
+                      filter_by(profile_id=policy_profile_id).
                       filter_by(network_id=network_id).one())
         return vm_network
     except exc.NoResultFound:
         return None
 
 
-def add_vm_network(name, profile_id, network_id, port_count):
+def add_vm_network(name, policy_profile_id, network_id, port_count):
     """
     Add a vm_network for a unique combination of network and
     policy profile. All ports having the same policy profile
@@ -437,7 +424,7 @@ def add_vm_network(name, profile_id, network_id, port_count):
     except exc.NoResultFound:
         with session.begin(subtransactions=True):
             vm_network = n1kv_models_v2.N1kVmNetwork(name,
-                                                     profile_id,
+                                                     policy_profile_id,
                                                      network_id,
                                                      port_count)
             session.add(vm_network)
@@ -459,10 +446,10 @@ def update_vm_network(name, port_count):
         raise c_exc.VMNetworkNotFound(name=name)
 
 
-def delete_vm_network(profile_id, network_id):
+def delete_vm_network(policy_profile_id, network_id):
     """Deletes a vm network"""
     session = db.get_session()
-    vm_network = get_vm_network(profile_id, network_id)
+    vm_network = get_vm_network(policy_profile_id, network_id)
     with session.begin(subtransactions=True):
         session.delete(vm_network)
         session.query(n1kv_models_v2.N1kVmNetwork).filter_by(
@@ -470,26 +457,26 @@ def delete_vm_network(profile_id, network_id):
     return vm_network
 
 
-def create_network_profile(profile):
+def create_network_profile(network_profile):
     """
     Create Network Profile
     """
     LOG.debug("create_network_profile()")
     session = db.get_session()
     with session.begin(subtransactions=True):
-        if profile['segment_type'] == 'vlan':
+        if network_profile['segment_type'] == 'vlan':
             net_profile = n1kv_models_v2.NetworkProfile(
-                name=profile['name'],
-                segment_type=profile['segment_type'],
-                segment_range=profile['segment_range'],
-                physical_network=profile['physical_network'])
-        elif profile['segment_type'] == 'vxlan':
+                name=network_profile['name'],
+                segment_type=network_profile['segment_type'],
+                segment_range=network_profile['segment_range'],
+                physical_network=network_profile['physical_network'])
+        elif network_profile['segment_type'] == 'vxlan':
             net_profile = n1kv_models_v2.NetworkProfile(
-                name=profile['name'],
-                segment_type=profile['segment_type'],
+                name=network_profile['name'],
+                segment_type=network_profile['segment_type'],
                 mcast_ip_index=0,
-                segment_range=profile['segment_range'],
-                mcast_ip_range=profile['multicast_ip_range'])
+                segment_range=network_profile['segment_range'],
+                mcast_ip_range=network_profile['multicast_ip_range'])
         session.add(net_profile)
         return net_profile
 
@@ -500,15 +487,15 @@ def delete_network_profile(id):
     """
     LOG.debug("delete_network_profile()")
     session = db.get_session()
-    profile = get_network_profile(id)
+    network_profile = get_network_profile(id)
     with session.begin(subtransactions=True):
-        session.delete(profile)
+        session.delete(network_profile)
         session.query(n1kv_models_v2.ProfileBinding).filter(
             n1kv_models_v2.ProfileBinding.profile_id == id).delete()
-    return profile
+    return network_profile
 
 
-def update_network_profile(id, profile):
+def update_network_profile(id, network_profile):
     """
     Update Network Profile
     """
@@ -516,7 +503,7 @@ def update_network_profile(id, profile):
     session = db.get_session()
     with session.begin(subtransactions=True):
         _profile = get_network_profile(id)
-        _profile.update(profile)
+        _profile.update(network_profile)
         session.merge(_profile)
         return _profile
 
@@ -528,9 +515,9 @@ def get_network_profile(id, fields=None):
     LOG.debug("get_network_profile()")
     session = db.get_session()
     try:
-        profile = session.query(n1kv_models_v2.NetworkProfile).filter_by(
+        net_profile = session.query(n1kv_models_v2.NetworkProfile).filter_by(
             id=id).one()
-        return profile
+        return net_profile
     except exc.NoResultFound:
         raise c_exc.NetworkProfileIdNotFound(profile_id=id)
 
@@ -542,9 +529,9 @@ def get_network_profile_by_name(name):
     LOG.debug("get_network_profile_by_name")
     session = db.get_session()
     try:
-        profile = session.query(
+        network_profile = session.query(
             n1kv_models_v2.NetworkProfile).filter_by(name=name).one()
-        return profile
+        return network_profile
     except exc.NoResultFound:
         return None
 
@@ -558,25 +545,25 @@ def _get_network_profiles(**kwargs):
     session = db.get_session()
     if "physical_network" in kwargs:
         try:
-            profiles = session.query(n1kv_models_v2.NetworkProfile).\
+            net_profiles = session.query(n1kv_models_v2.NetworkProfile).\
                 filter_by(physical_network=kwargs[
                           'physical_network']).all()
-            return profiles
+            return net_profiles
         except exc.NoResultFound:
             return None
     else:
         return session.query(n1kv_models_v2.NetworkProfile).all()
 
 
-def create_policy_profile(profile):
+def create_policy_profile(policy_profile):
     """
     Create Policy Profile
     """
     LOG.debug("create_policy_profile()")
     session = db.get_session()
     with session.begin(subtransactions=True):
-        p_profile = n1kv_models_v2.PolicyProfile(id=profile['id'],
-                                                 name=profile['name'])
+        p_profile = n1kv_models_v2.PolicyProfile(id=policy_profile['id'],
+                                                 name=policy_profile['name'])
         session.add(p_profile)
         return p_profile
 
@@ -587,12 +574,12 @@ def delete_policy_profile(id):
     """
     LOG.debug("delete_policy_profile()")
     session = db.get_session()
-    profile = get_policy_profile(id)
+    policy_profile = get_policy_profile(id)
     with session.begin(subtransactions=True):
-        session.delete(profile)
+        session.delete(policy_profile)
 
 
-def update_policy_profile(id, profile):
+def update_policy_profile(id, policy_profile):
     """
     Update a policy profile.
     """
@@ -600,7 +587,7 @@ def update_policy_profile(id, profile):
     session = db.get_session()
     with session.begin(subtransactions=True):
         _profile = get_policy_profile(id)
-        _profile.update(profile)
+        _profile.update(policy_profile)
         session.merge(_profile)
         return _profile
 
@@ -612,9 +599,9 @@ def get_policy_profile(id, fields=None):
     LOG.debug("get_policy_profile()")
     session = db.get_session()
     try:
-        profile = session.query(n1kv_models_v2.PolicyProfile).filter_by(
+        policy_profile = session.query(n1kv_models_v2.PolicyProfile).filter_by(
             id=id).one()
-        return profile
+        return policy_profile
     except exc.NoResultFound:
         raise c_exc.PolicyProfileIdNotFound(profile_id=id)
 
@@ -709,31 +696,31 @@ class NetworkProfile_db_mixin(object):
 
     def _get_network_collection_for_tenant(self, model, tenant_id):
         session = db.get_session()
-        profile_ids = (session.query(n1kv_models_v2.ProfileBinding.profile_id)
-                       .filter_by(tenant_id=tenant_id).
+        net_profile_ids = (session.query(n1kv_models_v2.ProfileBinding.\
+                       profile_id).filter_by(tenant_id=tenant_id).
                        filter_by(profile_type='network').all())
-        profiles = []
-        for pid in profile_ids:
+        network_profiles = []
+        for pid in net_profile_ids:
             try:
-                profiles.append(session.query(model).
+                network_profiles.append(session.query(model).
                                 filter_by(id=pid[0]).one())
             except exc.NoResultFound:
                 return []
-        return [self._make_network_profile_dict(p) for p in profiles]
+        return [self._make_network_profile_dict(p) for p in network_profiles]
 
     def _make_profile_bindings_dict(self, profile_binding, fields=None):
         res = {'profile_id': profile_binding['profile_id'],
                'tenant_id': profile_binding['tenant_id']}
         return self._fields(res, fields)
 
-    def _make_network_profile_dict(self, profile, fields=None):
-        res = {'id': profile['id'],
-               'name': profile['name'],
-               'segment_type': profile['segment_type'],
-               'segment_range': profile['segment_range'],
-               'multicast_ip_index': profile['multicast_ip_index'],
-               'multicast_ip_range': profile['multicast_ip_range'],
-               'physical_network': profile['physical_network']}
+    def _make_network_profile_dict(self, network_profile, fields=None):
+        res = {'id': network_profile['id'],
+               'name': network_profile['name'],
+               'segment_type': network_profile['segment_type'],
+               'segment_range': network_profile['segment_range'],
+               'multicast_ip_index': network_profile['multicast_ip_index'],
+               'multicast_ip_range': network_profile['multicast_ip_range'],
+               'physical_network': network_profile['physical_network']}
         return self._fields(res, fields)
 
     def get_network_profile_bindings(self, context, filters=None, fields=None):
@@ -789,11 +776,11 @@ class NetworkProfile_db_mixin(object):
                                                            NetworkProfile,
                                                            context.tenant_id)
 
-    def add_network_profile_tenant(self, profile_id, tenant_id):
+    def add_network_profile_tenant(self, network_profile_id, tenant_id):
         """
         Add a tenant to a network profile
         """
-        return create_profile_binding(tenant_id, profile_id, 'network')
+        return create_profile_binding(tenant_id, network_profile_id, 'network')
 
     def network_profile_exists(self, context, id):
         try:
@@ -863,63 +850,64 @@ class NetworkProfile_db_mixin(object):
         '''
         pass
 
-    def _validate_segment_range(self, p):
+    def _validate_segment_range(self, network_profile):
         """
         Validate segment range values.
         :param p:
         :return:
         """
-        mo = re.match(r"(\d+)\-(\d+)", p['segment_range'])
+        mo = re.match(r"(\d+)\-(\d+)", network_profile['segment_range'])
         if mo is None:
             msg = _("invalid segment range. example range: 500-550")
             raise q_exc.InvalidInput(error_message=msg)
 
-    def _validate_network_profile(self, p):
+    def _validate_network_profile(self, net_p):
         """
         Validate completeness of a network profile arguments.
         :param p:
         :return:
         """
-        if any(p[arg] == '' for arg in ('segment_type', 'segment_range')):
+        if any(net_p[arg] == '' for arg in ('segment_type', 'segment_range')):
             msg = _("arguments segment_type and segment_range missing"
                     " for network profile")
             LOG.exception(msg)
             raise q_exc.InvalidInput(error_message=msg)
-        _segment_type = p['segment_type'].lower()
+        _segment_type = net_p['segment_type'].lower()
         if _segment_type not in ['vlan', 'vxlan']:
             msg = _("segment_type should either be vlan or vxlan")
             LOG.exception(msg)
             raise q_exc.InvalidInput(error_message=msg)
-        self._validate_segment_range(p)
+        self._validate_segment_range(net_p)
         if _segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
-            self._validate_vlan(p)
-            p['multicast_ip_range'] = '0.0.0.0'
+            self._validate_vlan(net_p)
+            net_p['multicast_ip_range'] = '0.0.0.0'
         elif _segment_type == n1kv_models_v2.SEGMENT_TYPE_VXLAN:
-            self._validate_vxlan(p)
+            self._validate_vxlan(net_p)
 
-    def _validate_segment_range_uniqueness(self, context, p):
+    def _validate_segment_range_uniqueness(self, context, net_p):
         """
         Validate that segment range doesn't overlap.
         :param context:
         :param p:
         :return:
         """
-        _segment_type = p['segment_type'].lower()
+        _segment_type = net_p['segment_type'].lower()
         if _segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
             profiles = _get_network_profiles(
-                physical_network=p['physical_network'])
+                physical_network=net_p['physical_network'])
         elif _segment_type == n1kv_models_v2.SEGMENT_TYPE_VXLAN:
             profiles = _get_network_profiles()
         if profiles:
             for prfl in profiles:
                 _name = prfl.name
                 _segment_range = prfl.segment_range
-                if p['name'] == _name:
-                    msg = _("NetworkProfile name %s already exists" % p[
+                if net_p['name'] == _name:
+                    msg = _("NetworkProfile name %s already exists" % net_p[
                             'name'])
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
-                seg_min, seg_max = self._get_segment_range(p['segment_range'])
+                seg_min, seg_max = self._get_segment_range(\
+                                       net_p['segment_range'])
                 prfl_seg_min, prfl_seg_max = self._get_segment_range(
                     _segment_range)
                 if (((seg_min >= prfl_seg_min) and
@@ -953,8 +941,8 @@ class PolicyProfile_db_mixin(object):
                 return []
         return [self._make_policy_profile_dict(p) for p in profiles]
 
-    def _make_policy_profile_dict(self, profile, fields=None):
-        res = {'id': profile['id'], 'name': profile['name']}
+    def _make_policy_profile_dict(self, policy_profile, fields=None):
+        res = {'id': policy_profile['id'], 'name': policy_profile['name']}
         return self._fields(res, fields)
 
     def _make_profile_bindings_dict(self, profile_binding, fields=None):
@@ -1017,16 +1005,16 @@ class PolicyProfile_db_mixin(object):
         except exc.NoResultFound:
             raise c_exc.PolicyProfileIdNotFound(profile_id=id)
 
-    def add_policy_profile_tenant(self, profile_id, tenant_id):
+    def add_policy_profile_tenant(self, policy_profile_id, tenant_id):
         """
         Add tenant to a policy profile
         """
-        return create_profile_binding(tenant_id, profile_id, 'policy')
+        return create_profile_binding(tenant_id, policy_profile_id, 'policy')
 
-    def remove_policy_profile_tenant(self, profile_id, tenant_id):
-        delete_profile_binding(tenant_id, profile_id)
+    def remove_policy_profile_tenant(self, policy_profile_id, tenant_id):
+        delete_profile_binding(tenant_id, policy_profile_id)
 
-    def _delete_policy_profile(self, profile_id):
+    def _delete_policy_profile(self, policy_profile_id):
         """
         Delete policy profile and associated binding
         """
@@ -1034,10 +1022,10 @@ class PolicyProfile_db_mixin(object):
         with session.begin(subtransactions=True):
             session.query(n1kv_models_v2.PolicyProfile).\
                 filter(n1kv_models_v2.PolicyProfile.id ==
-                       profile_id).delete()
+                       policy_profile_id).delete()
             session.query(n1kv_models_v2.ProfileBinding).\
                 filter(n1kv_models_v2.ProfileBinding.profile_id ==
-                       profile_id).delete()
+                       policy_profile_id).delete()
 
     def _get_policy_profile_by_name(self, name):
         """
@@ -1095,12 +1083,15 @@ class PolicyProfile_db_mixin(object):
                     filter_by(tenant_id=n1kv_models_v2.TENANT_ID_NOT_SET).\
                     update({'tenant_id': tenant_id})
 
-    def _add_policy_profile(self, profile_name, profile_id, tenant_id=None):
+    def _add_policy_profile(self,
+                            policy_profile_name,
+                            policy_profile_id,
+                            tenant_id=None):
         """
         Add Policy profile and tenant binding
         """
-        profile = {'id': profile_id, 'name': profile_name}
+        policy_profile = {'id': policy_profile_id, 'name': policy_profile_name}
         tenant_id = tenant_id or n1kv_models_v2.TENANT_ID_NOT_SET
-        if not self._policy_profile_exists(profile_id):
-            create_policy_profile(profile)
-        create_profile_binding(tenant_id, profile['id'], 'policy')
+        if not self._policy_profile_exists(policy_profile_id):
+            create_policy_profile(policy_profile)
+        create_profile_binding(tenant_id, policy_profile['id'], 'policy')
