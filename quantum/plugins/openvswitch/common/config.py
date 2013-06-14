@@ -24,6 +24,7 @@ from quantum import scheduler
 DEFAULT_BRIDGE_MAPPINGS = []
 DEFAULT_VLAN_RANGES = []
 DEFAULT_TUNNEL_RANGES = []
+DEFAULT_TUNNEL_TYPES = []
 
 ovs_opts = [
     cfg.StrOpt('integration_bridge', default='br-int',
@@ -59,9 +60,9 @@ agent_opts = [
     cfg.IntOpt('polling_interval', default=2,
                help=_("The number of seconds the agent will wait between "
                       "polling for local device changes.")),
-    cfg.StrOpt('tunnel_type', default=None,
-               help=_("Network type for agent tunnel networks "
-                      "(gre or vxlan)")),
+    cfg.ListOpt('tunnel_types', default=DEFAULT_TUNNEL_TYPES,
+                help=_("Network types for agent tunnel networks "
+                       "(gre and/or vxlan)")),
     cfg.IntOpt('vxlan_udp_port', default=constants.VXLAN_UDP_PORT,
                help=_("The UDP port to use for VXLAN tunnels.")),
 ]

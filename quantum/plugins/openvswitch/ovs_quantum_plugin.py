@@ -161,7 +161,7 @@ class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         entry['tunnels'] = tunnels
         # Notify all other listening agents
         self.notifier.tunnel_update(rpc_context, tunnel.ip_address,
-                                    tunnel.id)
+                                    tunnel.id, None)
         # Return the list of tunnels IP's to the agent
         return entry
 
@@ -206,11 +206,12 @@ class AgentNotifierApi(proxy.RpcProxy,
                                        physical_network=physical_network),
                          topic=self.topic_port_update)
 
-    def tunnel_update(self, context, tunnel_ip, tunnel_id):
+    def tunnel_update(self, context, tunnel_ip, tunnel_id, tunnel_type):
         self.fanout_cast(context,
                          self.make_msg('tunnel_update',
                                        tunnel_ip=tunnel_ip,
-                                       tunnel_id=tunnel_id),
+                                       tunnel_id=tunnel_id,
+                                       tunnel_type=tunnel_type),
                          topic=self.topic_tunnel_update)
 
 
