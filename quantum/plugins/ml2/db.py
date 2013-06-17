@@ -24,6 +24,7 @@ from quantum.openstack.common import uuidutils
 from quantum.plugins.ml2 import driver_api as api
 from quantum.plugins.ml2 import models
 
+
 LOG = log.getLogger(__name__)
 
 

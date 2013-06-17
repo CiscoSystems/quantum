@@ -288,6 +288,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             return
         tunnel_ip = kwargs.get('tunnel_ip')
         tunnel_id = kwargs.get('tunnel_id')
+        if tunnel_id is None:
+            tunnel_id = tunnel_ip
         if tunnel_ip == self.local_ip:
             return
         tun_name = '%s-%s' % (self.tunnel_type, tunnel_id)
@@ -695,7 +697,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             tunnels = details['tunnels']
             for tunnel in tunnels:
                 if self.local_ip != tunnel['ip_address']:
-                    tun_name = '%s-%s' % (self.tunnel_type, tunnel['id'])
+                    tunnel_id = tunnel.get('id', tunnel['ip_address'])
+                    tun_name = '%s-%s' % (self.tunnel_type, tunnel_id)
                     self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'],
                                                 self.tunnel_type,
                                                 self.vxlan_udp_port)
