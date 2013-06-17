@@ -39,10 +39,21 @@ LOG = logging.getLogger(__name__)
 
 
 def initialize():
+    """
+    Initialize the database
+    """
     db.configure_db()
 
 
 def get_network_binding(session, network_id):
+    """
+    Retrieve network binding
+
+    :param session: database session
+    :param network_id: UUID representing the network whose binding is
+                       to fetch
+    :returns: binding object
+    """
     session = session or db.get_session()
     try:
         binding = (session.query(n1kv_models_v2.N1kvNetworkBinding).
@@ -57,17 +68,20 @@ def add_network_binding(session, network_id, network_type,
                         physical_network, segmentation_id,
                         multicast_ip, network_profile_id):
     """
-    Explanation for the parameters
+    Create network binding.
 
-    network_type : Whether its a VLAN or VXLAN based network
-    physical_network : Only applicable for VLAN networks. It represents a
-                       L2 Domain
-    segmentation_id : VLAN / VXLAN ID
-    multicast IP : VXLAN technology needs a multicast IP to be associated
-                   with every VXLAN ID to deal with broadcast packets. A
-                   single Multicast IP can be shared by multiple VXLAN IDs.
-    network_profile_id : Network Profile ID based by which this network is
-                         created
+    :param session: database session
+    :param network_id: UUID representing the network
+    :param network_type: string representing type of network (VLAN or VXLAN)
+    :param physical_network: Only applicable for VLAN networks. It
+                             represents a L2 Domain
+    :param segmentation_id: integer representing VLAN or VXLAN ID
+    :param multicast_ip: VXLAN technology needs a multicast IP to be associated
+                         with every VXLAN ID to deal with broadcast packets. A
+                         single multicast IP can be shared by multiple VXLAN
+                         IDs.
+    :param network_profile_id: network profile ID based on which this network
+                               is created
     """
     with session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kvNetworkBinding(network_id,
@@ -80,6 +94,13 @@ def add_network_binding(session, network_id, network_type,
 
 
 def get_port_binding(session, port_id):
+    """
+    Retrieve port binding.
+
+    :param session: database session
+    :param port_id: UUID representing the port whose binding is to fetch
+    :returns: port binding object
+    """
     session = session or db.get_session()
     try:
         binding = (session.query(n1kv_models_v2.N1kvPortBinding).
@@ -91,13 +112,28 @@ def get_port_binding(session, port_id):
 
 
 def add_port_binding(session, port_id, policy_profile_id):
+    """
+    Create port binding.
+
+    Bind the port with policy profile.
+    :param session: database session
+    :param port_id: UUID of the port
+    :param policy_profile_id: UUID of the policy profile
+    """
     with session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kvPortBinding(port_id, policy_profile_id)
         session.add(binding)
 
 
 def sync_vlan_allocations(network_vlan_ranges):
-    """Synchronize vlan_allocations table with configured VLAN ranges"""
+    """
+    Synchronize vlan_allocations table with configured VLAN ranges
+
+    Sync the network profile range with the vlan_allocations table for each
+    physical network.
+    :param network_vlan_ranges: dictionary of network vlan ranges with the
+                                physical network name as key.
+    """
 
     session = db.get_session()
     with session.begin():
@@ -123,7 +159,12 @@ def sync_vlan_allocations(network_vlan_ranges):
 
 
 def delete_vlan_allocations(network_vlan_ranges):
-    """Delete vlan_allocations for deleted network profile range"""
+    """
+    Delete vlan_allocations for deleted network profile range
+
+    :param network_vlan_ranges: dictionary of network vlan ranges with the
+                                physical network name as key.
+    """
 
     session = db.get_session()
     with session.begin():
@@ -147,6 +188,13 @@ def delete_vlan_allocations(network_vlan_ranges):
 
 
 def get_vlan_allocation(physical_network, vlan_id):
+    """
+    Retrieve vlan allocation.
+
+    :param physical network: string name for the physical network
+    :param vlan_id: integer representing the VLAN ID.
+    :returns: allocation object for given physical network and VLAN ID
+    """
     session = db.get_session()
     try:
         alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
@@ -159,6 +207,12 @@ def get_vlan_allocation(physical_network, vlan_id):
 
 
 def reserve_vlan(session, network_profile):
+    """
+    Reserve a VLAN ID within the range of the network profile.
+
+    :param session: database session
+    :param network_profile: network profile object
+    """
     seg_min, seg_max = network_profile.get_segment_range(session)
     segment_type = 'vlan'
 
@@ -178,6 +232,12 @@ def reserve_vlan(session, network_profile):
 
 
 def reserve_vxlan(session, network_profile):
+    """
+    Reserve a VXLAN ID within the range of the network profile.
+
+    :param session: database session
+    :param network_profile: network profile object
+    """
     seg_min, seg_max = network_profile.get_segment_range(session)
     segment_type = 'vxlan'
     physical_network = ""
@@ -200,6 +260,12 @@ def reserve_vxlan(session, network_profile):
 
 
 def alloc_network(session, network_profile_id):
+    """
+    Allocate network using first available free segment ID in segment range
+
+    :param session: database session
+    :param network_profile_id: UUID representing the network profile
+    """
     with session.begin(subtransactions=True):
         try:
             network_profile = get_network_profile(network_profile_id)
@@ -213,6 +279,13 @@ def alloc_network(session, network_profile_id):
 
 
 def reserve_specific_vlan(session, physical_network, vlan_id):
+    """
+    Reserve a specific VLAN ID for the network.
+
+    :param session: database session
+    :param physical_network: string representing the name of physical network
+    :param vlan_id: integer value of the segmentation ID to be reserved
+    """
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
@@ -239,6 +312,15 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
 
 
 def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
+    """
+    Release a given VLAN ID
+
+    :param session: database session
+    :param physical_network: string representing the name of physical network
+    :param vlan_id: integer value of the segmentation ID to be released
+    :param network_vlan_ranges: dictionary of network vlan ranges with the
+                                physical network name as key.
+    """
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
@@ -262,7 +344,11 @@ def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
 
 
 def sync_vxlan_allocations(vxlan_id_ranges):
-    """Synchronize vxlan_allocations table with configured vxlan ranges"""
+    """
+    Synchronize vxlan_allocations table with configured vxlan ranges
+
+    :param vxlan_id_ranges: list of segment range tuples
+    """
 
     vxlan_ids = set()
     for vxlan_id_range in vxlan_id_ranges:
@@ -285,7 +371,11 @@ def sync_vxlan_allocations(vxlan_id_ranges):
 
 
 def delete_vxlan_allocations(vxlan_id_ranges):
-    """Delete vxlan_allocations for deleted network profile range"""
+    """
+    Delete vxlan_allocations for deleted network profile range
+
+    :param vxlan_id_ranges: list of segment range tuples
+    """
     vxlan_ids = set()
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
@@ -307,6 +397,12 @@ def delete_vxlan_allocations(vxlan_id_ranges):
 
 
 def get_vxlan_allocation(vxlan_id):
+    """
+    Retrieve VXLAN allocation for the given VXLAN ID
+
+    :param vxlan_id: integer value representing the segmentation ID
+    :returns: allocation object
+    """
     session = db.get_session()
     try:
         alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
@@ -318,6 +414,12 @@ def get_vxlan_allocation(vxlan_id):
 
 
 def reserve_specific_vxlan(session, vxlan_id):
+    """
+    Reserve a specific VXLAN ID.
+
+    :param session: databse session
+    :param vxlan_id: integer value representing the segmentation ID
+    """
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
@@ -335,6 +437,13 @@ def reserve_specific_vxlan(session, vxlan_id):
 
 
 def release_vxlan(session, vxlan_id, vxlan_id_ranges):
+    """
+    Release a given VXLAN ID
+
+    :param session: database session
+    :param vxlan_id: integer value representing the segmentation ID
+    :param vxlan_id_ranges: list of the segment range tuples.
+    """
     with session.begin(subtransactions=True):
         try:
             alloc = (session.query(n1kv_models_v2.N1kvVxlanAllocation).
@@ -356,6 +465,12 @@ def release_vxlan(session, vxlan_id, vxlan_id_ranges):
 
 
 def get_port(port_id):
+    """
+    Retrieve port
+
+    :param port_id: UUID representing the port to fetch
+    :returns: port object
+    """
     session = db.get_session()
     try:
         port = session.query(models_v2.Port).filter_by(id=port_id).one()
