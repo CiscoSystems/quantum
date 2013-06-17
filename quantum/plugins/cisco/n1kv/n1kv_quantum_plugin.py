@@ -70,13 +70,14 @@ POLL_DURATION = 10
 class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                        l3_rpc_base.L3RpcCallbackMixin,
                        sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
+
     """Class to handle agent RPC calls."""
     # Set RPC API version to 1.0 by default.
     RPC_API_VERSION = '1.0'
 
     def __init__(self, notifier):
         self.notifier = notifier
- 
+
     def create_rpc_dispatcher(self):
         """Get the rpc dispatcher for this rpc manager.
 
@@ -85,6 +86,7 @@ class N1kvRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         """
         return q_rpc.PluginRpcDispatcher([self,
                                           agents_db.AgentExtRpcCallback()])
+
 
 class AgentNotifierApi(proxy.RpcProxy,
                        sg_rpc.SecurityGroupAgentRpcApiMixin):
@@ -145,7 +147,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     """
     Implement the Quantum abstractions using Cisco Nexus1000V
 
-    Read README file for the architecture, new features, and
+    Refer README file for the architecture, new features, and
     workflow
 
     """
@@ -192,7 +194,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.consume_in_thread()
 
     def _setup_vsm(self):
-        """ Establish Communication with Cisco Nexus1000V VSM """
+        """
+        Setup Cisco Nexus 1000V related parameters and pull policy profiles.
+
+        Retreive all the policy profiles from the VSM when the plugin is
+        is instantiated for the first time and then continue to poll for
+        policy profile updates.
+        """
         LOG.debug('_setup_vsm')
         self.agent_vsm = True
         # Retrieve all the policy profiles from VSM.
@@ -203,6 +211,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _populate_policy_profiles(self):
         """
         Populate all the policy profiles from VSM.
+
+        The tenant id is not available when the policy profiles are polled
+        from the VSM. Hence we associate the policy profiles with fake
+        tenant-ids.
         """
         LOG.debug('_populate_policy_profiles')
         n1kvclient = n1kv_client.Client()
@@ -224,6 +236,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if policy_profiles:
             for profile in policy_profiles['body'][c_const.SET]:
                 if c_const.NAME in profile:
+                    # Extract commands from the events XML.
                     cmd = profile[c_const.PROPERTIES]['cmd']
                     cmds = cmd.split(';')
                     cmdwords = cmds[1].split()
@@ -234,10 +247,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                         p = self._get_policy_profile_by_name(profile_name)
                         if p:
                             self._delete_policy_profile(p['id'])
+                    # Add policy profile to quantum DB idempotently
                     elif c_const.ID in profile[c_const.PROPERTIES]:
                         profile_id = profile[c_const.PROPERTIES][c_const.ID]
                         self._add_policy_profile(
                             profile_name, profile_id, tenant_id)
+            # Replace tenant-id for profile bindings with admin's tenant-id
             self._remove_all_fake_policy_profiles()
 
     def _add_network_vlan_range(self, physical_network, vlan_min, vlan_max):
@@ -393,20 +408,22 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         return (profile_id)
 
-    def _send_create_logical_network_request(self, profile):
+    def _send_create_logical_network_request(self, network_profile):
         """
-        Send Create logical network request to VSM.
+        Send create logical network request to VSM.
+
+        :param network_profile: network profile dictionary
         """
         LOG.debug('_send_create_logical_network')
         n1kvclient = n1kv_client.Client()
-        n1kvclient.create_logical_network(profile)
+        n1kvclient.create_logical_network(network_profile)
 
     def _send_create_network_profile_request(self, context, profile):
         """
-        Send Create network profile request to VSM.
-        :param context:
-        :param profile:
-        :return:
+        Send create network profile request to VSM.
+
+        :param context: quantum api request context
+        :param profile: network profile dictionary
         """
         LOG.debug('_send_create_network_profile_request: %s', profile['id'])
         n1kvclient = n1kv_client.Client()
@@ -414,9 +431,9 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _send_delete_network_profile_request(self, profile):
         """
-        Send Delete network profile request to VSM.
-        :param profile:
-        :return:
+        Send delete network profile request to VSM.
+
+        :param profile: network profile dictionary
         """
         LOG.debug('_send_delete_network_profile_request: %s', profile['name'])
         n1kvclient = n1kv_client.Client()
@@ -424,10 +441,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _send_create_network_request(self, context, network):
         """
-        Send Create network request to VSM.
-        :param context:
-        :param network:
-        :return:
+        Send create network request to VSM.
+
+        Create a bridge domain for network of type VXLAN.
+        :param context: quantum api request context
+        :param network: network dictionary
         """
         LOG.debug('_send_create_network_request: %s', network['id'])
         profile = self.get_network_profile(context,
@@ -438,7 +456,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.create_network_segment(network, profile)
 
     def _send_update_network_request(self, network):
-        """ Send Update network request to VSM """
+        """
+        Send update network request to VSM
+
+        :param network: network dictionary
+        """
         LOG.debug('_send_update_network_request: %s', network['id'])
         profile = n1kv_db_v2.get_network_profile(
             network[n1kv_profile.PROFILE_ID])
@@ -450,7 +472,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.update_network_segment(network['name'], body)
 
     def _send_delete_network_request(self, network):
-        """ Send Delete network request to VSM """
+        """
+        Send delete network request to VSM
+
+        Delete bridge domain if network is of type VXLAN.
+        :param network: network dictionary
+        """
         LOG.debug('_send_delete_network_request: %s', network['id'])
         n1kvclient = n1kv_client.Client()
         if network[providernet.NETWORK_TYPE] == c_const.TYPE_VXLAN:
@@ -459,7 +486,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.delete_network_segment(network['name'])
 
     def _send_create_subnet_request(self, context, subnet):
-        """ Send Create Subnet request to VSM """
+        """
+        Send create subnet request to VSM
+
+        :param context: quantum api request context
+        :param subnet: subnet dictionary
+        """
         LOG.debug('_send_create_subnet_request: %s', subnet['id'])
         network = self.get_network(context, subnet['network_id'])
         n1kvclient = n1kv_client.Client()
@@ -469,18 +501,34 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     # TBD Begin : Need to implement this function
     def _send_update_subnet_request(self, subnet):
-        """ Send Create Subnet request to VSM """
+        """
+        Send update subnet request to VSM
+
+        :param subnet: subnet dictionary
+        """
         LOG.debug('_send_update_subnet_request: %s', subnet['id'])
     # TBD End.
 
     def _send_delete_subnet_request(self, subnet):
-        """ Send Delete Subnet request to VSM """
+        """
+        Send delete subnet request to VSM
+
+        :param subnet: subnet dictionary
+        """
         LOG.debug('_send_delete_subnet_request: %s', id)
         n1kvclient = n1kv_client.Client()
         n1kvclient.delete_ip_pool(subnet['name'])
 
     def _send_create_port_request(self, context, port):
-        """ Send Create Port request to VSM """
+        """
+        Send create port request to VSM
+
+        Create a VM network for a network and policy profile combination.
+        If the VM network already exists, bind this port to the existing
+        VM network and increment its port count.
+        :param context: quantum api request context
+        :param port: port dictionary
+        """
         LOG.debug('_send_create_port_request: %s', port)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
                                                port['network_id'])
@@ -506,7 +554,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kvclient.create_n1kv_port(port, vm_network_name)
 
     def _send_update_port_request(self, port, vm_network_name):
-        """ Send Update Port request to VSM """
+        """
+        Send update port request to VSM
+
+        :param port: port dictionary
+        :param vm_network_name: VM network name to which the port is bound
+        """
         LOG.debug('_send_update_port_request: %s', port['id'])
         body = {'portId': port['id'],
                 'macAddress': port['mac_address']}
@@ -514,7 +567,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         n1kvclient.update_n1kv_port(vm_network_name, port['id'], body)
 
     def _send_delete_port_request(self, context, id):
-        """ Send Delete Port request to VSM """
+        """
+        Send delete port request to VSM
+
+        Decrement the port count of the VM network after deleting the port.
+        If the port count reaches zero, delete the VM network.
+        :param context: quantum api request context
+        :param id: UUID of the port to be deleted
+        """
         LOG.debug('_send_delete_port_request: %s', id)
         port = self.get_port(context, id)
         vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
@@ -530,13 +590,25 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kvclient.delete_vm_network(vm_network['name'])
 
     def _get_segmentation_id(self, context, id):
-        """ Send Delete Port request to VSM """
+        """
+        Retreive segmentation ID for a given network
+
+        :param context: quantum api request context
+        :param id: UUID of the network
+        :returns: segmentation ID for the network
+        """
         session = context.session
-        binding_seg_id = n1kv_db_v2.get_network_binding(session, id)
-        return binding_seg_id.segmentation_id
+        binding = n1kv_db_v2.get_network_binding(session, id)
+        return binding.segmentation_id
 
     def create_network(self, context, network):
-        """ Create network based on Network Profile """
+        """
+        Create network based on network profile
+
+        :param context: quantum api request context
+        :param network: network dictionary
+        :returns: network object
+        """
         (network_type, physical_network,
          segmentation_id) = self._process_provider_create(context,
                                                           network['network'])
@@ -586,7 +658,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             return net
 
     def update_network(self, context, id, network):
-        """ Update network Parameters """
+        """
+        Update network parameters
+
+        :param context: quantum api request context
+        :param id: UUID representing the network to update
+        :returns: updated network object
+        """
         self._check_provider_update(context, network['network'])
 
         session = context.session
@@ -600,7 +678,12 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return net
 
     def delete_network(self, context, id):
-        """ Delete Network """
+        """
+        Delete a network
+
+        :param context: quantum api request context
+        :param id: UUID representing the network to delete
+        """
         session = context.session
         with session.begin(subtransactions=True):
             binding = n1kv_db_v2.get_network_binding(session, id)
@@ -620,7 +703,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("Deleted network: %s", id)
 
     def get_network(self, context, id, fields=None):
-        """ Read Network """
+        """
+        Retreive a Network
+
+        :param context: quantum api request context
+        :param id: UUID representing the network to fetch
+        :returns: requested network dictionary
+        """
         LOG.debug("Get network: %s", id)
         net = super(N1kvQuantumPluginV2, self).get_network(context, id, None)
         self._extend_network_dict_provider(context, net)
@@ -628,7 +717,20 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return self._fields(net, fields)
 
     def get_networks(self, context, filters=None, fields=None):
-        """ Read All Networks """
+        """
+        Retreive a list of networks
+
+        :param context: quantum api request context
+        :param filters: a dictionary with keys that are valid keys for a
+                        network object. Values in this dictiontary are an
+                        iterable containing values that will be used for an
+                        exact match comparison for that value. Each result
+                        returned by this function will have matched one of the
+                        values for each key in filters
+        :params fields: a list of strings that are valid keys in a network
+                        dictionary. Only these fields will be returned.
+        :returns: list of network dictionaries.
+        """
         LOG.debug("Get networks")
         nets = super(N1kvQuantumPluginV2, self).get_networks(context, filters,
                                                              None)
@@ -640,16 +742,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def create_port(self, context, port):
         """
-        Create Quantum port
+        Create quantum port.
 
-        Create Port will be called twice when using this plugin
-        Once directly, and another through Nova
-
-        If it call directly it must have the port-profile ID set
-
-        If called from Nova, then the metadata should be present
-        to identify the pre created port
-
+        Create a port. Use a default policy profile for ports created for dhcp
+        and router interface. Default policy profile name is configured in the
+        /etc/quantum/cisco_plugins.ini file.
+        :param context: quantum api request context
+        :param port: port dictionary
+        :returns: port object
         """
         self._add_dummy_profile_only_if_testing(port)
 
@@ -693,7 +793,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         pass
 
     def update_port(self, context, id, port):
-        """ Update port parameters """
+        """
+        Update port parameters
+
+        :param context: quantum api request context
+        :param id: UUID representing the port to update
+        :returns: updated port object
+        """
         LOG.debug("Update port: %s", id)
         if self.agent_vsm:
             original_port = super(N1kvQuantumPluginV2, self).get_port(context,
@@ -703,19 +809,45 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return port
 
     def delete_port(self, context, id):
-        """ Delete port """
+        """
+        Delete port
+
+        :param context: quantum api request context
+        :param id: UUID representing the port to delete
+        :returns: deleted port object
+        """
         self._send_delete_port_request(context, id)
         return super(N1kvQuantumPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):
-        """ Read port """
+        """
+        Retrieve a port
+        :param context: quantum api request context
+        :param id: UUID representing the port to retrieve
+        :param fields: a list of strings that are valid keys in a port
+                       dictionary. Only these fields will be returned.
+        :returns: port dictionary
+        """
         LOG.debug("Get port: %s", id)
         port = super(N1kvQuantumPluginV2, self).get_port(context, id, fields)
         self._extend_port_dict_profile(context, port)
         return self._fields(port, fields)
 
     def get_ports(self, context, filters=None, fields=None):
-        """ Read all ports """
+        """
+        Retrieve a list of ports
+
+        :param context: quantum api request context
+        :param filters: a dictionary with keys that are valid keys for a
+                        port object. Values in this dictiontary are an
+                        iterable containing values that will be used for an
+                        exact match comparison for that value. Each result
+                        returned by this function will have matched one of the
+                        values for each key in filters
+        :params fields: a list of strings that are valid keys in a port
+                        dictionary. Only these fields will be returned.
+        :returns: list of port dictionaries
+        """
         LOG.debug("Get ports")
         ports = super(N1kvQuantumPluginV2, self).get_ports(context, filters,
                                                            fields)
@@ -725,7 +857,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(port, fields) for port in ports]
 
     def create_subnet(self, context, subnet):
-        """ Create Subnet for a given network """
+        """
+        Create subnet for a given network
+
+        :param context: quantum api request context
+        :param subnet: subnet dictionary
+        :returns: subnet object
+        """
         LOG.debug('Create subnet')
         sub = super(N1kvQuantumPluginV2, self).create_subnet(context, subnet)
         try:
@@ -738,7 +876,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             return sub
 
     def update_subnet(self, context, id, subnet):
-        """ Update Subnet """
+        """
+        Update a subnet
+
+        :param context: quantum api request context
+        :param id: UUID representing subnet to update
+        :returns: updated subnet object
+        """
         LOG.debug('Update subnet')
         sub = super(N1kvQuantumPluginV2, self).update_subnet(context, subnet)
         self._send_update_subnet_request(sub)
@@ -746,21 +890,48 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return sub
 
     def delete_subnet(self, context, id):
-        """ Delete a Subnet """
+        """
+        Delete a subnet
+
+        :param context: quantum api request context
+        :param id: UUID representing subnet to delete
+        :returns: deleted subnet object
+        """
         LOG.debug('Delete subnet: %s', id)
         subnet = self.get_subnet(context, id)
         self._send_delete_subnet_request(subnet)
         return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):
-        """ Read a Subnet """
+        """
+        Retrieve a subnet
+
+        :param context: quantum api request context
+        :param id: UUID representing subnet to retrieve
+        :params fields: a list of strings that are valid keys in a subnet
+                        dictionary. Only these fields will be returned.
+        :returns: subnet object
+        """
         LOG.debug("Get subnet: %s", id)
         subnet = super(N1kvQuantumPluginV2, self).get_subnet(context, id,
                                                              fields)
         return self._fields(subnet, fields)
 
     def get_subnets(self, context, filters=None, fields=None):
-        """ Read all the Subnets """
+        """
+        Retrieve a list of subnets
+
+        :param context: quantum api request context
+        :param filters: a dictionary with keys that are valid keys for a
+                        subnet object. Values in this dictiontary are an
+                        iterable containing values that will be used for an
+                        exact match comparison for that value. Each result
+                        returned by this function will have matched one of the
+                        values for each key in filters
+        :params fields: a list of strings that are valid keys in a subnet
+                        dictionary. Only these fields will be returned.
+        :returns: list of dictionaries of subnets
+        """
         LOG.debug("Get subnets")
         subnets = super(N1kvQuantumPluginV2, self).get_subnets(context,
                                                                filters,
@@ -768,6 +939,17 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return [self._fields(subnet, fields) for subnet in subnets]
 
     def create_network_profile(self, context, network_profile):
+        """
+        Create a network profile
+
+        Create a network profile, which represents a pool of networks
+        belonging to one type (VLAN or VXLAN). On creation of network
+        profile, we retrieve the admin tenant-id which we use to replace
+        the previously stored fake tenant-id in tenant-profile bindings.
+        :param context: quantum api request context
+        :param network_profile: network profile dictionary
+        :returns: network profile object
+        """
         self._replace_fake_tenant_id_with_real(context)
         _network_profile = super(N1kvQuantumPluginV2, self).\
             create_network_profile(
@@ -797,6 +979,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             return _network_profile
 
     def delete_network_profile(self, context, id):
+        """
+        Delete a network profile.
+
+        :param context: quantum api request context
+        :param id: UUID of the network profile to delete
+        :returns: deleted network profile object
+        """
         _network_profile = super(N1kvQuantumPluginV2, self).\
             delete_network_profile(context, id)
         seg_min, seg_max = self._get_segment_range(

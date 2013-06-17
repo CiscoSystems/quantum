@@ -309,8 +309,12 @@ class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):
     def test_add_network_binding(self):
         with self.network() as network:
             TEST_NETWORK_ID = network['network']['id']
-            self.assertIsNone(n1kv_db_v2.get_network_binding(self.session,
-                                                             TEST_NETWORK_ID))
+
+            self.assertRaises(c_exc.N1kvNetworkBindingNotFound,
+                              n1kv_db_v2.get_network_binding,
+                              self.session,
+                              TEST_NETWORK_ID)
+
             p = _create_test_network_profile_if_not_there(self.session)
             n1kv_db_v2.add_network_binding(
                 self.session, TEST_NETWORK_ID, 'vlan',

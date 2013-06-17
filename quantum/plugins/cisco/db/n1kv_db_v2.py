@@ -52,6 +52,7 @@ def get_network_binding(session, network_id):
     except exc.NoResultFound:
         raise c_exc.N1kvNetworkBindingNotFound(network_id=network_id)
 
+
 def add_network_binding(session, network_id, network_type,
                         physical_network, segmentation_id,
                         multicast_ip, network_profile_id):
@@ -143,6 +144,18 @@ def delete_vlan_allocations(network_vlan_ranges):
                                   "%s from pool" %
                                  (alloc.vlan_id, physical_network))
                         session.delete(alloc)
+
+
+def get_vlan_allocation(physical_network, vlan_id):
+    session = db.get_session()
+    try:
+        alloc = (session.query(n1kv_models_v2.N1kvVlanAllocation).
+                 filter_by(physical_network=physical_network,
+                           vlan_id=vlan_id).
+                 one())
+        return alloc
+    except exc.NoResultFound:
+        return
 
 
 def reserve_vlan(session, network_profile):
@@ -696,14 +709,15 @@ class NetworkProfile_db_mixin(object):
 
     def _get_network_collection_for_tenant(self, model, tenant_id):
         session = db.get_session()
-        net_profile_ids = (session.query(n1kv_models_v2.ProfileBinding.\
-                       profile_id).filter_by(tenant_id=tenant_id).
-                       filter_by(profile_type='network').all())
+        net_profile_ids = (session.query(n1kv_models_v2.ProfileBinding.
+                                         profile_id).
+                           filter_by(tenant_id=tenant_id).
+                           filter_by(profile_type='network').all())
         network_profiles = []
         for pid in net_profile_ids:
             try:
                 network_profiles.append(session.query(model).
-                                filter_by(id=pid[0]).one())
+                                        filter_by(id=pid[0]).one())
             except exc.NoResultFound:
                 return []
         return [self._make_network_profile_dict(p) for p in network_profiles]
@@ -906,8 +920,8 @@ class NetworkProfile_db_mixin(object):
                             'name'])
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
-                seg_min, seg_max = self._get_segment_range(\
-                                       net_p['segment_range'])
+                seg_min, seg_max = self._get_segment_range(
+                    net_p['segment_range'])
                 prfl_seg_min, prfl_seg_max = self._get_segment_range(
                     _segment_range)
                 if (((seg_min >= prfl_seg_min) and
