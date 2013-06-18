@@ -29,35 +29,36 @@ from oslo.config import cfg as q_conf
 
 from quantum import policy
 
+from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.v2 import attributes
+from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
+from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
+
 from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum.common import rpc as q_rpc
-from quantum.agent import securitygroups_rpc as sg_rpc
 
+from quantum.db import agents_db
+from quantum.db import agentschedulers_db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
-from quantum.db import agents_db
-from quantum.db import agentschedulers_db
 
 from quantum.extensions import providernet
 
 from quantum.openstack.common import context
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
-from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
-from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
 
-from quantum.plugins.cisco.extensions import n1kv_profile
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
 from quantum.plugins.cisco.common import config as c_conf
 from quantum.plugins.cisco.common import cisco_exceptions
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import network_db_v2
+from quantum.plugins.cisco.extensions import n1kv_profile
 from quantum.plugins.cisco.n1kv import n1kv_client
 
 
@@ -176,7 +177,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 'api_extensions_path',
                 'extensions:quantum/plugins/cisco/extensions')
         self._setup_vsm()
-        # TBD : Temporary change to enabld dhcp. To be removed
         self._setup_rpc()
 
     def _setup_rpc(self):
@@ -263,9 +263,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if physical_network not in self.network_vlan_ranges:
             self.network_vlan_ranges[physical_network] = []
 
-    # TODO(rkukura) Use core mechanism for attribute authorization
-    # when available.
-
     def _check_provider_view_auth(self, context, network):
         return policy.check(context,
                             "extension:provider_network:view",
@@ -278,7 +275,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_network_dict_provider(self, context, network):
         """ Add extended network parameters """
-#        if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_network_binding(context.session,
                                                  network['id'])
         network[providernet.NETWORK_TYPE] = binding.network_type
@@ -378,7 +374,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _extend_port_dict_profile(self, context, port):
         """ Add the extended parameter port profile to the port """
-        # if self._check_provider_view_auth(context, network):
         binding = n1kv_db_v2.get_port_binding(context.session,
                                               port['id'])
         port[n1kv_profile.PROFILE_ID] = binding.profile_id
@@ -509,15 +504,15 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug('_send_update_subnet_request: %s', subnet['id'])
     # TBD End.
 
-    def _send_delete_subnet_request(self, subnet):
+    def _send_delete_subnet_request(self, subnet_name):
         """
         Send delete subnet request to VSM
 
-        :param subnet: subnet dictionary
+        :param subnet_name: string representing name of the subnet to delete
         """
-        LOG.debug('_send_delete_subnet_request: %s', id)
+        LOG.debug('_send_delete_subnet_request: %s', subnet_name)
         n1kvclient = n1kv_client.Client()
-        n1kvclient.delete_ip_pool(subnet['name'])
+        n1kvclient.delete_ip_pool(subnet_name)
 
     def _send_create_port_request(self, context, port):
         """
@@ -530,16 +525,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         :param port: port dictionary
         """
         LOG.debug('_send_create_port_request: %s', port)
-        vm_network = n1kv_db_v2.get_vm_network(port[n1kv_profile.PROFILE_ID],
-                                               port['network_id'])
-        if vm_network:
-            vm_network_name = vm_network['name']
-            n1kvclient = n1kv_client.Client()
-            n1kvclient.create_n1kv_port(port, vm_network_name)
-            vm_network['port_count'] += 1
-            n1kv_db_v2.update_vm_network(
-                vm_network_name, vm_network['port_count'])
-        else:
+        try:
+            vm_network = n1kv_db_v2.get_vm_network(
+                port[n1kv_profile.PROFILE_ID],
+                port['network_id'])
+        except cisco_exceptions.VMNetworkNotFound:
             policy_profile = n1kv_db_v2.get_policy_profile(
                 port[n1kv_profile.PROFILE_ID])
             vm_network_name = "vmn_" + str(port[n1kv_profile.PROFILE_ID]) +\
@@ -552,19 +542,27 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kvclient = n1kv_client.Client()
             n1kvclient.create_vm_network(port, vm_network_name, policy_profile)
             n1kvclient.create_n1kv_port(port, vm_network_name)
+        else:
+            vm_network_name = vm_network['name']
+            n1kvclient = n1kv_client.Client()
+            n1kvclient.create_n1kv_port(port, vm_network_name)
+            vm_network['port_count'] += 1
+            n1kv_db_v2.update_vm_network(
+                vm_network_name, vm_network['port_count'])
 
-    def _send_update_port_request(self, port, vm_network_name):
+    def _send_update_port_request(self, port_id, mac_address, vm_network_name):
         """
         Send update port request to VSM
 
-        :param port: port dictionary
+        :param port_id: UUID representing port to update
+        :param mac_address: string representing the mac address
         :param vm_network_name: VM network name to which the port is bound
         """
-        LOG.debug('_send_update_port_request: %s', port['id'])
-        body = {'portId': port['id'],
-                'macAddress': port['mac_address']}
+        LOG.debug('_send_update_port_request: %s', port_id)
+        body = {'portId': port_id,
+                'macAddress': mac_address}
         n1kvclient = n1kv_client.Client()
-        n1kvclient.update_n1kv_port(vm_network_name, port['id'], body)
+        n1kvclient.update_n1kv_port(vm_network_name, port_id, body)
 
     def _send_delete_port_request(self, context, id):
         """
@@ -646,7 +644,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
 
-        # TODO: later move under port
         try:
             self._send_create_network_request(context, net)
         except(cisco_exceptions.VSMError,
@@ -757,7 +754,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 ['network:dhcp', 'network:router_interface']:
             p_profile_name = c_conf.CISCO_N1K.default_policy_profile
             p_profile = self._get_policy_profile_by_name(p_profile_name)
-            port['port']['n1kv:profile_id'] = p_profile['id']
+            if p_profile:
+                port['port']['n1kv:profile_id'] = p_profile['id']
 
         profile_id_set = False
         if n1kv_profile.PROFILE_ID in port['port']:
@@ -899,7 +897,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug('Delete subnet: %s', id)
         subnet = self.get_subnet(context, id)
-        self._send_delete_subnet_request(subnet)
+        self._send_delete_subnet_request(subnet['name'])
         return super(N1kvQuantumPluginV2, self).delete_subnet(context, id)
 
     def get_subnet(self, context, id, fields=None):
