@@ -20,19 +20,18 @@
 # @author: Sergey Sudakovich, Cisco Systems Inc.
 
 
-import logging
 import quantum.db.api as db
 import re
-
-from sqlalchemy.orm import exc
-from sqlalchemy.sql import and_
 
 from quantum.api.v2.attributes import _validate_ip_address
 from quantum.common import exceptions as q_exc
 from quantum.db import models_v2
+from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.db import n1kv_models_v2
+from sqlalchemy.sql import and_
+from sqlalchemy.orm import exc
 
 LOG = logging.getLogger(__name__)
 
@@ -181,8 +180,8 @@ def delete_vlan_allocations(network_vlan_ranges):
             for alloc in allocs:
                 if alloc.vlan_id in vlan_ids:
                     if not alloc.allocated:
-                        LOG.debug("removing vlan %s on physical network "
-                                  "%s from pool" %
+                        LOG.debug(_("removing vlan %s on physical network "
+                                  "%s from pool") %
                                  (alloc.vlan_id, physical_network))
                         db_session.delete(alloc)
 
@@ -275,7 +274,7 @@ def alloc_network(db_session, network_profile_id):
                 else:
                     return reserve_vxlan(db_session, network_profile)
         except q_exc.NotFound:
-            LOG.debug("NetworkProfile not found")
+            LOG.debug(_("NetworkProfile not found"))
 
 
 def reserve_specific_vlan(db_session, physical_network, vlan_id):
@@ -299,12 +298,12 @@ def reserve_specific_vlan(db_session, physical_network, vlan_id):
                 else:
                     raise q_exc.VlanIdInUse(vlan_id=vlan_id,
                                             physical_network=physical_network)
-            LOG.debug("reserving specific vlan %s on physical network %s "
-                      "from pool" % (vlan_id, physical_network))
+            LOG.debug(_("reserving specific vlan %s on physical network %s "
+                      "from pool") % (vlan_id, physical_network))
             alloc.allocated = True
         except exc.NoResultFound:
-            LOG.debug("reserving specific vlan %s on physical network %s "
-                      "outside pool" % (vlan_id, physical_network))
+            LOG.debug(_("reserving specific vlan %s on physical network %s "
+                      "outside pool") % (vlan_id, physical_network))
             alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
                                                       vlan_id)
             alloc.allocated = True
@@ -335,11 +334,11 @@ def release_vlan(db_session, physical_network, vlan_id, network_vlan_ranges):
                     break
             if not inside:
                 db_session.delete(alloc)
-            LOG.debug("releasing vlan %s on physical network %s %s pool" %
+            LOG.debug(_("releasing vlan %s on physical network %s %s pool") %
                       (vlan_id, physical_network,
                        inside and "to" or "outside"))
         except exc.NoResultFound:
-            LOG.warning("vlan_id %s on physical network %s not found" %
+            LOG.warning(_("vlan_id %s on physical network %s not found") %
                         (vlan_id, physical_network))
 
 
@@ -354,7 +353,7 @@ def sync_vxlan_allocations(vxlan_id_ranges):
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
         if tun_max + 1 - tun_min > 1000000:
-            LOG.error("Skipping unreasonable vxlan ID range %s:%s" %
+            LOG.error(_("Skipping unreasonable vxlan ID range %s:%s") %
                       vxlan_id_range)
         else:
             vxlan_ids |= set(xrange(tun_min, tun_max + 1))
@@ -380,7 +379,7 @@ def delete_vxlan_allocations(vxlan_id_ranges):
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
         if tun_max + 1 - tun_min > 1000000:
-            LOG.error("Skipping unreasonable vxlan ID range %s:%s" %
+            LOG.error(_("Skipping unreasonable vxlan ID range %s:%s") %
                       vxlan_id_range)
         else:
             vxlan_ids |= set(xrange(tun_min, tun_max + 1))
@@ -391,7 +390,7 @@ def delete_vxlan_allocations(vxlan_id_ranges):
         for alloc in allocs:
             if alloc.vxlan_id in vxlan_ids:
                 if not alloc.allocated:
-                    LOG.debug("removing vxlan %s from pool" %
+                    LOG.debug(_("removing vxlan %s from pool") %
                               alloc.vxlan_id)
                     db_session.delete(alloc)
 
@@ -427,10 +426,10 @@ def reserve_specific_vxlan(db_session, vxlan_id):
                      one())
             if alloc.allocated:
                 raise c_exc.VxlanIdInUse(vxlan_id=vxlan_id)
-            LOG.debug("reserving specific vxlan %s from pool" % vxlan_id)
+            LOG.debug(_("reserving specific vxlan %s from pool") % vxlan_id)
             alloc.allocated = True
         except exc.NoResultFound:
-            LOG.debug("reserving specific vxlan %s outside pool" % vxlan_id)
+            LOG.debug(_("reserving specific vxlan %s outside pool") % vxlan_id)
             alloc = n1kv_models_v2.N1kvVxlanAllocation(vxlan_id)
             alloc.allocated = True
             db_session.add(alloc)
@@ -457,10 +456,10 @@ def release_vxlan(db_session, vxlan_id, vxlan_id_ranges):
                     break
             if not inside:
                 db_session.delete(alloc)
-            LOG.debug("releasing vxlan %s %s pool" %
+            LOG.debug(_("releasing vxlan %s %s pool") %
                       (vxlan_id, inside and "to" or "outside"))
         except exc.NoResultFound:
-            LOG.warning("vxlan_id %s not found" % vxlan_id)
+            LOG.warning(_("vxlan_id %s not found") % vxlan_id)
 
 
 def set_port_status(port_id, status):
@@ -537,7 +536,7 @@ def create_network_profile(network_profile):
     """
     Create Network Profile
     """
-    LOG.debug("create_network_profile()")
+    LOG.debug(_("create_network_profile()"))
     db_session = db.get_session()
     with db_session.begin(subtransactions=True):
         if network_profile['segment_type'] == 'vlan':
@@ -561,7 +560,7 @@ def delete_network_profile(id):
     """
     Delete Network Profile
     """
-    LOG.debug("delete_network_profile()")
+    LOG.debug(_("delete_network_profile()"))
     db_session = db.get_session()
     network_profile = get_network_profile(id)
     with db_session.begin(subtransactions=True):
@@ -575,7 +574,7 @@ def update_network_profile(id, network_profile):
     """
     Update Network Profile
     """
-    LOG.debug("update_network_profile()")
+    LOG.debug(_("update_network_profile()"))
     db_session = db.get_session()
     with db_session.begin(subtransactions=True):
         _profile = get_network_profile(id)
@@ -588,7 +587,7 @@ def get_network_profile(id, fields=None):
     """
     Get Network Profile
     """
-    LOG.debug("get_network_profile()")
+    LOG.debug(_("get_network_profile()"))
     db_session = db.get_session()
     try:
         net_profile = db_session.query(
@@ -602,7 +601,7 @@ def get_network_profile_by_name(name):
     """
     Get Network Profile by name.
     """
-    LOG.debug("get_network_profile_by_name")
+    LOG.debug(_("get_network_profile_by_name"))
     db_session = db.get_session()
     try:
         network_profile = db_session.query(
@@ -635,7 +634,7 @@ def create_policy_profile(policy_profile):
     """
     Create Policy Profile
     """
-    LOG.debug("create_policy_profile()")
+    LOG.debug(_("create_policy_profile()"))
     db_session = db.get_session()
     with db_session.begin(subtransactions=True):
         p_profile = n1kv_models_v2.PolicyProfile(id=policy_profile['id'],
@@ -648,7 +647,7 @@ def delete_policy_profile(id):
     """
     Delete Policy Profile
     """
-    LOG.debug("delete_policy_profile()")
+    LOG.debug(_("delete_policy_profile()"))
     db_session = db.get_session()
     policy_profile = get_policy_profile(id)
     with db_session.begin(subtransactions=True):
@@ -659,7 +658,7 @@ def update_policy_profile(id, policy_profile):
     """
     Update a policy profile.
     """
-    LOG.debug("update_policy_profile()")
+    LOG.debug(_("update_policy_profile()"))
     db_session = db.get_session()
     with db_session.begin(subtransactions=True):
         _profile = get_policy_profile(id)
@@ -672,7 +671,7 @@ def get_policy_profile(id, fields=None):
     """
     Get Policy Profile
     """
-    LOG.debug("get_policy_profile()")
+    LOG.debug(_("get_policy_profile()"))
     db_session = db.get_session()
     try:
         policy_profile = db_session.query(
@@ -703,18 +702,18 @@ def create_profile_binding(tenant_id, profile_id, profile_type):
 
 
 def _profile_binding_exists(tenant_id, profile_id, profile_type):
-    LOG.debug("_profile_binding_exists()")
+    LOG.debug(_("_profile_binding_exists()"))
     try:
         binding = _get_profile_binding(tenant_id, profile_id)
         return binding.profile_type == profile_type
     except exc.NoResultFound:
         return False
     except Exception, e:
-        LOG.debug("Error in get_profile_binding(): %s" % e)
+        LOG.debug(_("Error in get_profile_binding(): %s") % e)
 
 
 def _get_profile_binding(tenant_id, profile_id):
-    LOG.debug("_get_profile_binding")
+    LOG.debug(_("_get_profile_binding"))
     db_session = db.get_session()
     binding = db_session.query(n1kv_models_v2.ProfileBinding).filter_by(
         tenant_id=tenant_id, profile_id=profile_id).one()
@@ -725,7 +724,7 @@ def get_profile_binding(tenant_id, profile_id):
     """
     Get Network/Policy Profile - Tenant binding
     """
-    LOG.debug("get_profile_binding()")
+    LOG.debug(_("get_profile_binding()"))
     try:
         return _get_profile_binding(tenant_id, profile_id)
     except exc.NoResultFound:
@@ -738,7 +737,7 @@ def delete_profile_binding(tenant_id, profile_id):
     """
     Delete Policy Binding
     """
-    LOG.debug("delete_profile_binding()")
+    LOG.debug(_("delete_profile_binding()"))
     db_session = db.get_session()
     binding = get_profile_binding(tenant_id, profile_id)
     with db_session.begin(subtransactions=True):
@@ -751,7 +750,7 @@ def _get_profile_bindings(profile_type=None):
     If profile type is None, return profile-tenant binding for all
     profile types.
     """
-    LOG.debug("_get_profile_bindings()")
+    LOG.debug(_("_get_profile_bindings()"))
     db_session = db.get_session()
     if profile_type:
         profile_bindings = db_session.query(n1kv_models_v2.ProfileBinding).\

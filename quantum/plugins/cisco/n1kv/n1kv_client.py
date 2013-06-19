@@ -16,17 +16,17 @@
 #
 # @author: Abhishek Raut, Cisco Systems, Inc.
 
-import httplib
-import logging
 import base64
+import httplib
 
-from quantum.wsgi import Serializer
 from quantum.extensions import providernet
-from quantum.plugins.cisco.db import network_db_v2
+from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.common import cisco_constants
 from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
+from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.extensions import n1kv_profile
+from quantum.wsgi import Serializer
 
 LOG = logging.getLogger(__name__)
 
@@ -102,19 +102,6 @@ class Client(object):
 
     """
 
-    def __init__(self, **kwargs):
-        """ Initialize a new client for the plugin """
-        self.format = 'json'
-        self.action_prefix = '/api/hyper-v'
-        self.hosts = self._get_vsm_hosts()
-        netmask_to_str = lambda b: "%d.%d.%d.%d" % ((b & 0xff000000) >> 24,
-                                                    (b & 0xff0000) >> 16,
-                                                    (b & 0xff00) >> 8,
-                                                    (b & 0xff))
-        self.cidr_lookup_table = \
-            dict([(i, netmask_to_str((2 ** 32) - (2 ** (32 - i))))
-                  for i in xrange(33)])
-
     # Metadata for deserializing xml
     _serialization_metadata = {
         "application/xml": {
@@ -148,6 +135,19 @@ class Client(object):
     bridge_domain_path = "/bridge-domain/%s"
     logical_networks_path = "/fabric-network"
     events_path = "/events"
+
+    def __init__(self, **kwargs):
+        """ Initialize a new client for the plugin """
+        self.format = 'json'
+        self.action_prefix = '/api/hyper-v'
+        self.hosts = self._get_vsm_hosts()
+        netmask_to_str = lambda b: "%d.%d.%d.%d" % ((b & 0xff000000) >> 24,
+                                                    (b & 0xff0000) >> 16,
+                                                    (b & 0xff00) >> 8,
+                                                    (b & 0xff))
+        self.cidr_lookup_table = \
+            dict([(i, netmask_to_str((2 ** 32) - (2 ** (32 - i))))
+                  for i in xrange(33)])
 
     def list_port_profiles(self):
         """
@@ -196,7 +196,7 @@ class Client(object):
         :param network: network dict
         :param network_profile: network profile dict
         """
-        LOG.debug("seg id %s\n", network_profile['name'])
+        LOG.debug(_("seg id %s\n"), network_profile['name'])
         body = {'name': network['name'],
                 'id': network['id'],
                 'networkDefinition': network_profile['name'], }
@@ -234,7 +234,7 @@ class Client(object):
 
         :param network_profile: network profile dict
         """
-        LOG.debug("logical network")
+        LOG.debug(_("logical network"))
         body = {'name': network_profile['name']}
         return self._post(self.logical_networks_path,
                           body=body)
@@ -245,7 +245,7 @@ class Client(object):
 
         :param network_profile: network profile dict
         """
-        LOG.debug("network_segment_pool")
+        LOG.debug(_("network_segment_pool"))
         body = {'name': network_profile['name'],
                 'id': network_profile['id'],
                 'fabricNetworkName': 'test'}
@@ -393,19 +393,19 @@ class Client(object):
         headers.update({'Content-Type': self._set_content_type('json')})
         if body:
             body = "%s  " % self._serialize(body)
-            LOG.debug("req: %s", body)
+            LOG.debug(_("req: %s"), body)
         conn = httplib.HTTPConnection(self.hosts[0])
         conn.request(method, action, body, headers)
         resp = conn.getresponse()
         _content_type = resp.getheader('content-type')
         replybody = resp.read()
         status_code = self._get_status_code(resp)
-        LOG.debug("status_code %s\n", status_code)
+        LOG.debug(_("status_code %s\n"), status_code)
         if status_code == httplib.OK:
             if 'application/xml' in _content_type:
                 return self._deserialize(replybody, status_code)
             elif 'text/plain' in _content_type:
-                LOG.debug("VSM: %s", replybody)
+                LOG.debug(_("VSM: %s"), replybody)
         elif status_code == httplib.INTERNAL_SERVER_ERROR:
             raise c_exc.VSMError(reason=_(replybody))
         elif status_code == httplib.SERVICE_UNAVAILABLE:
