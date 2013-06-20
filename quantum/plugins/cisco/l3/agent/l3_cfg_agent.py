@@ -856,7 +856,7 @@ class L3NATAgent(manager.Manager):
                     self.fullsync = True
 
     def after_start(self):
-        LOG.info(_("L3 agent started"))
+        LOG.info(_("L3 Cfg Agent started"))
 
     def _update_routing_table(self, ri, operation, route):
         cmd = ['ip', 'route', operation, 'to', route['destination'],
@@ -967,8 +967,8 @@ def main():
     conf(project='quantum')
     config.setup_logging(conf)
     server = quantum_service.Service.create(
-        binary='quantum-l3-agent',
-        topic=topics.L3_AGENT,
+        binary='quantum-l3-cfg-agent',
+        topic=cl3_constants.L3_CFG_AGENT,
         report_interval=cfg.CONF.AGENT.report_interval,
-        manager='quantum.agent.l3_agent.L3NATAgentWithStateReport')
+        manager='quantum.plugins.cisco.l3.agent.l3_cfg_agent.L3NATAgentWithStateReport')
     service.launch(server).wait()

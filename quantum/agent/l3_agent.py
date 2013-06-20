@@ -139,7 +139,7 @@ class RouterInfo(object):
             self._snat_action = None
 
 
-class L3NATAgent(manager.Manager):
+class L3CfgAgent(manager.Manager):
 
     OPTS = [
         cfg.StrOpt('external_network_bridge', default='br-ex',
@@ -197,7 +197,7 @@ class L3NATAgent(manager.Manager):
         self.sync_sem = semaphore.Semaphore(1)
         if self.conf.use_namespaces:
             self._destroy_router_namespaces(self.conf.router_id)
-        super(L3NATAgent, self).__init__(host=self.conf.host)
+        super(L3CfgAgent, self).__init__(host=self.conf.host)
 
     def _destroy_router_namespaces(self, only_router_id=None):
         """Destroy router namespaces on the host to eliminate all stale
@@ -701,10 +701,10 @@ class L3NATAgent(manager.Manager):
         ri.routes = new_routes
 
 
-class L3NATAgentWithStateReport(L3NATAgent):
+class L3CfgAgentWithStateReport(L3CfgAgent):
 
     def __init__(self, host, conf=None):
-        super(L3NATAgentWithStateReport, self).__init__(host=host, conf=conf)
+        super(L3CfgAgentWithStateReport, self).__init__(host=host, conf=conf)
         self.state_rpc = agent_rpc.PluginReportStateAPI(topics.PLUGIN)
         self.agent_state = {
             'binary': 'quantum-l3-agent',
@@ -767,7 +767,7 @@ class L3NATAgentWithStateReport(L3NATAgent):
 def main():
     eventlet.monkey_patch()
     conf = cfg.CONF
-    conf.register_opts(L3NATAgent.OPTS)
+    conf.register_opts(L3CfgAgent.OPTS)
     config.register_agent_state_opts_helper(conf)
     config.register_root_helper(conf)
     conf.register_opts(interface.OPTS)
@@ -778,5 +778,5 @@ def main():
         binary='quantum-l3-agent',
         topic=topics.L3_AGENT,
         report_interval=cfg.CONF.AGENT.report_interval,
-        manager='quantum.agent.l3_agent.L3NATAgentWithStateReport')
+        manager='quantum.agent.l3_cfg_agent.L3CfgAgentWithStateReport')
     service.launch(server).wait()
