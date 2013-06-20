@@ -189,7 +189,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         if self.enable_tunneling:
             self.setup_tunnel_br(tun_br)
         self.agent_state = {
-            'binary': 'quantum-openvswitch-agent',
+            'binary': 'quantum-csr1kv-openvswitch-agent',
             'host': cfg.CONF.host,
             'topic': q_const.L2_AGENT_TOPIC,
             'configurations': bridge_mappings,
