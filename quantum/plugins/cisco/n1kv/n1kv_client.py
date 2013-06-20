@@ -16,17 +16,17 @@
 #
 # @author: Abhishek Raut, Cisco Systems, Inc.
 
+import base64
 import httplib
 import logging
-import base64
 
-from quantum.wsgi import Serializer
 from quantum.extensions import providernet
-from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.common import cisco_constants
 from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
+from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.extensions import n1kv_profile
+from quantum.wsgi import Serializer
 
 LOG = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class Client(object):
     """
 
     def __init__(self, **kwargs):
-        """ Initialize a new client for the plugin """
+        """Initialize a new client for the plugin."""
         self.format = 'json'
         self.action_prefix = '/api/hyper-v'
         self.hosts = self._get_vsm_hosts()
@@ -297,9 +297,9 @@ class Client(object):
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
-    # TODO: Removing tenantId from the request as a temp fix to allow
-    #       port create. VSM CLI needs to be fixed. Should not interfere
-    #       since VSM is not using tenantId as of now.
+    # TODO(abhraut): Removing tenantId from the request as a temp fix to allow
+    #                port create. VSM CLI needs to be fixed. Should not
+    #                interfere since VSM is not using tenantId as of now.
     def create_vm_network(self, port, vm_network_name, policy_profile):
         """
         Create a VM network on the VSM

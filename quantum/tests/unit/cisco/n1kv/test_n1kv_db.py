@@ -13,17 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest2
 from sqlalchemy.orm import exc as s_exc
+import unittest2
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
-from quantum.tests.unit import test_db_plugin as test_plugin
+from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db.n1kv_models_v2 import NetworkProfile
 from quantum.plugins.cisco.db.n1kv_models_v2 import PolicyProfile
 from quantum.plugins.cisco.db.n1kv_models_v2 import ProfileBinding
-from quantum.plugins.cisco.common import cisco_exceptions as c_exc
+from quantum.tests.unit import test_db_plugin as test_plugin
 
 PHYS_NET = 'physnet1'
 PHYS_NET_2 = 'physnet2'
@@ -420,7 +420,7 @@ class NetworkProfileTests(unittest2.TestCase):
                           'physical_network': 'phys1',
                           'segment_range': '261-270'}]
         [n1kv_db_v2.create_network_profile(p) for p in test_profiles]
-        # TODO Fix this test to work with real tenant_td
+        # TODO(abhraut): Fix this test to work with real tenant_td
         profiles = n1kv_db_v2._get_network_profiles()
         self.assertEqual(len(test_profiles), len(profiles))
 

@@ -13,19 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
 import httplib
+import unittest
 
 from mock import patch
 
-from quantum.plugins.cisco.db import n1kv_models_v2
 from quantum.plugins.cisco.db import n1kv_db_v2
-from quantum.tests.unit import test_db_plugin as test_plugin
+from quantum.plugins.cisco.db import n1kv_models_v2
+from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.extensions import n1kv_profile
-
 from quantum.plugins.cisco.n1kv import n1kv_client
 from quantum.plugins.cisco.n1kv import n1kv_quantum_plugin
-from quantum.plugins.cisco.db import network_db_v2 as cdb
+from quantum.tests.unit import test_db_plugin as test_plugin
 
 from quantum import context
 import quantum.db.api as db
@@ -82,7 +81,7 @@ def _fake_add_dummy_profile_for_test(self, obj):
 
 
 def _fake_setup_vsm(self):
-    """ Fake establish Communication with Cisco Nexus1000V VSM """
+    """Fake establish Communication with Cisco Nexus1000V VSM."""
     self.agent_vsm = True
     self._poll_policies(event_type="port_profile")
 

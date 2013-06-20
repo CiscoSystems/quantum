@@ -62,12 +62,7 @@ class ProcessManager(object):
 
         if self.active:
             cmd = ['kill', '-9', pid]
-            if self.namespace:
-                ip_wrapper = ip_lib.IPWrapper(self.root_helper, self.namespace)
-                ip_wrapper.netns.execute(cmd)
-            else:
-                utils.execute(cmd, self.root_helper)
-
+            utils.execute(cmd, self.root_helper)
         elif pid:
             LOG.debug(_('Process for %(uuid)s pid %(pid)d is stale, ignoring '
                         'command'), {'uuid': self.uuid, 'pid': pid})
@@ -78,7 +73,7 @@ class ProcessManager(object):
         """Returns the file name for a given kind of config file."""
         pids_dir = os.path.abspath(os.path.normpath(self.conf.external_pids))
         if ensure_pids_dir and not os.path.isdir(pids_dir):
-            os.makedirs(pids_dir, 0755)
+            os.makedirs(pids_dir, 0o755)
 
         return os.path.join(pids_dir, self.uuid + '.pid')
 
@@ -91,9 +86,9 @@ class ProcessManager(object):
         try:
             with open(file_name, 'r') as f:
                 return int(f.read())
-        except IOError, e:
+        except IOError:
             msg = _('Unable to access %s')
-        except ValueError, e:
+        except ValueError:
             msg = _('Unable to convert value in %s')
 
         LOG.debug(msg, file_name)
@@ -108,5 +103,5 @@ class ProcessManager(object):
         cmd = ['cat', '/proc/%s/cmdline' % pid]
         try:
             return self.uuid in utils.execute(cmd, self.root_helper)
-        except RuntimeError, e:
+        except RuntimeError:
             return False

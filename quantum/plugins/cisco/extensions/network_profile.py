@@ -16,9 +16,9 @@
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Sergey Sudakovich, Cisco Systems, Inc.
 
+from quantum.api import extensions
 from quantum.api.v2 import attributes
 from quantum.api.v2 import base
-from quantum.api import extensions
 from quantum import manager
 
 
@@ -81,7 +81,7 @@ class Network_profile(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_resources(cls):
-        """ Returns Ext Resources """
+        """Returns Ext Resources."""
         exts = []
         plugin = manager.QuantumManager.get_plugin()
         for resource_name in ['network_profile', 'network_profile_binding']:

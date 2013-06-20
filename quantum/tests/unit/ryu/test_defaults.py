@@ -17,13 +17,12 @@
 
 from oslo.config import cfg
 
-#NOTE this import loads tests required options
-from quantum.plugins.ryu.common import config
+from quantum.plugins.ryu.common import config  # noqa
 from quantum.tests import base
 
 
 class ConfigurationTest(base.BaseTestCase):
-    """Configuration file Tests"""
+    """Configuration file Tests."""
     def test_defaults(self):
         self.assertEqual('br-int', cfg.CONF.OVS.integration_bridge)
         self.assertEqual(2, cfg.CONF.AGENT.polling_interval)

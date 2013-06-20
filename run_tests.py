@@ -41,14 +41,13 @@ To run a single functional test module::
     python run_tests.py functional.test_stores
 """
 
-import gettext
 import os
 import sys
 
-from quantum.common.test_lib import run_tests
 from nose import config
 from nose import core
 
+from quantum.common.test_lib import run_tests
 import quantum.tests.unit
 
 

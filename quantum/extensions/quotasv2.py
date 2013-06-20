@@ -15,6 +15,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import sys
+
 from oslo.config import cfg
 import webob
 
@@ -52,6 +54,8 @@ class QuotaSetsController(wsgi.Controller):
             attr_dict[quota_resource] = {'allow_post': False,
                                          'allow_put': True,
                                          'convert_to': convert_to_int,
+                                         'validate': {'type:range':
+                                                      [-1, sys.maxsize]},
                                          'is_visible': True}
         self._update_extended_attributes = False
 
@@ -98,13 +102,13 @@ class QuotaSetsController(wsgi.Controller):
         body = base.Controller.prepare_request_body(
             request.context, body, False, self._resource_name,
             EXTENDED_ATTRIBUTES_2_0[RESOURCE_COLLECTION])
-        for key, value in body[self._resource_name].iteritems():
+        for key, value in body[self._resource_name].items():
             self._driver.update_quota_limit(request.context, id, key, value)
         return {self._resource_name: self._get_quotas(request, id)}
 
 
 class Quotasv2(extensions.ExtensionDescriptor):
-    """Quotas management support"""
+    """Quotas management support."""
 
     @classmethod
     def get_name(cls):
@@ -131,7 +135,7 @@ class Quotasv2(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_resources(cls):
-        """ Returns Ext Resources """
+        """Returns Ext Resources."""
         controller = resource.Resource(
             QuotaSetsController(QuantumManager.get_plugin()),
             faults=base.FAULT_MAP)

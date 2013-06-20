@@ -17,6 +17,7 @@
 # @author: Mark McClain, DreamHost
 
 import os
+import sys
 
 import mock
 import testtools
@@ -44,16 +45,16 @@ class TestPidfile(base.BaseTestCase):
         self.os.O_CREAT = os.O_CREAT
         self.os.O_RDWR = os.O_RDWR
 
-        p = daemon.Pidfile('thefile', 'python')
+        daemon.Pidfile('thefile', 'python')
         self.os.open.assert_called_once_with('thefile', os.O_CREAT | os.O_RDWR)
         self.fcntl.flock.assert_called_once_with(FAKE_FD, self.fcntl.LOCK_EX)
 
     def test_init_open_fail(self):
         self.os.open.side_effect = IOError
 
-        with mock.patch.object(daemon.sys, 'stderr') as stderr:
+        with mock.patch.object(daemon.sys, 'stderr'):
             with testtools.ExpectedException(SystemExit):
-                p = daemon.Pidfile('thefile', 'python')
+                daemon.Pidfile('thefile', 'python')
                 sys.assert_has_calls([
                     mock.call.stderr.write(mock.ANY),
                     mock.call.exit(1)]
@@ -94,6 +95,30 @@ class TestPidfile(base.BaseTestCase):
             execute.assert_called_once_with(
                 ['cat', '/proc/34/cmdline'], 'sudo')
 
+    def test_is_running_uuid_true(self):
+        with mock.patch('quantum.agent.linux.utils.execute') as execute:
+            execute.return_value = 'python 1234'
+            p = daemon.Pidfile('thefile', 'python', uuid='1234')
+
+            with mock.patch.object(p, 'read') as read:
+                read.return_value = 34
+                self.assertTrue(p.is_running())
+
+            execute.assert_called_once_with(
+                ['cat', '/proc/34/cmdline'], 'sudo')
+
+    def test_is_running_uuid_false(self):
+        with mock.patch('quantum.agent.linux.utils.execute') as execute:
+            execute.return_value = 'python 1234'
+            p = daemon.Pidfile('thefile', 'python', uuid='6789')
+
+            with mock.patch.object(p, 'read') as read:
+                read.return_value = 34
+                self.assertFalse(p.is_running())
+
+            execute.assert_called_once_with(
+                ['cat', '/proc/34/cmdline'], 'sudo')
+
 
 class TestDaemon(base.BaseTestCase):
     def setUp(self):
@@ -126,7 +151,7 @@ class TestDaemon(base.BaseTestCase):
 
     def test_fork_error(self):
         self.os.fork.side_effect = lambda: OSError(1)
-        with mock.patch.object(daemon.sys, 'stderr') as stderr:
+        with mock.patch.object(daemon.sys, 'stderr'):
             with testtools.ExpectedException(SystemExit):
                 d = daemon.Daemon('pidfile', 'stdin')
                 d._fork()
@@ -174,7 +199,7 @@ class TestDaemon(base.BaseTestCase):
         self.pidfile.return_value.is_running.return_value = True
         d = daemon.Daemon('pidfile')
 
-        with mock.patch.object(daemon.sys, 'stderr') as stderr:
+        with mock.patch.object(daemon.sys, 'stderr'):
             with mock.patch.object(d, 'daemonize') as daemonize:
                 with testtools.ExpectedException(SystemExit):
                     d.start()

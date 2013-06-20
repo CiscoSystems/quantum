@@ -73,7 +73,7 @@ class TestProcessManager(base.BaseTestCase):
             active.__get__ = mock.Mock(return_value=True)
 
             manager = ep.ProcessManager(self.conf, 'uuid', namespace='ns')
-            with mock.patch.object(ep, 'ip_lib') as ip_lib:
+            with mock.patch.object(ep, 'ip_lib'):
                 manager.enable(callback)
                 self.assertFalse(callback.called)
 
@@ -95,12 +95,10 @@ class TestProcessManager(base.BaseTestCase):
 
                 manager = ep.ProcessManager(self.conf, 'uuid', namespace='ns')
 
-                with mock.patch.object(ep, 'ip_lib') as ip_lib:
+                with mock.patch.object(ep, 'utils') as utils:
                     manager.disable()
-                    ip_lib.assert_has_calls([
-                        mock.call.IPWrapper('sudo', 'ns'),
-                        mock.call.IPWrapper().netns.execute(['kill', '-9', 4])]
-                    )
+                    utils.assert_has_calls(
+                        mock.call.execute(['kill', '-9', 4], 'sudo'))
 
     def test_disable_not_active(self):
         with mock.patch.object(ep.ProcessManager, 'pid') as pid:
@@ -136,7 +134,7 @@ class TestProcessManager(base.BaseTestCase):
                 manager = ep.ProcessManager(self.conf, 'uuid')
                 retval = manager.get_pid_file_name(ensure_pids_dir=True)
                 self.assertEqual(retval, '/var/path/uuid.pid')
-                makedirs.assert_called_once_with('/var/path', 0755)
+                makedirs.assert_called_once_with('/var/path', 0o755)
 
     def test_get_pid_file_name_default(self):
         with mock.patch.object(ep.os.path, 'isdir') as isdir:

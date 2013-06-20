@@ -21,9 +21,9 @@ from sqlalchemy.orm import exc
 from sqlalchemy.sql import exists
 
 from quantum.common import constants
-from quantum.db import l3_db
 from quantum.db import agents_db
 from quantum.db import agentschedulers_db
+from quantum.db import l3_db
 from quantum.openstack.common import log as logging
 
 
@@ -33,7 +33,8 @@ LOG = logging.getLogger(__name__)
 class ChanceScheduler(object):
     """Allocate a L3 agent for a router in a random way.
     More sophisticated scheduler (similar to filter scheduler in nova?)
-    can be introduced later."""
+    can be introduced later.
+    """
 
     def auto_schedule_routers(self, plugin, context, host, router_id):
         """Schedule non-hosted routers to L3 Agent running on host.
@@ -86,7 +87,7 @@ class ChanceScheduler(object):
 
             # check if the configuration of l3 agent is compatible
             # with the router
-            router_ids = [router_id[0] for router_id in router_ids]
+            router_ids = [router_id_[0] for router_id_ in router_ids]
             routers = plugin.get_routers(context, filters={'id': router_ids})
             to_removed_ids = []
             for router in routers:

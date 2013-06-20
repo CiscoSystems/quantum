@@ -30,7 +30,7 @@ from quantum.tests import base
 
 
 class TestConfig(object):
-    """Configuration for this test"""
+    """Configuration for this test."""
     host = '127.0.0.1'
     port = 8888
     use_ssl = False
@@ -39,7 +39,7 @@ class TestConfig(object):
 
 
 def _ofc(id):
-    """OFC ID converter"""
+    """OFC ID converter."""
     return "ofc-%s" % id
 
 
@@ -55,7 +55,7 @@ class PFCDriverTestBase(base.BaseTestCase):
         self.addCleanup(self.mox.UnsetStubs)
 
     def get_ofc_item_random_params(self):
-        """create random parameters for ofc_item test"""
+        """create random parameters for ofc_item test."""
         tenant_id = uuidutils.generate_uuid()
         network_id = uuidutils.generate_uuid()
         port_id = uuidutils.generate_uuid()
@@ -166,6 +166,9 @@ class PFCDriverTestBase(base.BaseTestCase):
         self.driver.delete_port(port_path)
         self.mox.VerifyAll()
 
+    def test_filter_supported(self):
+        self.assertFalse(self.driver.filter_supported())
+
 
 class PFCDriverBaseTest(PFCDriverTestBase):
     pass
@@ -185,7 +188,14 @@ class PFCV3DriverTest(PFCDriverTestBase):
         self.assertEqual(ofc_t_path, ret)
 
     def testc_delete_tenant(self):
-        pass
+        t, n, p = self.get_ofc_item_random_params()
+
+        path = "/tenants/%s" % _ofc(t)
+        # There is no API call.
+        self.mox.ReplayAll()
+
+        self.driver.delete_tenant(path)
+        self.mox.VerifyAll()
 
 
 class PFCV4DriverTest(PFCDriverTestBase):

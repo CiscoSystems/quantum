@@ -74,8 +74,9 @@ class Controller(object):
         if self._allow_pagination and self._native_pagination:
             # Native pagination need native sorting support
             if not self._native_sorting:
-                raise Exception(_("Native pagination depend on native "
-                                  "sorting"))
+                raise exceptions.Invalid(
+                    _("Native pagination depend on native sorting")
+                )
             if not self._allow_sorting:
                 LOG.info(_("Allow sorting is enabled because native "
                            "pagination requires native sorting"))
@@ -116,17 +117,40 @@ class Controller(object):
                                     % self._plugin.__class__.__name__)
         return getattr(self._plugin, native_sorting_attr_name, False)
 
-    def _is_visible(self, attr):
-        attr_val = self._attr_info.get(attr)
-        return attr_val and attr_val['is_visible']
+    def _is_visible(self, context, attr_name, data):
+        action = "%s:%s" % (self._plugin_handlers[self.SHOW], attr_name)
+        # Optimistically init authz_check to True
+        authz_check = True
+        try:
+            attr = (attributes.RESOURCE_ATTRIBUTE_MAP
+                    [self._collection].get(attr_name))
+            if attr and attr.get('enforce_policy'):
+                authz_check = policy.check_if_exists(
+                    context, action, data)
+        except KeyError:
+            # The extension was not configured for adding its resources
+            # to the global resource attribute map. Policy check should
+            # not be performed
+            LOG.debug(_("The resource %(resource)s was not found in the "
+                        "RESOURCE_ATTRIBUTE_MAP; unable to perform authZ "
+                        "check for attribute %(attr)s"),
+                      {'resource': self._collection,
+                       'attr': attr_name})
+        except exceptions.PolicyRuleNotFound:
+            LOG.debug(_("Policy rule:%(action)s not found. Assuming no "
+                        "authZ check is defined for %(attr)s"),
+                      {'action': action,
+                       'attr': attr_name})
+        attr_val = self._attr_info.get(attr_name)
+        return attr_val and attr_val['is_visible'] and authz_check
 
-    def _view(self, data, fields_to_strip=None):
+    def _view(self, context, data, fields_to_strip=None):
         # make sure fields_to_strip is iterable
         if not fields_to_strip:
             fields_to_strip = []
 
         return dict(item for item in data.iteritems()
-                    if (self._is_visible(item[0]) and
+                    if (self._is_visible(context, item[0], data) and
                         item[0] not in fields_to_strip))
 
     def _do_field_list(self, original_fields):
@@ -141,13 +165,23 @@ class Controller(object):
     def __getattr__(self, name):
         if name in self._member_actions:
             def _handle_action(request, id, **kwargs):
-                if 'body' in kwargs:
-                    body = kwargs.pop('body')
-                    return getattr(self._plugin, name)(request.context, id,
-                                                       body, **kwargs)
-                else:
-                    return getattr(self._plugin, name)(request.context, id,
-                                                       **kwargs)
+                arg_list = [request.context, id]
+                # Fetch the resource and verify if the user can access it
+                try:
+                    resource = self._item(request, id, True)
+                except exceptions.PolicyNotAuthorized:
+                    raise webob.exc.HTTPNotFound()
+                body = kwargs.pop('body', None)
+                # Explicit comparison with None to distinguish from {}
+                if body is not None:
+                    arg_list.append(body)
+                # TODO(salvatore-orlando): bp/make-authz-ortogonal
+                # The body of the action request should be included
+                # in the info passed to the policy engine
+                # It is ok to raise a 403 because accessibility to the
+                # object was checked earlier in this method
+                policy.enforce(request.context, name, resource)
+                return getattr(self._plugin, name)(*arg_list, **kwargs)
             return _handle_action
         else:
             raise AttributeError
@@ -169,7 +203,7 @@ class Controller(object):
         return api_common.NoSortingHelper(request, self._attr_info)
 
     def _items(self, request, do_authz=False, parent_id=None):
-        """Retrieves and formats a list of elements of the requested entity"""
+        """Retrieves and formats a list of elements of the requested entity."""
         # NOTE(salvatore-orlando): The following ensures that fields which
         # are needed for authZ policy validation are not stripped away by the
         # plugin before returning.
@@ -192,7 +226,6 @@ class Controller(object):
         obj_list = obj_getter(request.context, **kwargs)
         obj_list = sorting_helper.sort(obj_list)
         obj_list = pagination_helper.paginate(obj_list)
-
         # Check authz
         if do_authz:
             # FIXME(salvatore-orlando): obj_getter might return references to
@@ -204,7 +237,7 @@ class Controller(object):
                                         obj,
                                         plugin=self._plugin)]
         collection = {self._collection:
-                      [self._view(obj,
+                      [self._view(request.context, obj,
                                   fields_to_strip=fields_to_add)
                        for obj in obj_list]}
         pagination_links = pagination_helper.get_links(obj_list)
@@ -215,7 +248,7 @@ class Controller(object):
 
     def _item(self, request, id, do_authz=False, field_list=None,
               parent_id=None):
-        """Retrieves and formats a single element of the requested entity"""
+        """Retrieves and formats a single element of the requested entity."""
         kwargs = {'fields': field_list}
         action = self._plugin_handlers[self.SHOW]
         if parent_id:
@@ -226,7 +259,7 @@ class Controller(object):
         # FIXME(salvatore-orlando): obj_getter might return references to
         # other resources. Must check authZ on them too.
         if do_authz:
-            policy.enforce(request.context, action, obj, plugin=self._plugin)
+            policy.enforce(request.context, action, obj)
         return obj
 
     def _send_dhcp_notification(self, context, data, methodname):
@@ -234,12 +267,12 @@ class Controller(object):
             self._dhcp_agent_notifier.notify(context, data, methodname)
 
     def index(self, request, **kwargs):
-        """Returns a list of the requested entity"""
+        """Returns a list of the requested entity."""
         parent_id = kwargs.get(self._parent_id_name)
         return self._items(request, True, parent_id)
 
     def show(self, request, id, **kwargs):
-        """Returns detailed information about the requested entity"""
+        """Returns detailed information about the requested entity."""
         try:
             # NOTE(salvatore-orlando): The following ensures that fields
             # which are needed for authZ policy validation are not stripped
@@ -248,7 +281,8 @@ class Controller(object):
                 api_common.list_args(request, "fields"))
             parent_id = kwargs.get(self._parent_id_name)
             return {self._resource:
-                    self._view(self._item(request,
+                    self._view(request.context,
+                               self._item(request,
                                           id,
                                           do_authz=True,
                                           field_list=field_list,
@@ -266,7 +300,8 @@ class Controller(object):
                 kwargs = {self._resource: item}
                 if parent_id:
                     kwargs[self._parent_id_name] = parent_id
-                objs.append(self._view(obj_creator(request.context,
+                objs.append(self._view(request.context,
+                                       obj_creator(request.context,
                                                    **kwargs)))
             return objs
         # Note(salvatore-orlando): broad catch as in theory a plugin
@@ -292,7 +327,7 @@ class Controller(object):
             raise ex
 
     def create(self, request, body=None, **kwargs):
-        """Creates a new instance of the requested entity"""
+        """Creates a new instance of the requested entity."""
         parent_id = kwargs.get(self._parent_id_name)
         notifier_api.notify(request.context,
                             self._publisher_id,
@@ -317,8 +352,7 @@ class Controller(object):
                                                     item[self._resource])
             policy.enforce(request.context,
                            action,
-                           item[self._resource],
-                           plugin=self._plugin)
+                           item[self._resource])
             try:
                 tenant_id = item[self._resource]['tenant_id']
                 count = quota.QUOTAS.count(request.context, self._resource,
@@ -355,7 +389,7 @@ class Controller(object):
             # plugin does atomic bulk create operations
             obj_creator = getattr(self._plugin, "%s_bulk" % action)
             objs = obj_creator(request.context, body, **kwargs)
-            return notify({self._collection: [self._view(obj)
+            return notify({self._collection: [self._view(request.context, obj)
                                               for obj in objs]})
         else:
             obj_creator = getattr(self._plugin, action)
@@ -367,10 +401,11 @@ class Controller(object):
             else:
                 kwargs.update({self._resource: body})
                 obj = obj_creator(request.context, **kwargs)
-                return notify({self._resource: self._view(obj)})
+                return notify({self._resource: self._view(request.context,
+                                                          obj)})
 
     def delete(self, request, id, **kwargs):
-        """Deletes the specified entity"""
+        """Deletes the specified entity."""
         notifier_api.notify(request.context,
                             self._publisher_id,
                             self._resource + '.delete.start',
@@ -384,8 +419,7 @@ class Controller(object):
         try:
             policy.enforce(request.context,
                            action,
-                           obj,
-                           plugin=self._plugin)
+                           obj)
         except exceptions.PolicyNotAuthorized:
             # To avoid giving away information, pretend that it
             # doesn't exist
@@ -399,13 +433,13 @@ class Controller(object):
                             notifier_method,
                             notifier_api.CONF.default_notification_level,
                             {self._resource + '_id': id})
-        result = {self._resource: self._view(obj)}
+        result = {self._resource: self._view(request.context, obj)}
         self._send_dhcp_notification(request.context,
                                      result,
                                      notifier_method)
 
     def update(self, request, id, body=None, **kwargs):
-        """Updates the specified entity's attributes"""
+        """Updates the specified entity's attributes."""
         parent_id = kwargs.get(self._parent_id_name)
         try:
             payload = body.copy()
@@ -435,8 +469,7 @@ class Controller(object):
         try:
             policy.enforce(request.context,
                            action,
-                           orig_obj,
-                           plugin=self._plugin)
+                           orig_obj)
         except exceptions.PolicyNotAuthorized:
             # To avoid giving away information, pretend that it
             # doesn't exist
@@ -447,7 +480,7 @@ class Controller(object):
         if parent_id:
             kwargs[self._parent_id_name] = parent_id
         obj = obj_updater(request.context, id, **kwargs)
-        result = {self._resource: self._view(obj)}
+        result = {self._resource: self._view(request.context, obj)}
         notifier_method = self._resource + '.update.end'
         notifier_api.notify(request.context,
                             self._publisher_id,
@@ -473,20 +506,21 @@ class Controller(object):
             if context.tenant_id:
                 res_dict['tenant_id'] = context.tenant_id
             else:
-                msg = _("Running without keystyone AuthN requires "
+                msg = _("Running without keystone AuthN requires "
                         " that tenant_id is specified")
                 raise webob.exc.HTTPBadRequest(msg)
 
     @staticmethod
     def prepare_request_body(context, body, is_create, resource, attr_info,
                              allow_bulk=False):
-        """ verifies required attributes are in request body, and that
-            an attribute is only specified if it is allowed for the given
-            operation (create/update).
-            Attribute with default values are considered to be
-            optional.
+        """Verifies required attributes are in request body.
 
-            body argument must be the deserialized body
+        Also checking that an attribute is only specified if it is allowed
+        for the given operation (create/update).
+
+        Attribute with default values are considered to be optional.
+
+        body argument must be the deserialized body.
         """
         collection = resource + "s"
         if not body:

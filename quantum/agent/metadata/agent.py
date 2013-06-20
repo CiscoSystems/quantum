@@ -53,6 +53,10 @@ class MetadataProxyHandler(object):
                    help=_("The type of authentication to use")),
         cfg.StrOpt('auth_region',
                    help=_("Authentication region")),
+        cfg.StrOpt('endpoint_type',
+                   default='adminURL',
+                   help=_("Network service endpoint type to pull from "
+                          "the keystone catalog")),
         cfg.StrOpt('nova_metadata_ip', default='127.0.0.1',
                    help=_("IP address used by Nova metadata server.")),
         cfg.IntOpt('nova_metadata_port',
@@ -66,6 +70,7 @@ class MetadataProxyHandler(object):
 
     def __init__(self, conf):
         self.conf = conf
+        self.auth_info = {}
 
     def _get_quantum_client(self):
         qclient = client.Client(
@@ -75,6 +80,9 @@ class MetadataProxyHandler(object):
             auth_url=self.conf.auth_url,
             auth_strategy=self.conf.auth_strategy,
             region_name=self.conf.auth_region,
+            auth_token=self.auth_info.get('auth_token'),
+            endpoint_url=self.auth_info.get('endpoint_url'),
+            endpoint_type=self.conf.endpoint_type
         )
         return qclient
 
@@ -89,7 +97,7 @@ class MetadataProxyHandler(object):
             else:
                 return webob.exc.HTTPNotFound()
 
-        except Exception, e:
+        except Exception:
             LOG.exception(_("Unexpected error."))
             msg = _('An unknown error has occurred. '
                     'Please try your request again.')
@@ -115,6 +123,8 @@ class MetadataProxyHandler(object):
             network_id=networks,
             fixed_ips=['ip_address=%s' % remote_address])['ports']
 
+        self.auth_info = qclient.get_auth_info()
+
         if len(ports) == 1:
             return ports[0]['device_id']
 
@@ -134,7 +144,8 @@ class MetadataProxyHandler(object):
             ''))
 
         h = httplib2.Http()
-        resp, content = h.request(url, headers=headers)
+        resp, content = h.request(url, method=req.method, headers=headers,
+                                  body=req.body)
 
         if resp.status == 200:
             LOG.debug(str(resp))
@@ -148,6 +159,8 @@ class MetadataProxyHandler(object):
             return webob.exc.HTTPForbidden()
         elif resp.status == 404:
             return webob.exc.HTTPNotFound()
+        elif resp.status == 409:
+            return webob.exc.HTTPConflict()
         elif resp.status == 500:
             msg = _(
                 'Remote metadata server experienced an internal server error.'
@@ -207,7 +220,7 @@ class UnixDomainMetadataProxy(object):
                 if os.path.exists(cfg.CONF.metadata_proxy_socket):
                     raise
         else:
-            os.makedirs(dirname, 0755)
+            os.makedirs(dirname, 0o755)
 
     def run(self):
         server = UnixDomainWSGIServer('quantum-metadata-agent')

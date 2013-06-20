@@ -111,8 +111,7 @@ class ResourceExtensionTest(base.BaseTestCase):
         # anything that is below 200 or above 400 so we can't actually check
         # it.  It throws webtest.AppError instead.
         try:
-            response = (
-                test_app.get("/tweedles/some_id/notimplemented_function"))
+            test_app.get("/tweedles/some_id/notimplemented_function")
             # Shouldn't be reached
             self.assertTrue(False)
         except webtest.AppError:
@@ -427,7 +426,8 @@ class ExtensionManagerTest(base.BaseTestCase):
     def test_invalid_extensions_are_not_registered(self):
 
         class InvalidExtension(object):
-            """
+            """Invalid extension.
+
             This Extension doesn't implement extension methods :
             get_name, get_description, get_namespace and get_updated
             """
@@ -459,8 +459,8 @@ class PluginAwareExtensionManagerTest(base.BaseTestCase):
 
     def test_extensions_are_not_loaded_for_plugins_unaware_of_extensions(self):
         class ExtensionUnawarePlugin(object):
-            """
-            This plugin does not implement supports_extension method.
+            """This plugin does not implement supports_extension method.
+
             Extensions will not be loaded when this plugin is used.
             """
             pass
@@ -474,9 +474,7 @@ class PluginAwareExtensionManagerTest(base.BaseTestCase):
     def test_extensions_not_loaded_for_plugin_without_expected_interface(self):
 
         class PluginWithoutExpectedIface(object):
-            """
-            Plugin does not implement get_foo method as expected by extension
-            """
+            """Does not implement get_foo method as expected by extension."""
             supported_extension_aliases = ["supported_extension"]
 
         plugin_info = {constants.CORE: PluginWithoutExpectedIface()}
@@ -489,9 +487,7 @@ class PluginAwareExtensionManagerTest(base.BaseTestCase):
     def test_extensions_are_loaded_for_plugin_with_expected_interface(self):
 
         class PluginWithExpectedInterface(object):
-            """
-            This Plugin implements get_foo method as expected by extension
-            """
+            """Implements get_foo method as expected by extension."""
             supported_extension_aliases = ["supported_extension"]
 
             def get_foo(self, bar=None):
@@ -506,8 +502,8 @@ class PluginAwareExtensionManagerTest(base.BaseTestCase):
 
     def test_extensions_expecting_quantum_plugin_interface_are_loaded(self):
         class ExtensionForQuamtumPluginInterface(ext_stubs.StubExtension):
-            """
-            This Extension does not implement get_plugin_interface method.
+            """This Extension does not implement get_plugin_interface method.
+
             This will work with any plugin implementing QuantumPluginBase
             """
             pass
@@ -520,8 +516,8 @@ class PluginAwareExtensionManagerTest(base.BaseTestCase):
 
     def test_extensions_without_need_for__plugin_interface_are_loaded(self):
         class ExtensionWithNoNeedForPluginInterface(ext_stubs.StubExtension):
-            """
-            This Extension does not need any plugin interface.
+            """This Extension does not need any plugin interface.
+
             This will work with any plugin implementing QuantumPluginBase
             """
             def get_plugin_interface(self):

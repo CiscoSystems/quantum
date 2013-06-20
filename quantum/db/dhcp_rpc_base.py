@@ -91,7 +91,7 @@ class DhcpRpcCallbackMixin(object):
         try:
             filters = dict(network_id=[network_id], device_id=[device_id])
             ports = plugin.get_ports(context, filters=filters)
-            if len(ports):
+            if ports:
                 # Ensure that fixed_ips cover all dhcp_enabled subnets.
                 port = ports[0]
                 for fixed_ip in port['fixed_ips']:
@@ -109,7 +109,10 @@ class DhcpRpcCallbackMixin(object):
         if retval is None:
             # No previous port exists, so create a new one.
             LOG.debug(_('DHCP port %(device_id)s on network %(network_id)s '
-                        'does not exist on %(host)s'), locals())
+                        'does not exist on %(host)s'),
+                      {'device_id': device_id,
+                       'network_id': network_id,
+                       'host': host})
 
             network = plugin.get_network(context, network_id)
 
@@ -139,12 +142,13 @@ class DhcpRpcCallbackMixin(object):
         device_id = kwargs.get('device_id')
 
         LOG.debug(_('DHCP port deletion for %(network_id)s request from '
-                    '%(host)s'), locals())
+                    '%(host)s'),
+                  {'network_id': network_id, 'host': host})
         plugin = manager.QuantumManager.get_plugin()
         filters = dict(network_id=[network_id], device_id=[device_id])
         ports = plugin.get_ports(context, filters=filters)
 
-        if len(ports):
+        if ports:
             plugin.delete_port(context, ports[0]['id'])
 
     def release_port_fixed_ip(self, context, **kwargs):
@@ -155,12 +159,13 @@ class DhcpRpcCallbackMixin(object):
         subnet_id = kwargs.get('subnet_id')
 
         LOG.debug(_('DHCP port remove fixed_ip for %(subnet_id)s request '
-                    'from %(host)s'), locals())
+                    'from %(host)s'),
+                  {'subnet_id': subnet_id, 'host': host})
         plugin = manager.QuantumManager.get_plugin()
         filters = dict(network_id=[network_id], device_id=[device_id])
         ports = plugin.get_ports(context, filters=filters)
 
-        if len(ports):
+        if ports:
             port = ports[0]
 
             fixed_ips = port.get('fixed_ips', [])
@@ -178,7 +183,10 @@ class DhcpRpcCallbackMixin(object):
         lease_remaining = kwargs.get('lease_remaining')
 
         LOG.debug(_('Updating lease expiration for %(ip_address)s on network '
-                    '%(network_id)s from %(host)s.'), locals())
+                    '%(network_id)s from %(host)s.'),
+                  {'ip_address': ip_address,
+                   'network_id': network_id,
+                   'host': host})
         plugin = manager.QuantumManager.get_plugin()
 
         plugin.update_fixed_ip_lease_expiration(context, network_id,

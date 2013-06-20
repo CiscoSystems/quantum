@@ -16,7 +16,6 @@
 #    under the License.
 
 import mock
-from oslo.config import cfg
 
 from quantum.agent import rpc
 from quantum.openstack.common import context
@@ -47,6 +46,24 @@ class AgentRPCPluginApi(base.BaseTestCase):
         self._test_rpc_call('tunnel_sync')
 
 
+class AgentPluginReportState(base.BaseTestCase):
+    def test_plugin_report_state(self):
+        topic = 'test'
+        reportStateAPI = rpc.PluginReportStateAPI(topic)
+        expected_agent_state = {'agent': 'test'}
+        with mock.patch.object(reportStateAPI, 'call') as call:
+            ctxt = context.RequestContext('fake_user', 'fake_project')
+            reportStateAPI.report_state(ctxt, expected_agent_state)
+            self.assertEqual(call.call_args[0][0], ctxt)
+            self.assertEqual(call.call_args[0][1]['method'],
+                             'report_state')
+            self.assertEqual(call.call_args[0][1]['args']['agent_state'],
+                             {'agent_state': expected_agent_state})
+            self.assertIsInstance(call.call_args[0][1]['args']['time'],
+                                  str)
+            self.assertEqual(call.call_args[1]['topic'], topic)
+
+
 class AgentRPCMethods(base.BaseTestCase):
     def test_create_consumers(self):
         dispatcher = mock.Mock()
@@ -59,5 +76,5 @@ class AgentRPCMethods(base.BaseTestCase):
 
         call_to_patch = 'quantum.openstack.common.rpc.create_connection'
         with mock.patch(call_to_patch) as create_connection:
-            conn = rpc.create_consumers(dispatcher, 'foo', [('topic', 'op')])
+            rpc.create_consumers(dispatcher, 'foo', [('topic', 'op')])
             create_connection.assert_has_calls(expected)

@@ -19,7 +19,6 @@ import os
 import mock
 import netaddr
 from oslo.config import cfg
-import testtools
 import webob.exc
 
 from quantum.common import constants
@@ -29,12 +28,11 @@ from quantum.extensions import l3
 from quantum.extensions import providernet as pnet
 from quantum.extensions import securitygroup as secgrp
 from quantum import manager
-import quantum.plugins.nicira.nicira_nvp_plugin as nvp_plugin
-from quantum.plugins.nicira.nicira_nvp_plugin.extensions import nvp_networkgw
-from quantum.plugins.nicira.nicira_nvp_plugin.extensions import (nvp_qos
-                                                                 as ext_qos)
-from quantum.plugins.nicira.nicira_nvp_plugin import nvplib
-from quantum.plugins.nicira.nicira_nvp_plugin import QuantumPlugin
+import quantum.plugins.nicira as nvp_plugin
+from quantum.plugins.nicira.extensions import nvp_networkgw
+from quantum.plugins.nicira.extensions import nvp_qos as ext_qos
+from quantum.plugins.nicira import nvplib
+from quantum.plugins.nicira import QuantumPlugin
 from quantum.tests.unit.nicira import fake_nvpapiclient
 import quantum.tests.unit.nicira.test_networkgw as test_l2_gw
 import quantum.tests.unit.test_db_plugin as test_plugin
@@ -42,9 +40,10 @@ import quantum.tests.unit.test_extension_portsecurity as psec
 import quantum.tests.unit.test_extension_security_group as ext_sg
 from quantum.tests.unit import test_extensions
 import quantum.tests.unit.test_l3_plugin as test_l3_plugin
+from quantum.tests.unit import testlib_api
 
 NICIRA_PKG_PATH = nvp_plugin.__name__
-NICIRA_EXT_PATH = "../../plugins/nicira/nicira_nvp_plugin/extensions"
+NICIRA_EXT_PATH = "../../plugins/nicira/extensions"
 
 
 class NiciraPluginV2TestCase(test_plugin.QuantumDbPluginV2TestCase):
@@ -88,7 +87,7 @@ class NiciraPluginV2TestCase(test_plugin.QuantumDbPluginV2TestCase):
         instance.return_value.get_nvp_version.return_value = "2.999"
         instance.return_value.request.side_effect = _fake_request
         super(NiciraPluginV2TestCase, self).setUp(self._plugin_name)
-        cfg.CONF.set_override('enable_metadata_access_network', False, 'NVP')
+        cfg.CONF.set_override('metadata_mode', None, 'NVP')
         self.addCleanup(self.fc.reset_all)
         self.addCleanup(self.mock_nvpapi.stop)
 
@@ -128,7 +127,7 @@ class TestNiciraPortsV2(test_plugin.TestPortsV2, NiciraPluginV2TestCase):
                 with self.port(subnet=sub):
                     with self.port(subnet=sub):
                         plugin = manager.QuantumManager.get_plugin()
-                        ls = nvplib.get_lswitches(plugin.default_cluster,
+                        ls = nvplib.get_lswitches(plugin.cluster,
                                                   net['network']['id'])
                         self.assertEqual(len(ls), 2)
 
@@ -187,10 +186,10 @@ class TestNiciraNetworksV2(test_plugin.TestNetworksV2,
         self._test_create_bridge_network(vlan_id=123)
 
     def test_create_bridge_vlan_network_outofrange_returns_400(self):
-        with testtools.ExpectedException(
+        with testlib_api.ExpectedException(
                 webob.exc.HTTPClientError) as ctx_manager:
             self._test_create_bridge_network(vlan_id=5000)
-            self.assertEqual(ctx_manager.exception.code, 400)
+        self.assertEqual(ctx_manager.exception.code, 400)
 
     def test_list_networks_filter_by_id(self):
         # We add this unit test to cover some logic specific to the
@@ -222,8 +221,8 @@ class TestNiciraNetworksV2(test_plugin.TestNetworksV2,
         self.assertEqual(net_del_res.status_int, 204)
 
     def test_list_networks_with_shared(self):
-        with self.network(name='net1') as net1:
-            with self.network(name='net2', shared=True) as net2:
+        with self.network(name='net1'):
+            with self.network(name='net2', shared=True):
                 req = self.new_list_request('networks')
                 res = self.deserialize('json', req.get_response(self.api))
                 self.assertEqual(len(res['networks']), 2)
@@ -336,8 +335,9 @@ class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
                 self.assertEqual(net['network'][k], v)
 
     def _nvp_validate_ext_gw(self, router_id, l3_gw_uuid, vlan_id):
-        """ Verify data on fake NVP API client in order to validate
-        plugin did set them properly"""
+        """Verify data on fake NVP API client in order to validate
+        plugin did set them properly
+        """
         ports = [port for port in self.fc._fake_lrouter_lport_dict.values()
                  if (port['lr_uuid'] == router_id and
                      port['att_type'] == "L3GatewayAttachment")]
@@ -419,14 +419,19 @@ class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
 
     def test_floatingip_with_assoc_fails(self):
         self._test_floatingip_with_assoc_fails(
-            'quantum.plugins.nicira.nicira_nvp_plugin.'
+            'quantum.plugins.nicira.'
+            'QuantumPlugin.NvpPluginV2')
+
+    def test_floatingip_with_invalid_create_port(self):
+        self._test_floatingip_with_invalid_create_port(
+            'quantum.plugins.nicira.'
             'QuantumPlugin.NvpPluginV2')
 
     def _nvp_metadata_setup(self):
-        cfg.CONF.set_override('enable_metadata_access_network', True, 'NVP')
+        cfg.CONF.set_override('metadata_mode', 'access_network', 'NVP')
 
     def _nvp_metadata_teardown(self):
-        cfg.CONF.set_override('enable_metadata_access_network', False, 'NVP')
+        cfg.CONF.set_override('metadata_mode', None, 'NVP')
 
     def test_create_router_name_exceeds_40_chars(self):
         name = 'this_is_a_router_whose_name_is_longer_than_40_chars'
@@ -478,10 +483,10 @@ class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
         self._nvp_metadata_setup()
         with self.router() as r:
             with self.subnet() as s:
-                body = self._router_interface_action('add',
-                                                     r['router']['id'],
-                                                     s['subnet']['id'],
-                                                     None)
+                self._router_interface_action('add',
+                                              r['router']['id'],
+                                              s['subnet']['id'],
+                                              None)
                 r_ports = self._list('ports')['ports']
                 self.assertEqual(len(r_ports), 2)
                 ips = []
@@ -491,10 +496,10 @@ class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
                 meta_cidr = netaddr.IPNetwork('169.254.0.0/16')
                 self.assertTrue(any([ip in meta_cidr for ip in ips]))
                 # Needed to avoid 409
-                body = self._router_interface_action('remove',
-                                                     r['router']['id'],
-                                                     s['subnet']['id'],
-                                                     None)
+                self._router_interface_action('remove',
+                                              r['router']['id'],
+                                              s['subnet']['id'],
+                                              None)
         self._nvp_metadata_teardown()
 
     def test_metadatata_network_removed_with_router_interface_remove(self):
@@ -525,6 +530,23 @@ class TestNiciraL3NatTestCase(test_l3_plugin.L3NatDBTestCase,
                 self._show('subnets', meta_sub_id,
                            webob.exc.HTTPNotFound.code)
         self._nvp_metadata_teardown()
+
+    def test_metadata_dhcp_host_route(self):
+        cfg.CONF.set_override('metadata_mode', 'dhcp_host_route', 'NVP')
+        subnets = self._list('subnets')['subnets']
+        with self.subnet() as s:
+            with self.port(subnet=s, device_id='1234',
+                           device_owner='network:dhcp'):
+                subnets = self._list('subnets')['subnets']
+                self.assertEqual(len(subnets), 1)
+                self.assertEquals(subnets[0]['host_routes'][0]['nexthop'],
+                                  '10.0.0.2')
+                self.assertEquals(subnets[0]['host_routes'][0]['destination'],
+                                  '169.254.169.254/32')
+
+            subnets = self._list('subnets')['subnets']
+            # Test that route is deleted after dhcp port is removed
+            self.assertEquals(len(subnets[0]['host_routes']), 0)
 
 
 class NvpQoSTestExtensionManager(object):
@@ -740,7 +762,7 @@ class TestNiciraQoSQueue(NiciraPluginV2TestCase):
         quantum_context = context.Context('', 'not_admin')
         port = self._update('ports', port['port']['id'], data,
                             quantum_context=quantum_context)
-        self.assertEqual(ext_qos.QUEUE not in port['port'], True)
+        self.assertFalse(ext_qos.QUEUE in port['port'])
 
     def test_rxtx_factor(self):
         with self.qos_queue(max=10) as q1:
@@ -821,6 +843,26 @@ class NiciraQuantumNVPOutOfSync(test_l3_plugin.L3NatTestCaseBase,
         self.assertEqual(net['port']['status'],
                          constants.PORT_STATUS_ERROR)
 
+    def test_create_port_on_network_not_in_nvp(self):
+        res = self._create_network('json', 'net1', True)
+        net1 = self.deserialize('json', res)
+        self.fc._fake_lswitch_dict.clear()
+        res = self._create_port('json', net1['network']['id'])
+        port = self.deserialize('json', res)
+        self.assertEqual(port['port']['status'], constants.PORT_STATUS_ERROR)
+
+    def test_update_port_not_in_nvp(self):
+        res = self._create_network('json', 'net1', True)
+        net1 = self.deserialize('json', res)
+        res = self._create_port('json', net1['network']['id'])
+        port = self.deserialize('json', res)
+        self.fc._fake_lswitch_lport_dict.clear()
+        data = {'port': {'name': 'error_port'}}
+        req = self.new_update_request('ports', data, port['port']['id'])
+        port = self.deserialize('json', req.get_response(self.api))
+        self.assertEqual(port['port']['status'], constants.PORT_STATUS_ERROR)
+        self.assertEqual(port['port']['name'], 'error_port')
+
     def test_delete_port_and_network_not_in_nvp(self):
         res = self._create_network('json', 'net1', True)
         net1 = self.deserialize('json', res)
@@ -891,6 +933,10 @@ class TestNiciraNetworkGateway(test_l2_gw.NetworkGatewayDbTestCase,
                                  gw1[self.resource]['name'])
                 self.assertEqual(res[key][2]['name'],
                                  gw2[self.resource]['name'])
+
+    def test_list_network_gateway_with_multiple_connections(self):
+        self._test_list_network_gateway_with_multiple_connections(
+            expected_gateways=2)
 
     def test_delete_network_gateway(self):
         # The default gateway must still be there

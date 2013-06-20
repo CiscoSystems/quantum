@@ -33,7 +33,7 @@ class L3AgentNotifyAPI(proxy.RpcProxy):
             topic=topic, default_version=self.BASE_RPC_API_VERSION)
 
     def _notification_host(self, context, method, payload, host):
-        """Notify the agent that is hosting the router"""
+        """Notify the agent that is hosting the router."""
         LOG.debug(_('Nofity agent at %(host)s the message '
                     '%(method)s'), {'host': host,
                                     'method': method})
@@ -44,12 +44,7 @@ class L3AgentNotifyAPI(proxy.RpcProxy):
 
     def _agent_notification(self, context, method, routers,
                             operation, data):
-        """Notify changed routers to hosting l3 agents.
-
-        Adjust routers according to l3 agents' role and
-        related dhcp agents.
-        Notify dhcp agent to get right subnet's gateway ips.
-        """
+        """Notify changed routers to hosting l3 agents."""
         adminContext = context.is_admin and context or context.elevated()
         plugin = manager.QuantumManager.get_plugin()
         for router in routers:
@@ -69,7 +64,7 @@ class L3AgentNotifyAPI(proxy.RpcProxy):
                     topic='%s.%s' % (l3_agent.topic, l3_agent.host))
 
     def _notification(self, context, method, routers, operation, data):
-        """Notify all the agents that are hosting the routers"""
+        """Notify all the agents that are hosting the routers."""
         plugin = manager.QuantumManager.get_plugin()
         if utils.is_extension_supported(
             plugin, constants.AGENT_SCHEDULER_EXT_ALIAS):
@@ -85,10 +80,10 @@ class L3AgentNotifyAPI(proxy.RpcProxy):
                 topic=topics.L3_AGENT)
 
     def _notification_fanout(self, context, method, router_id):
-        """Fanout the deleted router to all L3 agents"""
+        """Fanout the deleted router to all L3 agents."""
         LOG.debug(_('Fanout notify agent at %(topic)s the message '
                     '%(method)s on router %(router_id)s'),
-                  {'topic': topics.DHCP_AGENT,
+                  {'topic': topics.L3_AGENT,
                    'method': method,
                    'router_id': router_id})
         self.fanout_cast(

@@ -18,9 +18,8 @@
 
 from oslo.config import cfg
 
-from quantum.common.exceptions import ClassNotFound
+from quantum.common import utils
 from quantum.openstack.common import importutils
-from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import periodic_task
 from quantum.plugins.common import constants
@@ -59,8 +58,33 @@ class Manager(periodic_task.PeriodicTasks):
         pass
 
 
-class QuantumManager(object):
+def validate_post_plugin_load():
+    """Checks if the configuration variables are valid.
+
+    If the configuration is invalid then the method will return an error
+    message. If all is OK then it will return None.
     """
+    if ('dhcp_agents_per_network' in cfg.CONF and
+        cfg.CONF.dhcp_agents_per_network <= 0):
+        msg = _("dhcp_agents_per_network must be >= 1. '%s' "
+                "is invalid.") % cfg.CONF.dhcp_agents_per_network
+        return msg
+
+
+def validate_pre_plugin_load():
+    """Checks if the configuration variables are valid.
+
+    If the configuration is invalid then the method will return an error
+    message. If all is OK then it will return None.
+    """
+    if cfg.CONF.core_plugin is None:
+        msg = _('Quantum core_plugin not configured!')
+        return msg
+
+
+class QuantumManager(object):
+    """Quantum's Manager class.
+
     Quantum's Manager class is responsible for parsing a config file and
     instantiating the correct plugin that concretely implement
     quantum_plugin_base class.
@@ -73,8 +97,8 @@ class QuantumManager(object):
         if not options:
             options = {}
 
-        if cfg.CONF.core_plugin is None:
-            msg = _('Quantum core_plugin not configured!')
+        msg = validate_pre_plugin_load()
+        if msg:
             LOG.critical(msg)
             raise Exception(msg)
 
@@ -88,21 +112,48 @@ class QuantumManager(object):
         try:
             LOG.info(_("Loading Plugin: %s"), plugin_provider)
             plugin_klass = importutils.import_class(plugin_provider)
-        except ClassNotFound:
+        except ImportError:
             LOG.exception(_("Error loading plugin"))
             raise Exception(_("Plugin not found.  You can install a "
                             "plugin with: pip install <plugin-name>\n"
                             "Example: pip install quantum-sample-plugin"))
         self.plugin = plugin_klass()
 
+        msg = validate_post_plugin_load()
+        if msg:
+            LOG.critical(msg)
+            raise Exception(msg)
+
         # core plugin as a part of plugin collection simplifies
         # checking extensions
-        # TODO (enikanorov): make core plugin the same as
+        # TODO(enikanorov): make core plugin the same as
         # the rest of service plugins
         self.service_plugins = {constants.CORE: self.plugin}
         self._load_service_plugins()
 
+    def _load_services_from_core_plugin(self):
+        """Puts core plugin in service_plugins for supported services."""
+        LOG.debug(_("Loading services supported by the core plugin"))
+
+        # supported service types are derived from supported extensions
+        if not hasattr(self.plugin, "supported_extension_aliases"):
+            return
+        for ext_alias in self.plugin.supported_extension_aliases:
+            if ext_alias in constants.EXT_TO_SERVICE_MAPPING:
+                service_type = constants.EXT_TO_SERVICE_MAPPING[ext_alias]
+                self.service_plugins[service_type] = self.plugin
+                LOG.info(_("Service %s is supported by the core plugin"),
+                         service_type)
+
     def _load_service_plugins(self):
+        """Loads service plugins.
+
+        Starts from the core plugin and checks if it supports
+        advanced services then loads classes provided in configuration.
+        """
+        # load services from the core plugin first
+        self._load_services_from_core_plugin()
+
         plugin_providers = cfg.CONF.service_plugins
         LOG.debug(_("Loading service plugins: %s"), plugin_providers)
         for provider in plugin_providers:
@@ -111,18 +162,18 @@ class QuantumManager(object):
             try:
                 LOG.info(_("Loading Plugin: %s"), provider)
                 plugin_class = importutils.import_class(provider)
-            except ClassNotFound:
+            except ImportError:
                 LOG.exception(_("Error loading plugin"))
-                raise Exception(_("Plugin not found."))
+                raise ImportError(_("Plugin not found."))
             plugin_inst = plugin_class()
 
             # only one implementation of svc_type allowed
             # specifying more than one plugin
             # for the same type is a fatal exception
             if plugin_inst.get_plugin_type() in self.service_plugins:
-                raise Exception(_("Multiple plugins for service "
-                                "%s were configured"),
-                                plugin_inst.get_plugin_type())
+                raise ValueError(_("Multiple plugins for service "
+                                   "%s were configured"),
+                                 plugin_inst.get_plugin_type())
 
             self.service_plugins[plugin_inst.get_plugin_type()] = plugin_inst
 
@@ -132,7 +183,7 @@ class QuantumManager(object):
                        "desc": plugin_inst.get_plugin_description()})
 
     @classmethod
-    @lockutils.synchronized("qmlock", "qml-")
+    @utils.synchronized("manager")
     def _create_instance(cls):
         if cls._instance is None:
             cls._instance = cls()

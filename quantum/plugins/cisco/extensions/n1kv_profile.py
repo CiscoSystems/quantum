@@ -16,8 +16,8 @@
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
-from quantum.api.v2 import attributes
 from quantum.api import extensions
+from quantum.api.v2 import attributes
 
 
 PROFILE_ID = 'n1kv:profile_id'

@@ -45,9 +45,29 @@ CMD_VLAN_CONF_SNIPPET = """
                   <name>
                     <vlan-name>%s</vlan-name>
                   </name>
+                </__XML__MODE_vlan>
+              </vlan-id-create-delete>
+            </vlan>
+"""
+
+CMD_VLAN_ACTIVE_SNIPPET = """
+            <vlan>
+              <vlan-id-create-delete>
+                <__XML__PARAM_value>%s</__XML__PARAM_value>
+                <__XML__MODE_vlan>
                   <state>
                     <vstate>active</vstate>
                   </state>
+                </__XML__MODE_vlan>
+              </vlan-id-create-delete>
+            </vlan>
+"""
+
+CMD_VLAN_NO_SHUTDOWN_SNIPPET = """
+            <vlan>
+              <vlan-id-create-delete>
+                <__XML__PARAM_value>%s</__XML__PARAM_value>
+                <__XML__MODE_vlan>
                   <no>
                     <shutdown/>
                   </no>
@@ -66,7 +86,7 @@ CMD_NO_VLAN_CONF_SNIPPET = """
           </no>
 """
 
-CMD_VLAN_INT_SNIPPET = """
+CMD_INT_VLAN_HEADER = """
           <interface>
             <ethernet>
               <interface>%s</interface>
@@ -74,10 +94,16 @@ CMD_VLAN_INT_SNIPPET = """
                 <switchport>
                   <trunk>
                     <allowed>
-                      <vlan>
-                        <__XML__BLK_Cmd_switchport_trunk_allowed_allow-vlans>
-                          <allow-vlans>%s</allow-vlans>
-                        </__XML__BLK_Cmd_switchport_trunk_allowed_allow-vlans>
+                      <vlan>"""
+
+CMD_VLAN_ID = """
+                          <vlan_id>%s</vlan_id>"""
+
+CMD_VLAN_ADD_ID = """
+                        <add>%s
+                        </add>""" % CMD_VLAN_ID
+
+CMD_INT_VLAN_TRAILER = """
                       </vlan>
                     </allowed>
                   </trunk>
@@ -86,6 +112,14 @@ CMD_VLAN_INT_SNIPPET = """
             </ethernet>
           </interface>
 """
+
+CMD_INT_VLAN_SNIPPET = (CMD_INT_VLAN_HEADER +
+                        CMD_VLAN_ID +
+                        CMD_INT_VLAN_TRAILER)
+
+CMD_INT_VLAN_ADD_SNIPPET = (CMD_INT_VLAN_HEADER +
+                            CMD_VLAN_ADD_ID +
+                            CMD_INT_VLAN_TRAILER)
 
 CMD_PORT_TRUNK = """
           <interface>
@@ -148,4 +182,33 @@ FILTER_SHOW_VLAN_BRIEF_SNIPPET = """
           <brief/>
         </vlan>
       </show>
+"""
+
+
+CMD_VLAN_SVI_SNIPPET = """
+<interface>
+    <vlan>
+        <vlan>%s</vlan>
+        <__XML__MODE_vlan>
+            <no>
+              <shutdown/>
+            </no>
+            <ip>
+                <address>
+                    <address>%s</address>
+                </address>
+            </ip>
+        </__XML__MODE_vlan>
+    </vlan>
+</interface>
+"""
+
+CMD_NO_VLAN_SVI_SNIPPET = """
+<no>
+    <interface>
+        <vlan>
+            <vlan>%s</vlan>
+        </vlan>
+    </interface>
+</no>
 """

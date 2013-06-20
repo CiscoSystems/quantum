@@ -205,6 +205,17 @@ class TestIpWrapper(base.BaseTestCase):
                                              'peer', 'name', 'tap1'),
                                              'sudo', None)
 
+    def test_add_veth_with_namespaces(self):
+        ns2 = 'ns2'
+        with mock.patch.object(ip_lib.IPWrapper, 'ensure_namespace') as en:
+            ip_lib.IPWrapper('sudo').add_veth('tap0', 'tap1', namespace2=ns2)
+            en.assert_has_calls([mock.call(ns2)])
+        self.execute.assert_called_once_with('', 'link',
+                                             ('add', 'tap0', 'type', 'veth',
+                                              'peer', 'name', 'tap1',
+                                              'netns', ns2),
+                                             'sudo', None)
+
     def test_get_device(self):
         dev = ip_lib.IPWrapper('sudo', 'ns').device('eth0')
         self.assertEqual(dev.root_helper, 'sudo')
@@ -216,7 +227,7 @@ class TestIpWrapper(base.BaseTestCase):
             ip = ip_lib.IPWrapper('sudo')
             with mock.patch.object(ip.netns, 'exists') as ns_exists:
                 ns_exists.return_value = False
-                ns = ip.ensure_namespace('ns')
+                ip.ensure_namespace('ns')
                 self.execute.assert_has_calls(
                     [mock.call([], 'netns', ('add', 'ns'), 'sudo', None)])
                 ip_dev.assert_has_calls([mock.call('lo', 'sudo', 'ns'),
@@ -626,7 +637,7 @@ class TestIpNetnsCommand(TestIPCmdBase):
         self.assertEqual(ns.namespace, 'ns')
 
     def test_delete_namespace(self):
-        with mock.patch('quantum.agent.linux.utils.execute') as execute:
+        with mock.patch('quantum.agent.linux.utils.execute'):
             self.netns_cmd.delete('ns')
             self._assert_sudo([], ('delete', 'ns'), force_root_namespace=True)
 

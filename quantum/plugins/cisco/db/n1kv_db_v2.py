@@ -27,7 +27,7 @@ import re
 from sqlalchemy.orm import exc
 from sqlalchemy.sql import and_
 
-from quantum.api.v2.attributes import _validate_ip_address
+from quantum.api.v2.attributes import _validate_ip_address  # noqa
 from quantum.common import exceptions as q_exc
 from quantum.db import models_v2
 from quantum.plugins.cisco.common import cisco_constants as c_const
@@ -475,7 +475,7 @@ def set_port_status(port_id, status):
 
 
 def get_vm_network(policy_profile_id, network_id):
-    """Retrieve a vm_network based on policy profile and network id"""
+    """Retrieve a vm_network based on policy profile and network id."""
     db_session = db.get_session()
     try:
         vm_network = (db_session.query(n1kv_models_v2.N1kVmNetwork).
@@ -508,7 +508,7 @@ def add_vm_network(name, policy_profile_id, network_id, port_count):
 
 
 def update_vm_network(name, port_count):
-    """Updates a vm network with new port count"""
+    """Updates a vm network with new port count."""
     db_session = db.get_session()
     try:
         vm_network = (db_session.query(n1kv_models_v2.N1kVmNetwork).
@@ -523,7 +523,7 @@ def update_vm_network(name, port_count):
 
 
 def delete_vm_network(policy_profile_id, network_id):
-    """Deletes a vm network"""
+    """Deletes a vm network."""
     db_session = db.get_session()
     vm_network = get_vm_network(policy_profile_id, network_id)
     with db_session.begin(subtransactions=True):
@@ -869,7 +869,7 @@ class NetworkProfile_db_mixin(object):
         """
         Validate completeness of Nexus1000V network profile arguments.
         """
-        # TODO Cleanup validation logic
+        # TODO(abhraut): Cleanup validation logic
         self._validate_network_profile(p)
         self._validate_segment_range_uniqueness(context, p)
 
@@ -973,8 +973,8 @@ class NetworkProfile_db_mixin(object):
                 name = prfl.name
                 segment_range = prfl.segment_range
                 if net_p['name'] == name:
-                    msg = _("NetworkProfile name %s already exists" % net_p[
-                            'name'])
+                    msg = _("NetworkProfile name %s already exists"),
+                             net_p['name']
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
                 seg_min, seg_max = self._get_segment_range(

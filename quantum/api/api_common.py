@@ -29,8 +29,8 @@ LOG = logging.getLogger(__name__)
 
 
 def get_filters(request, attr_info, skips=[]):
-    """
-    Extracts the filters from the request string
+    """Extracts the filters from the request string.
+
     Returns a dict of lists for the filters:
     check=a&check=b&name=Bob&
     becomes:
@@ -119,13 +119,14 @@ def _get_limit_param(request, max_limit):
 
 
 def list_args(request, arg):
-    """Extracts the list of arg from request"""
+    """Extracts the list of arg from request."""
     return [v for v in request.GET.getall(arg) if v]
 
 
 def get_sorts(request, attr_info):
-    """Extract sort_key and sort_dir from request, return as:
-       [(key1, value1), (key2, value2)]
+    """Extract sort_key and sort_dir from request.
+
+    Return as: [(key1, value1), (key2, value2)]
     """
     sort_keys = list_args(request, "sort_key")
     sort_dirs = list_args(request, "sort_dir")
@@ -292,7 +293,7 @@ class NoSortingHelper(SortingHelper):
 
 
 class QuantumController(object):
-    """ Base controller class for Quantum API """
+    """Base controller class for Quantum API."""
     # _resource_name will be redefined in sub concrete controller
     _resource_name = None
 
@@ -301,10 +302,10 @@ class QuantumController(object):
         super(QuantumController, self).__init__()
 
     def _prepare_request_body(self, body, params):
-        """ verifies required parameters are in request body.
-            sets default value for missing optional parameters.
+        """Verifies required parameters are in request body.
 
-            body argument must be the deserialized body
+        Sets default value for missing optional parameters.
+        Body argument must be the deserialized body.
         """
         try:
             if body is None:

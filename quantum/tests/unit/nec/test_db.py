@@ -17,37 +17,38 @@
 
 import random
 
+from quantum.common import constants as q_const
 from quantum.db import api as db_api
 from quantum.openstack.common import uuidutils
 from quantum.plugins.nec.common import exceptions as nexc
 from quantum.plugins.nec.db import api as ndb
-from quantum.plugins.nec.db import models as nmodels
+from quantum.plugins.nec.db import models as nmodels  # noqa
 from quantum.tests import base
 
 
 class NECPluginV2DBTestBase(base.BaseTestCase):
-    """Class conisting of NECPluginV2 DB unit tests"""
+    """Class conisting of NECPluginV2 DB unit tests."""
 
     def setUp(self):
-        """Setup for tests"""
+        """Setup for tests."""
         super(NECPluginV2DBTestBase, self).setUp()
         ndb.initialize()
         self.session = db_api.get_session()
         self.addCleanup(ndb.clear_db)
 
     def get_ofc_item_random_params(self):
-        """create random parameters for ofc_item test"""
+        """create random parameters for ofc_item test."""
         ofc_id = uuidutils.generate_uuid()
         quantum_id = uuidutils.generate_uuid()
         none = uuidutils.generate_uuid()
         return ofc_id, quantum_id, none
 
     def get_portinfo_random_params(self):
-        """create random parameters for portinfo test"""
+        """create random parameters for portinfo test."""
         port_id = uuidutils.generate_uuid()
         datapath_id = hex(random.randint(0, 0xffffffff))
         port_no = random.randint(1, 100)
-        vlan_id = random.randint(0, 4095)
+        vlan_id = random.randint(q_const.MIN_VLAN_TAG, q_const.MAX_VLAN_TAG)
         mac = ':'.join(["%02x" % random.randint(0, 0xff) for x in range(6)])
         none = uuidutils.generate_uuid()
         return port_id, datapath_id, port_no, vlan_id, mac, none
@@ -56,7 +57,7 @@ class NECPluginV2DBTestBase(base.BaseTestCase):
 class NECPluginV2DBTest(NECPluginV2DBTestBase):
 
     def testa_add_ofc_item(self):
-        """test add OFC item"""
+        """test add OFC item."""
         o, q, n = self.get_ofc_item_random_params()
         tenant = ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         self.assertEqual(tenant.ofc_id, o)
@@ -67,7 +68,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
                           self.session, 'ofc_tenant', q, o)
 
     def testb_get_ofc_item(self):
-        """test get OFC item"""
+        """test get OFC item."""
         o, q, n = self.get_ofc_item_random_params()
         ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         tenant = ndb.get_ofc_item(self.session, 'ofc_tenant', q)
@@ -78,7 +79,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, tenant_none)
 
     def testb_get_ofc_id(self):
-        """test get OFC d"""
+        """test get OFC d."""
         o, q, n = self.get_ofc_item_random_params()
         ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         tenant_id = ndb.get_ofc_id(self.session, 'ofc_tenant', q)
@@ -88,7 +89,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, tenant_none)
 
     def testb_exists_ofc_item(self):
-        """test get OFC d"""
+        """test get OFC d."""
         o, q, n = self.get_ofc_item_random_params()
         ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         ret = ndb.exists_ofc_item(self.session, 'ofc_tenant', q)
@@ -98,7 +99,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, tenant_none)
 
     def testc_find_ofc_item(self):
-        """test find OFC item"""
+        """test find OFC item."""
         o, q, n = self.get_ofc_item_random_params()
         ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         tenant = ndb.find_ofc_item(self.session, 'ofc_tenant', o)
@@ -109,7 +110,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, tenant_none)
 
     def testc_del_ofc_item(self):
-        """test delete OFC item"""
+        """test delete OFC item."""
         o, q, n = self.get_ofc_item_random_params()
         ndb.add_ofc_item(self.session, 'ofc_tenant', q, o)
         ndb.del_ofc_item(self.session, 'ofc_tenant', q)
@@ -122,7 +123,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, tenant_none)
 
     def testd_add_portinfo(self):
-        """test add portinfo"""
+        """test add portinfo."""
         i, d, p, v, m, n = self.get_portinfo_random_params()
         portinfo = ndb.add_portinfo(self.session, i, d, p, v, m)
         self.assertEqual(portinfo.id, i)
@@ -139,7 +140,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertTrue(exception_raised)
 
     def teste_get_portinfo(self):
-        """test get portinfo"""
+        """test get portinfo."""
         i, d, p, v, m, n = self.get_portinfo_random_params()
         ndb.add_portinfo(self.session, i, d, p, v, m)
         portinfo = ndb.get_portinfo(self.session, i)
@@ -153,7 +154,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
         self.assertEqual(None, portinfo_none)
 
     def testf_del_portinfo(self):
-        """test delete portinfo"""
+        """test delete portinfo."""
         i, d, p, v, m, n = self.get_portinfo_random_params()
         ndb.add_portinfo(self.session, i, d, p, v, m)
         portinfo = ndb.get_portinfo(self.session, i)
@@ -164,7 +165,7 @@ class NECPluginV2DBTest(NECPluginV2DBTestBase):
 
 
 class NECPluginV2DBOldMappingTest(NECPluginV2DBTestBase):
-    """Test related to old ID mapping"""
+    """Test related to old ID mapping."""
 
     # Mapping Table mode
     OLD = True

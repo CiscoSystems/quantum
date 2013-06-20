@@ -23,7 +23,7 @@ from quantum.db.models_v2 import model_base
 
 
 class VlanAllocation(model_base.BASEV2):
-    """Represents allocation state of vlan_id on physical network"""
+    """Represents allocation state of vlan_id on physical network."""
     __tablename__ = 'ovs_vlan_allocations'
 
     physical_network = Column(String(64), nullable=False, primary_key=True)
@@ -42,7 +42,7 @@ class VlanAllocation(model_base.BASEV2):
 
 
 class TunnelAllocation(model_base.BASEV2):
-    """Represents allocation state of tunnel_id"""
+    """Represents allocation state of tunnel_id."""
     __tablename__ = 'ovs_tunnel_allocations'
 
     tunnel_id = Column(Integer, nullable=False, primary_key=True,
@@ -58,7 +58,7 @@ class TunnelAllocation(model_base.BASEV2):
 
 
 class NetworkBinding(model_base.BASEV2):
-    """Represents binding of virtual network to physical realization"""
+    """Represents binding of virtual network to physical realization."""
     __tablename__ = 'ovs_network_bindings'
 
     network_id = Column(String(36),
@@ -83,21 +83,8 @@ class NetworkBinding(model_base.BASEV2):
                                                   self.segmentation_id)
 
 
-class TunnelIP(model_base.BASEV2):
-    """Represents tunnel endpoint in DB mode"""
-    __tablename__ = 'ovs_tunnel_ips'
-
-    ip_address = Column(String(255), primary_key=True)
-
-    def __init__(self, ip_address):
-        self.ip_address = ip_address
-
-    def __repr__(self):
-        return "<TunnelIP(%s)>" % (self.ip_address)
-
-
 class TunnelEndpoint(model_base.BASEV2):
-    """Represents tunnel endpoint in RPC mode"""
+    """Represents tunnel endpoint in RPC mode."""
     __tablename__ = 'ovs_tunnel_endpoints'
 
     ip_address = Column(String(64), primary_key=True)

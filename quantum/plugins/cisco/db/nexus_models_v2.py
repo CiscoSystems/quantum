@@ -22,7 +22,8 @@ from quantum.plugins.cisco.db.l2network_models import L2NetworkBase
 
 
 class NexusPortBinding(model_base.BASEV2, L2NetworkBase):
-    """Represents a binding of VM's to nexus ports"""
+    """Represents a binding of VM's to nexus ports."""
+
     __tablename__ = "nexusport_bindings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -40,3 +41,11 @@ class NexusPortBinding(model_base.BASEV2, L2NetworkBase):
     def __repr__(self):
         return "<NexusPortBinding (%s,%d, %s, %s)>" % \
             (self.port_id, self.vlan_id, self.switch_ip, self.instance_id)
+
+    def __eq__(self, other):
+        return (
+            self.port_id == other.port_id and
+            self.vlan_id == other.vlan_id and
+            self.switch_ip == other.switch_ip and
+            self.instance_id == other.instance_id
+        )

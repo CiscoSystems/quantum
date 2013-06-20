@@ -25,7 +25,6 @@ from oslo.config import cfg
 from paste import deploy
 
 from quantum.api.v2 import attributes
-from quantum.common import constants
 from quantum.common import utils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
@@ -109,20 +108,17 @@ def parse(args):
 
 
 def setup_logging(conf):
-    """
-    Sets up the logging options for a log with supplied name
+    """Sets up the logging options for a log with supplied name.
 
     :param conf: a cfg.ConfOpts object
     """
     product_name = "quantum"
     logging.setup(product_name)
-    log_root = logging.getLogger(product_name).logger
     LOG.info(_("Logging enabled!"))
 
 
 def load_paste_app(app_name):
-    """
-    Builds and returns a WSGI app from a paste config file.
+    """Builds and returns a WSGI app from a paste config file.
 
     :param app_name: Name of the application to load
     :raises RuntimeError when config file cannot be located or application
@@ -136,8 +132,10 @@ def load_paste_app(app_name):
     try:
         app = deploy.loadapp("config:%s" % config_path, name=app_name)
     except (LookupError, ImportError):
-        msg = _("Unable to load %(app_name)s from "
-                "configuration file %(config_path)s.") % locals()
+        msg = (_("Unable to load %(app_name)s from "
+                 "configuration file %(config_path)s.") %
+               {'app_name': app_name,
+                'config_path': config_path})
         LOG.exception(msg)
         raise RuntimeError(msg)
     return app

@@ -56,16 +56,20 @@ def setup_conf():
     from the main config that do not apply during clean-up.
     """
 
-    opts = [
-        cfg.StrOpt('dhcp_driver',
-                   default='quantum.agent.linux.dhcp.Dnsmasq',
-                   help=_("The driver used to manage the DHCP server.")),
+    cli_opts = [
         cfg.BoolOpt('force',
                     default=False,
                     help=_('Delete the namespace by removing all devices.')),
     ]
 
+    opts = [
+        cfg.StrOpt('dhcp_driver',
+                   default='quantum.agent.linux.dhcp.Dnsmasq',
+                   help=_("The driver used to manage the DHCP server.")),
+    ]
+
     conf = cfg.CONF
+    conf.register_cli_opts(cli_opts)
     conf.register_opts(opts)
     agent_config.register_root_helper(conf)
     conf.register_opts(dhcp.OPTS)
@@ -139,7 +143,7 @@ def destroy_namespace(conf, namespace, force=False):
                     unplug_device(conf, device)
 
         ip.garbage_collect_namespace()
-    except Exception, e:
+    except Exception:
         LOG.exception(_('Error unable to destroy namespace: %s'), namespace)
 
 

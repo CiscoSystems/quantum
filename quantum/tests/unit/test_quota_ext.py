@@ -9,9 +9,11 @@ from quantum.common import config
 from quantum.common import exceptions
 from quantum import context
 from quantum.db import api as db
+from quantum.db import quota_db
 from quantum import manager
 from quantum.plugins.linuxbridge.db import l2network_db_v2
 from quantum import quota
+from quantum.tests import base
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_extensions
 from quantum.tests.unit import testlib_api
@@ -173,6 +175,36 @@ class QuotaExtensionDbTestCase(QuotaExtensionTestCase):
                            expect_errors=True)
         self.assertEqual(400, res.status_int)
 
+    def test_update_quotas_with_negative_integer_returns_400(self):
+        tenant_id = 'tenant_id1'
+        env = {'quantum.context': context.Context('', tenant_id,
+                                                  is_admin=True)}
+        quotas = {'quota': {'network': -2}}
+        res = self.api.put(_get_path('quotas', id=tenant_id, fmt=self.fmt),
+                           self.serialize(quotas), extra_environ=env,
+                           expect_errors=True)
+        self.assertEqual(400, res.status_int)
+
+    def test_update_quotas_to_unlimited(self):
+        tenant_id = 'tenant_id1'
+        env = {'quantum.context': context.Context('', tenant_id,
+                                                  is_admin=True)}
+        quotas = {'quota': {'network': -1}}
+        res = self.api.put(_get_path('quotas', id=tenant_id, fmt=self.fmt),
+                           self.serialize(quotas), extra_environ=env,
+                           expect_errors=False)
+        self.assertEqual(200, res.status_int)
+
+    def test_update_quotas_exceeding_current_limit(self):
+        tenant_id = 'tenant_id1'
+        env = {'quantum.context': context.Context('', tenant_id,
+                                                  is_admin=True)}
+        quotas = {'quota': {'network': 120}}
+        res = self.api.put(_get_path('quotas', id=tenant_id, fmt=self.fmt),
+                           self.serialize(quotas), extra_environ=env,
+                           expect_errors=False)
+        self.assertEqual(200, res.status_int)
+
     def test_update_quotas_with_non_support_resource_returns_400(self):
         tenant_id = 'tenant_id1'
         env = {'quantum.context': context.Context('', tenant_id,
@@ -249,26 +281,12 @@ class QuotaExtensionDbTestCase(QuotaExtensionTestCase):
                                  tenant_id,
                                  network=4)
 
-    def test_quotas_limit_check_with_over_quota(self):
-        tenant_id = 'tenant_id1'
-        env = {'quantum.context': context.Context('', tenant_id,
-                                                  is_admin=True)}
-        quotas = {'quota': {'network': 5}}
-        res = self.api.put(_get_path('quotas', id=tenant_id,
-                                     fmt=self.fmt),
-                           self.serialize(quotas), extra_environ=env)
-        self.assertEqual(200, res.status_int)
-        with testtools.ExpectedException(exceptions.OverQuota):
-            quota.QUOTAS.limit_check(context.Context('', tenant_id),
-                                     tenant_id,
-                                     network=6)
-
     def test_quotas_limit_check_with_invalid_quota_value(self):
         tenant_id = 'tenant_id1'
         with testtools.ExpectedException(exceptions.InvalidQuotaValue):
             quota.QUOTAS.limit_check(context.Context('', tenant_id),
                                      tenant_id,
-                                     network=-1)
+                                     network=-2)
 
     def test_quotas_get_tenant_from_request_context(self):
         tenant_id = 'tenant_id1'
@@ -341,3 +359,31 @@ class QuotaExtensionCfgTestCase(QuotaExtensionTestCase):
 
 class QuotaExtensionCfgTestCaseXML(QuotaExtensionCfgTestCase):
     fmt = 'xml'
+
+
+class TestDbQuotaDriver(base.BaseTestCase):
+    """Test for quantum.db.quota_db.DbQuotaDriver."""
+
+    def test_get_tenant_quotas_arg(self):
+        """Call quantum.db.quota_db.DbQuotaDriver._get_quotas."""
+
+        driver = quota_db.DbQuotaDriver()
+        ctx = context.Context('', 'bar')
+
+        foo_quotas = {'network': 5}
+        default_quotas = {'network': 10}
+        target_tenant = 'foo'
+
+        with mock.patch.object(quota_db.DbQuotaDriver,
+                               'get_tenant_quotas',
+                               return_value=foo_quotas) as get_tenant_quotas:
+
+            quotas = driver._get_quotas(ctx,
+                                        target_tenant,
+                                        default_quotas,
+                                        ['network'])
+
+            self.assertEqual(quotas, foo_quotas)
+            get_tenant_quotas.assert_called_once_with(ctx,
+                                                      default_quotas,
+                                                      target_tenant)
