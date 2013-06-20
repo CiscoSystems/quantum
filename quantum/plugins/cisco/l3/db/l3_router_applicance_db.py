@@ -423,15 +423,15 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             # These resources are owned by the L3AdminTenant
             birth_date = timeutils.utcnow()
             for i in xrange(0, num):
-                # mgmt_port, t1_n, t1_p, t2_n, t2_p = (
-                #     svm.create_service_vm_resources(
-                #         self.mgmt_nw_id(),
-                #         self.l3_tenant_id(),
-                #         cfg.CONF.max_routers_per_csr1kv))
-                # if mgmt_port is None:
-                #     # Required ports could not be created
-                #     return hosting_entities
-                mgmt_port, t1_n, t1_p, t2_n, t2_p = None, [], [], [], []
+                mgmt_port, t1_n, t1_p, t2_n, t2_p = (
+                     svm.create_service_vm_resources(
+                         self.mgmt_nw_id(),
+                         self.l3_tenant_id(),
+                         cfg.CONF.max_routers_per_csr1kv))
+                if mgmt_port is None:
+                     # Required ports could not be created
+                     return hosting_entities
+                #mgmt_port, t1_n, t1_p, t2_n, t2_p = None, [], [], [], []
                 host_ent = svm.dispatch_service_vm(cfg.CONF.csr1kv_image,
                                                    cfg.CONF.csr1kv_flavor,
                                                    mgmt_port,
@@ -443,8 +443,8 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                         tenant_id=self.l3_tenant_id(),
                         admin_state_up=True,
                         host_type=cl3_const.CSR1KV_HOST,
-                        ip_address='10.0.100.5',
-#                        ip_address=mgmt_port['fixed_ips'][0]['ip_address'],
+#                        ip_address='10.0.100.5',
+                        ip_address=mgmt_port['fixed_ips'][0]['ip_address'],
                         transport_port=cl3_const.CSR1kv_SSH_NETCONF_PORT,
                         l3_cfg_agent_id=None,
                         created_at=birth_date,
@@ -630,16 +630,18 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                 self._update_trunking_on_hosting_port(
                     context, trunk_network_id, trunk_mappings)
         hosting_mac = None
+        hosting_port_name = None
         tr_info = None
         for itfc in router.get(l3_constants.INTERFACE_KEY, []):
             tr_info, did_allocation = self._populate_trunk_for_port(
                 context, itfc, router['hosting_entity']['id'],
                 router['id'], cl3_const.T1_PORT_NAME,
-                l3_db.DEVICE_OWNER_ROUTER_INTF, hosting_mac)
+                l3_db.DEVICE_OWNER_ROUTER_INTF, hosting_mac, hosting_port_name)
             update_internal_trunk |= did_allocation
             if hosting_mac is None and tr_info is not None:
                 # All itfc have same hosting interface so this avoids lookups
                 hosting_mac = itfc['trunk_info']['hosting_mac']
+                hosting_port_name = itfc['trunk_info']['hosting_port_name']
         if update_internal_trunk:
             # The router has been attached to or detached from a subnet
             # so we need to update the vlan trunking on the hosting port.
@@ -655,7 +657,8 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
 
     def _populate_trunk_for_port(self, context, port, hosting_entity_id,
                                  router_id, trunk_port_name, device_owner,
-                                 hosting_port_mac=None):
+                                 hosting_port_mac=None,
+                                 hosting_port_name = None):
         port_db = self._get_port(context, port['id'])
         tr_info = port_db.trunk_info
         new_allocation = False
@@ -674,13 +677,15 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             else:
                 new_allocation = True
         if hosting_port_mac is None:
-            hosting_port_mac = self.get_port(
-                context, tr_info.hosting_port_id,
-                ['mac_address']).get('mac_address')
+            p_data = self.get_port(context, tr_info.hosting_port_id,
+                                   ['mac_address', 'name'])
+            hosting_port_mac = p_data['mac_address']
+            hosting_port_name = p_data['name']
         # Including MAC address of hosting port so L3CfgAgent can easily
         # determine which VM VIF to configure VLAN sub-interface on.
         port['trunk_info'] = {'hosting_port_id': tr_info.hosting_port_id,
                               'hosting_mac': hosting_port_mac,
+                              'hosting_port_name': hosting_port_name,
                               'segmentation_id': tr_info.segmentation_tag}
         return tr_info, new_allocation
 
