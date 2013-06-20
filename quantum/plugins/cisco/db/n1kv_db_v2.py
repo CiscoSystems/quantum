@@ -972,7 +972,7 @@ class NetworkProfile_db_mixin(object):
                 name = prfl.name
                 segment_range = prfl.segment_range
                 if net_p['name'] == name:
-                    msg = _("NetworkProfile name %s already exists"),
+                    msg = _("NetworkProfile name %s already exists"),\
                              net_p['name']
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)

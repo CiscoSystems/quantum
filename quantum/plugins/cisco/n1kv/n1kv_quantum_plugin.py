@@ -334,7 +334,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if network_type in [c_const.TYPE_VLAN]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
-                    msg = _("unknown provider:physical_network %s"),
+                    msg = _("unknown provider:physical_network %s"),\
                              physical_network
                     raise q_exc.InvalidInput(error_message=msg)
             elif 'default' in self.network_vlan_ranges:
