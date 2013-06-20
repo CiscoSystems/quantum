@@ -19,7 +19,7 @@ import urlparse
 
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import uuidutils
-from quantum.plugins.nicira.nicira_nvp_plugin import NvpApiClient
+from quantum.plugins.nicira import NvpApiClient
 
 
 LOG = logging.getLogger(__name__)
@@ -260,7 +260,7 @@ class FakeClient:
         return fake_gwservice
 
     def _build_relation(self, src, dst, resource_type, relation):
-        if not relation in self.MANAGED_RELATIONS[resource_type]:
+        if relation not in self.MANAGED_RELATIONS[resource_type]:
             return  # Relation is not desired in output
         if not '_relations' in src or not src['_relations'].get(relation):
             return  # Item does not have relation
@@ -291,7 +291,8 @@ class FakeClient:
         return new_data
 
     def _get_resource_type(self, path):
-        """
+        """Get resource type.
+
         Identifies resource type and relevant uuids in the uri
 
         /ws.v1/lswitch/xxx
@@ -354,7 +355,7 @@ class FakeClient:
             def _lswitch_match(res_uuid):
                 # verify that the switch exist
                 if parent_uuid and not parent_uuid in self._fake_lswitch_dict:
-                    raise Exception(_("lswitch:%s not found" % parent_uuid))
+                    raise Exception(_("lswitch:%s not found") % parent_uuid)
                 if (not parent_uuid
                     or res_dict[res_uuid].get('ls_uuid') == parent_uuid):
                     return True
@@ -363,7 +364,7 @@ class FakeClient:
             def _lrouter_match(res_uuid):
                 # verify that the router exist
                 if parent_uuid and not parent_uuid in self._fake_lrouter_dict:
-                    raise Exception(_("lrouter:%s not found" % parent_uuid))
+                    raise Exception(_("lrouter:%s not found") % parent_uuid)
                 if (not parent_uuid or
                     res_dict[res_uuid].get('lr_uuid') == parent_uuid):
                     return True
@@ -437,7 +438,7 @@ class FakeClient:
               self.SECPROF_RESOURCE in res_type or
               'gatewayservice' in res_type):
             LOG.debug("UUIDS:%s", uuids)
-            if len(uuids) > 0:
+            if uuids:
                 return self._show(res_type, response_file, uuids[0],
                                   relations=relations)
             else:
@@ -461,7 +462,7 @@ class FakeClient:
             if val_func:
                 val_func(body_json)
             args = [body]
-            if len(uuids):
+            if uuids:
                 args.append(uuids[0])
             response = response_template % add_resource(*args)
             return response

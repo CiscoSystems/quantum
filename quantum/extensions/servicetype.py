@@ -30,12 +30,12 @@ from quantum.plugins.common import constants
 
 LOG = logging.getLogger(__name__)
 
-RESOURCE_NAME = "service-type"
+RESOURCE_NAME = "service_type"
 COLLECTION_NAME = "%ss" % RESOURCE_NAME
 SERVICE_ATTR = 'service_class'
 PLUGIN_ATTR = 'plugin'
 DRIVER_ATTR = 'driver'
-EXT_ALIAS = RESOURCE_NAME
+EXT_ALIAS = 'service-type'
 
 # Attribute Map for Service Type Resource
 RESOURCE_ATTRIBUTE_MAP = {
@@ -72,7 +72,7 @@ def set_default_svctype_id(original_id):
 
 
 def _validate_servicetype_ref(data, valid_values=None):
-    """ Verify the service type id exists """
+    """Verify the service type id exists."""
     svc_type_id = data
     svctype_mgr = servicetype_db.ServiceTypeManager.get_instance()
     try:
@@ -83,9 +83,9 @@ def _validate_servicetype_ref(data, valid_values=None):
 
 
 def _validate_service_defs(data, valid_values=None):
-    """ Validate the list of service definitions. """
+    """Validate the list of service definitions."""
     try:
-        if len(data) == 0:
+        if not data:
             return _("No service type definition was provided. At least a "
                      "service type definition must be provided")
         f_name = _validate_service_defs.__name__
@@ -100,19 +100,22 @@ def _validate_service_defs(data, valid_values=None):
                 except KeyError:
                     msg = (_("Required attributes missing in service "
                              "definition: %s") % svc_def)
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
                 # Validate 'service' attribute
                 if svc_name not in constants.ALLOWED_SERVICES:
                     msg = (_("Service name '%s' unspecified "
                              "or invalid") % svc_name)
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
                 # Validate 'plugin' attribute
                 if not plugin_name:
                     msg = (_("Plugin name not specified in "
                              "service definition %s") % svc_def)
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
                 # TODO(salvatore-orlando): This code will need to change when
                 # multiple plugins for each adv service will be supported
@@ -120,11 +123,13 @@ def _validate_service_defs(data, valid_values=None):
                     svc_name)
                 if not svc_plugin:
                     msg = _("No plugin for service '%s'") % svc_name
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
                 if svc_plugin.get_plugin_name() != plugin_name:
                     msg = _("Plugin name '%s' is not correct ") % plugin_name
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
                 # Validate 'driver' attribute (just check it's a string)
                 # FIXME(salvatore-orlando): This should be a list
@@ -137,17 +142,19 @@ def _validate_service_defs(data, valid_values=None):
                         return msg
                     del svc_def_copy[DRIVER_ATTR]
                 # Anything left - it should be an error
-                if len(svc_def_copy):
+                if svc_def_copy:
                     msg = (_("Unparseable attributes found in "
                              "service definition %s") % svc_def)
-                    LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                    LOG.error(_("%(f_name)s: %(msg)s"),
+                              {'f_name': f_name, 'msg': msg})
                     return msg
             except TypeError:
                 LOG.exception(_("Exception while parsing service "
                                 "definition:%s"), svc_def)
                 msg = (_("Was expecting a dict for service definition, found "
                          "the following: %s") % svc_def)
-                LOG.error(_("%(f_name)s: %(msg)s"), locals())
+                LOG.error(_("%(f_name)s: %(msg)s"),
+                          {'f_name': f_name, 'msg': msg})
                 return msg
     except TypeError:
         return (_("%s: provided data are not iterable") %
@@ -182,18 +189,23 @@ class Servicetype(extensions.ExtensionDescriptor):
 
     @classmethod
     def get_resources(cls):
-        """ Returns Extended Resource for service type management """
-        my_plurals = [(key.replace('-', '_'),
-                       key[:-1].replace('-', '_')) for
-                      key in RESOURCE_ATTRIBUTE_MAP.keys()]
+        """Returns Extended Resource for service type management."""
+        my_plurals = [(key, key[:-1]) for key in RESOURCE_ATTRIBUTE_MAP.keys()]
         my_plurals.append(('service_definitions', 'service_definition'))
         attributes.PLURALS.update(dict(my_plurals))
         attr_map = RESOURCE_ATTRIBUTE_MAP[COLLECTION_NAME]
+        collection_name = COLLECTION_NAME.replace('_', '-')
         controller = base.create_resource(
-            COLLECTION_NAME,
+            collection_name,
             RESOURCE_NAME,
             servicetype_db.ServiceTypeManager.get_instance(),
             attr_map)
-        return [extensions.ResourceExtension(COLLECTION_NAME,
+        return [extensions.ResourceExtension(collection_name,
                                              controller,
                                              attr_map=attr_map)]
+
+    def get_extended_resources(self, version):
+        if version == "2.0":
+            return dict(RESOURCE_ATTRIBUTE_MAP.items())
+        else:
+            return {}

@@ -17,8 +17,7 @@
 # @author: Bob Kukura, Red Hat, Inc.
 
 from sqlalchemy.orm import exc
-
-from oslo.config import cfg
+from sqlalchemy.sql import func
 
 from quantum.common import exceptions as q_exc
 import quantum.db.api as db
@@ -58,7 +57,7 @@ def add_network_binding(session, network_id, network_type,
 
 
 def sync_vlan_allocations(network_vlan_ranges):
-    """Synchronize vlan_allocations table with configured VLAN ranges"""
+    """Synchronize vlan_allocations table with configured VLAN ranges."""
 
     session = db.get_session()
     with session.begin():
@@ -158,12 +157,15 @@ def reserve_specific_vlan(session, physical_network, vlan_id):
                     raise q_exc.VlanIdInUse(vlan_id=vlan_id,
                                             physical_network=physical_network)
             LOG.debug(_("Reserving specific vlan %(vlan_id)s on physical "
-                        "network %(physical_network)s from pool"), locals())
+                        "network %(physical_network)s from pool"),
+                      {'vlan_id': vlan_id,
+                       'physical_network': physical_network})
             alloc.allocated = True
         except exc.NoResultFound:
             LOG.debug(_("Reserving specific vlan %(vlan_id)s on physical "
                         "network %(physical_network)s outside pool"),
-                      locals())
+                      {'vlan_id': vlan_id,
+                       'physical_network': physical_network})
             alloc = ovs_models_v2.VlanAllocation(physical_network, vlan_id)
             alloc.allocated = True
             session.add(alloc)
@@ -187,19 +189,22 @@ def release_vlan(session, physical_network, vlan_id, network_vlan_ranges):
                 session.delete(alloc)
                 LOG.debug(_("Releasing vlan %(vlan_id)s on physical network "
                             "%(physical_network)s outside pool"),
-                          locals())
+                          {'vlan_id': vlan_id,
+                           'physical_network': physical_network})
             else:
                 LOG.debug(_("Releasing vlan %(vlan_id)s on physical network "
                             "%(physical_network)s to pool"),
-                          locals())
+                          {'vlan_id': vlan_id,
+                           'physical_network': physical_network})
         except exc.NoResultFound:
             LOG.warning(_("vlan_id %(vlan_id)s on physical network "
                           "%(physical_network)s not found"),
-                        locals())
+                        {'vlan_id': vlan_id,
+                         'physical_network': physical_network})
 
 
 def sync_tunnel_allocations(tunnel_id_ranges):
-    """Synchronize tunnel_allocations table with configured tunnel ranges"""
+    """Synchronize tunnel_allocations table with configured tunnel ranges."""
 
     # determine current configured allocatable tunnels
     tunnel_ids = set()
@@ -208,7 +213,7 @@ def sync_tunnel_allocations(tunnel_id_ranges):
         if tun_max + 1 - tun_min > 1000000:
             LOG.error(_("Skipping unreasonable tunnel ID range "
                         "%(tun_min)s:%(tun_max)s"),
-                      locals())
+                      {'tun_min': tun_min, 'tun_max': tun_max})
         else:
             tunnel_ids |= set(xrange(tun_min, tun_max + 1))
 
@@ -312,7 +317,7 @@ def get_port(port_id):
 
 
 def get_port_from_device(port_id):
-    """Get port from database"""
+    """Get port from database."""
     LOG.debug(_("get_port_with_securitygroups() called:port_id=%s"), port_id)
     session = db.get_session()
     sg_binding_port = sg_db.SecurityGroupPortBinding.port_id
@@ -329,7 +334,7 @@ def get_port_from_device(port_id):
     plugin = manager.QuantumManager.get_plugin()
     port_dict = plugin._make_port_dict(port)
     port_dict[ext_sg.SECURITYGROUPS] = [
-        sg_id for port, sg_id in port_and_sgs if sg_id]
+        sg_id for port_, sg_id in port_and_sgs if sg_id]
     port_dict['security_group_rules'] = []
     port_dict['security_group_source_groups'] = []
     port_dict['fixed_ips'] = [ip['ip_address']
@@ -350,25 +355,16 @@ def set_port_status(port_id, status):
 
 def get_tunnel_endpoints():
     session = db.get_session()
-    try:
-        tunnels = session.query(ovs_models_v2.TunnelEndpoint).all()
-    except exc.NoResultFound:
-        return []
+
+    tunnels = session.query(ovs_models_v2.TunnelEndpoint)
     return [{'id': tunnel.id,
              'ip_address': tunnel.ip_address} for tunnel in tunnels]
 
 
 def _generate_tunnel_id(session):
-    try:
-        tunnels = session.query(ovs_models_v2.TunnelEndpoint).all()
-    except exc.NoResultFound:
-        return 0
-    tunnel_ids = ([tunnel['id'] for tunnel in tunnels])
-    if tunnel_ids:
-        id = max(tunnel_ids)
-    else:
-        id = 0
-    return id + 1
+    max_tunnel_id = session.query(
+        func.max(ovs_models_v2.TunnelEndpoint.id)).scalar() or 0
+    return max_tunnel_id + 1
 
 
 def add_tunnel_endpoint(ip):
@@ -377,8 +373,8 @@ def add_tunnel_endpoint(ip):
         tunnel = (session.query(ovs_models_v2.TunnelEndpoint).
                   filter_by(ip_address=ip).with_lockmode('update').one())
     except exc.NoResultFound:
-        id = _generate_tunnel_id(session)
-        tunnel = ovs_models_v2.TunnelEndpoint(ip, id)
+        tunnel_id = _generate_tunnel_id(session)
+        tunnel = ovs_models_v2.TunnelEndpoint(ip, tunnel_id)
         session.add(tunnel)
         session.flush()
     return tunnel

@@ -18,12 +18,15 @@
 import netaddr
 from oslo.config import cfg
 import sqlalchemy as sa
+from sqlalchemy import orm
 
 from quantum.common import utils
+from quantum.db import db_base_plugin_v2
 from quantum.db import l3_db
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.extensions import extraroute
+from quantum.extensions import l3
 from quantum.openstack.common import log as logging
 
 
@@ -44,9 +47,24 @@ class RouterRoute(model_base.BASEV2, models_v2.Route):
                                         ondelete="CASCADE"),
                           primary_key=True)
 
+    router = orm.relationship(l3_db.Router,
+                              backref=orm.backref("route_list",
+                                                  lazy='joined',
+                                                  cascade='delete'))
+
 
 class ExtraRoute_db_mixin(l3_db.L3_NAT_db_mixin):
-    """ Mixin class to support extra route configuration on router"""
+    """Mixin class to support extra route configuration on router."""
+
+    def _extend_router_dict_extraroute(self, router_res, router_db):
+        router_res['routes'] = (ExtraRoute_db_mixin.
+                                _make_extra_route_list(
+                                    router_db['route_list']
+                                ))
+
+    db_base_plugin_v2.QuantumDbPluginV2.register_dict_extend_funcs(
+        l3.ROUTERS, [_extend_router_dict_extraroute])
+
     def update_router(self, context, id, router):
         r = router['router']
         with context.session.begin(subtransactions=True):
@@ -123,7 +141,8 @@ class ExtraRoute_db_mixin(l3_db.L3_NAT_db_mixin):
                                   destination=route['destination'],
                                   nexthop=route['nexthop']).delete()
 
-    def _make_extra_route_list(self, extra_routes):
+    @staticmethod
+    def _make_extra_route_list(extra_routes):
         return [{'destination': route['destination'],
                  'nexthop': route['nexthop']}
                 for route in extra_routes]
@@ -131,15 +150,12 @@ class ExtraRoute_db_mixin(l3_db.L3_NAT_db_mixin):
     def _get_extra_routes_by_router_id(self, context, id):
         query = context.session.query(RouterRoute)
         query.filter(RouterRoute.router_id == id)
-        extra_routes = query.all()
-        return self._make_extra_route_list(extra_routes)
+        return self._make_extra_route_list(query)
 
     def get_router(self, context, id, fields=None):
         with context.session.begin(subtransactions=True):
             router = super(ExtraRoute_db_mixin, self).get_router(
                 context, id, fields)
-            router['routes'] = self._get_extra_routes_by_router_id(
-                context, id)
             return router
 
     def get_routers(self, context, filters=None, fields=None,
@@ -149,21 +165,7 @@ class ExtraRoute_db_mixin(l3_db.L3_NAT_db_mixin):
             routers = super(ExtraRoute_db_mixin, self).get_routers(
                 context, filters, fields, sorts=sorts, limit=limit,
                 marker=marker, page_reverse=page_reverse)
-            for router in routers:
-                router['routes'] = self._get_extra_routes_by_router_id(
-                    context, router['id'])
             return routers
-
-    def get_sync_data(self, context, router_ids=None, active=None):
-        """Query routers and their related floating_ips, interfaces."""
-        with context.session.begin(subtransactions=True):
-            routers = super(ExtraRoute_db_mixin,
-                            self).get_sync_data(context, router_ids,
-                                                active=active)
-            for router in routers:
-                router['routes'] = self._get_extra_routes_by_router_id(
-                    context, router['id'])
-        return routers
 
     def _confirm_router_interface_not_in_use(self, context, router_id,
                                              subnet_id):

@@ -53,7 +53,7 @@ def get_port_from_device(port_id):
     plugin = manager.QuantumManager.get_plugin()
     port_dict = plugin._make_port_dict(port)
     port_dict[ext_sg.SECURITYGROUPS] = [
-        sg_id for port, sg_id in port_and_sgs if sg_id]
+        sg_id for port_, sg_id in port_and_sgs if sg_id]
     port_dict['security_group_rules'] = []
     port_dict['security_group_source_groups'] = []
     port_dict['fixed_ips'] = [ip['ip_address'] for ip in port['fixed_ips']]
@@ -98,8 +98,9 @@ class TunnelKey(object):
         return session.query(ryu_models_v2.TunnelKeyLast).one()
 
     def _find_key(self, session, last_key):
-        """
-        Try to find unused tunnel key in TunnelKey table starting
+        """Try to find unused tunnel key.
+
+        Trying to find unused tunnel key in TunnelKey table starting
         from last_key + 1.
         When all keys are used, raise sqlalchemy.orm.exc.NoResultFound
         """
@@ -153,7 +154,7 @@ class TunnelKey(object):
 
         new_key = new_key[0]  # the result is tuple.
         LOG.debug(_("last_key %(last_key)s new_key %(new_key)s"),
-                  locals())
+                  {'last_key': last_key, 'new_key': new_key})
         if new_key > self.key_max:
             LOG.debug(_("No key found"))
             raise orm_exc.NoResultFound()

@@ -25,12 +25,16 @@ from quantum.api.v2 import base
 from quantum.common import exceptions as qexception
 from quantum import manager
 from quantum.plugins.common import constants
-from quantum.plugins.services.service_base import ServicePluginBase
+from quantum.services.service_base import ServicePluginBase
 
 
 # Loadbalancer Exceptions
 class VipNotFound(qexception.NotFound):
     message = _("Vip %(vip_id)s could not be found")
+
+
+class VipExists(qexception.QuantumException):
+    message = _("Another Vip already exists for pool %(pool_id)s")
 
 
 class PoolNotFound(qexception.NotFound):

@@ -51,14 +51,14 @@ class DhcpAgentNotifyAPI(proxy.RpcProxy):
                 dhcp_agent in dhcp_agents]
 
     def _notification_host(self, context, method, payload, host):
-        """Notify the agent on host"""
+        """Notify the agent on host."""
         self.cast(
             context, self.make_msg(method,
                                    payload=payload),
             topic='%s.%s' % (topics.DHCP_AGENT, host))
 
     def _notification(self, context, method, payload, network_id):
-        """Notify all the agents that are hosting the network"""
+        """Notify all the agents that are hosting the network."""
         plugin = manager.QuantumManager.get_plugin()
         if (method != 'network_delete_end' and utils.is_extension_supported(
                 plugin, constants.AGENT_SCHEDULER_EXT_ALIAS)):
@@ -69,12 +69,13 @@ class DhcpAgentNotifyAPI(proxy.RpcProxy):
                 adminContext = (context if context.is_admin else
                                 context.elevated())
                 network = plugin.get_network(adminContext, network_id)
-                chosen_agent = plugin.schedule_network(adminContext, network)
-                if chosen_agent:
-                    self._notification_host(
-                        context, 'network_create_end',
-                        {'network': {'id': network_id}},
-                        chosen_agent['host'])
+                chosen_agents = plugin.schedule_network(adminContext, network)
+                if chosen_agents:
+                    for agent in chosen_agents:
+                        self._notification_host(
+                            context, 'network_create_end',
+                            {'network': {'id': network_id}},
+                            agent['host'])
             for (host, topic) in self._get_dhcp_agents(context, network_id):
                 self.cast(
                     context, self.make_msg(method,
@@ -87,7 +88,7 @@ class DhcpAgentNotifyAPI(proxy.RpcProxy):
             self._notification_fanout(context, method, payload)
 
     def _notification_fanout(self, context, method, payload):
-        """Fanout the payload to all dhcp agents"""
+        """Fanout the payload to all dhcp agents."""
         self.fanout_cast(
             context, self.make_msg(method,
                                    payload=payload),

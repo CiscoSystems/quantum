@@ -26,8 +26,7 @@ from quantum.db import models_v2
 from quantum.extensions.flavor import (FLAVOR_NETWORK, FLAVOR_ROUTER)
 from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
-# NOTE (e0ne): this import is needed for config init
-from quantum.plugins.metaplugin.common import config
+from quantum.plugins.metaplugin.common import config  # noqa
 from quantum.plugins.metaplugin import meta_db_v2
 from quantum.plugins.metaplugin.meta_models_v2 import (NetworkFlavor,
                                                        RouterFlavor)
@@ -52,7 +51,8 @@ class MetaPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug(_("Start initializing metaplugin"))
         self.supported_extension_aliases = \
             cfg.CONF.META.supported_extension_aliases.split(',')
-        self.supported_extension_aliases += ['flavor', 'router', 'extraroute']
+        self.supported_extension_aliases += ['flavor', 'router',
+                                             'ext-gw-mode', 'extraroute']
 
         # Ignore config option overapping
         def _is_opt_registered(opts, opt):
@@ -167,7 +167,7 @@ class MetaPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             try:
                 meta_db_v2.add_network_flavor_binding(context.session,
                                                       flavor, str(net['id']))
-            except:
+            except Exception:
                 LOG.exception(_('Failed to add flavor bindings'))
                 plugin.delete_network(context, net['id'])
                 raise FaildToAddFlavorBinding()
@@ -218,7 +218,7 @@ class MetaPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     column = getattr(models_v2.Network, key, None)
                 if column:
                     collection = collection.filter(column.in_(value))
-        return [self._make_network_dict(c, fields) for c in collection.all()]
+        return [self._make_network_dict(c, fields) for c in collection]
 
     def get_networks(self, context, filters=None, fields=None):
         nets = self.get_networks_with_flavor(context, filters, None)
@@ -334,7 +334,7 @@ class MetaPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     column = getattr(l3_db.Router, key, None)
                 if column:
                     collection = collection.filter(column.in_(value))
-        return [self._make_router_dict(c, fields) for c in collection.all()]
+        return [self._make_router_dict(c, fields) for c in collection]
 
     def get_routers(self, context, filters=None, fields=None):
         routers = self.get_routers_with_flavor(context, filters,

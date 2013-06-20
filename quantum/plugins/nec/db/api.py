@@ -24,8 +24,7 @@ from quantum.db import securitygroups_db as sg_db
 from quantum.extensions import securitygroup as ext_sg
 from quantum import manager
 from quantum.openstack.common import log as logging
-# NOTE (e0ne): this import is needed for config init
-from quantum.plugins.nec.common import config
+from quantum.plugins.nec.common import config  # noqa
 from quantum.plugins.nec.common import exceptions as nexc
 from quantum.plugins.nec.db import models as nmodels
 
@@ -113,7 +112,7 @@ def add_ofc_item(session, resource, quantum_id, ofc_id, old_style=False):
             session.flush()
     except Exception as exc:
         LOG.exception(exc)
-        raise nexc.NECDBException
+        raise nexc.NECDBException(reason=exc.message)
     return item
 
 
@@ -189,7 +188,7 @@ def add_portinfo(session, id, datapath_id='', port_no=0,
             session.add(portinfo)
     except Exception as exc:
         LOG.exception(exc)
-        raise nexc.NECDBException
+        raise nexc.NECDBException(reason=exc.message)
     return portinfo
 
 
@@ -204,7 +203,7 @@ def del_portinfo(session, id):
 
 
 def get_port_from_device(port_id):
-    """Get port from database"""
+    """Get port from database."""
     LOG.debug(_("get_port_with_securitygroups() called:port_id=%s"), port_id)
     session = db.get_session()
     sg_binding_port = sg_db.SecurityGroupPortBinding.port_id
@@ -221,7 +220,7 @@ def get_port_from_device(port_id):
     plugin = manager.QuantumManager.get_plugin()
     port_dict = plugin._make_port_dict(port)
     port_dict[ext_sg.SECURITYGROUPS] = [
-        sg_id for port, sg_id in port_and_sgs if sg_id]
+        sg_id for port_, sg_id in port_and_sgs if sg_id]
     port_dict['security_group_rules'] = []
     port_dict['security_group_source_groups'] = []
     port_dict['fixed_ips'] = [ip['ip_address']

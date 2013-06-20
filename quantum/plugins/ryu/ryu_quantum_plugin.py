@@ -29,14 +29,14 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import extraroute_db
+from quantum.db import l3_gwmode_db
 from quantum.db import l3_rpc_base
 from quantum.db import models_v2
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
-from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
-from quantum.plugins.ryu.common import config
+from quantum.plugins.ryu.common import config  # noqa
 from quantum.plugins.ryu.db import api_v2 as db_api_v2
 
 
@@ -87,9 +87,11 @@ class AgentNotifierApi(proxy.RpcProxy,
 
 class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          extraroute_db.ExtraRoute_db_mixin,
+                         l3_gwmode_db.L3_NAT_db_mixin,
                          sg_db_rpc.SecurityGroupServerRpcMixin):
 
-    _supported_extension_aliases = ["router", "extraroute", "security-group"]
+    _supported_extension_aliases = ["router", "ext-gw-mode",
+                                    "extraroute", "security-group"]
 
     @property
     def supported_extension_aliases(self):
@@ -101,7 +103,6 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     def __init__(self, configfile=None):
         db.configure_db()
-
         self.tunnel_key = db_api_v2.TunnelKey(
             cfg.CONF.OVS.tunnel_key_min, cfg.CONF.OVS.tunnel_key_max)
         self.ofp_api_host = cfg.CONF.OVS.openflow_rest_api
@@ -133,7 +134,7 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         for tun in self.tunnel_key.all_list():
             self.tun_client.update_tunnel_key(tun.network_id, tun.tunnel_key)
         session = db.get_session()
-        for port in session.query(models_v2.Port).all():
+        for port in session.query(models_v2.Port):
             self.iface_client.update_network_id(port.id, port.network_id)
 
     def _client_create_network(self, net_id, tunnel_key):
@@ -162,7 +163,7 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             tunnel_key = self.tunnel_key.allocate(session, net['id'])
             try:
                 self._client_create_network(net['id'], tunnel_key)
-            except:
+            except Exception:
                 self._client_delete_network(net['id'])
                 raise
 
@@ -204,8 +205,7 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             sgids = self._get_security_groups_on_port(context, port)
             port = super(RyuQuantumPluginV2, self).create_port(context, port)
             self._process_port_create_security_group(
-                context, port['id'], sgids)
-            self._extend_port_dict_security_group(context, port)
+                context, port, sgids)
         self.notify_security_groups_member_updated(context, port)
         self.iface_client.create_network_id(port['id'], port['network_id'])
         return port
@@ -254,13 +254,10 @@ class RyuQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with context.session.begin(subtransactions=True):
             port = super(RyuQuantumPluginV2, self).get_port(context, id,
                                                             fields)
-            self._extend_port_dict_security_group(context, port)
         return self._fields(port, fields)
 
     def get_ports(self, context, filters=None, fields=None):
         with context.session.begin(subtransactions=True):
             ports = super(RyuQuantumPluginV2, self).get_ports(
                 context, filters, fields)
-            for port in ports:
-                self._extend_port_dict_security_group(context, port)
         return [self._fields(port, fields) for port in ports]

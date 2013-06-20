@@ -28,14 +28,15 @@ LOG = logging.getLogger(__name__)
 
 
 class Pidfile(object):
-    def __init__(self, pidfile, procname, root_helper='sudo'):
+    def __init__(self, pidfile, procname, uuid=None, root_helper='sudo'):
         try:
             self.fd = os.open(pidfile, os.O_CREAT | os.O_RDWR)
-        except IOError, e:
+        except IOError:
             LOG.exception(_("Failed to open pidfile: %s"), pidfile)
             sys.exit(1)
         self.pidfile = pidfile
         self.procname = procname
+        self.uuid = uuid
         self.root_helper = root_helper
         if not not fcntl.flock(self.fd, fcntl.LOCK_EX):
             raise IOError(_('Unable to lock pid file'))
@@ -67,31 +68,33 @@ class Pidfile(object):
 
         cmd = ['cat', '/proc/%s/cmdline' % pid]
         try:
-            return self.procname in utils.execute(cmd, self.root_helper)
-        except RuntimeError, e:
+            exec_out = utils.execute(cmd, self.root_helper)
+            return self.procname in exec_out and (not self.uuid or
+                                                  self.uuid in exec_out)
+        except RuntimeError:
             return False
 
 
 class Daemon(object):
-    """
-    A generic daemon class.
+    """A generic daemon class.
 
     Usage: subclass the Daemon class and override the run() method
     """
     def __init__(self, pidfile, stdin='/dev/null', stdout='/dev/null',
-                 stderr='/dev/null', procname='python', root_helper='sudo'):
+                 stderr='/dev/null', procname='python', uuid=None,
+                 root_helper='sudo'):
         self.stdin = stdin
         self.stdout = stdout
         self.stderr = stderr
         self.procname = procname
-        self.pidfile = Pidfile(pidfile, procname, root_helper)
+        self.pidfile = Pidfile(pidfile, procname, uuid, root_helper)
 
     def _fork(self):
         try:
             pid = os.fork()
             if pid > 0:
                 sys.exit(0)
-        except OSError, e:
+        except OSError:
             LOG.exception(_('Fork failed'))
             sys.exit(1)
 
@@ -126,7 +129,7 @@ class Daemon(object):
         os.remove(str(self.pidfile))
 
     def start(self):
-        """ Start the daemon """
+        """Start the daemon."""
 
         if self.pidfile.is_running():
             self.pidfile.unlock()

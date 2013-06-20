@@ -30,9 +30,10 @@ BASE = models.BASE
 
 
 def configure_db(options):
-    """
-    Establish the database, create an engine if needed, and
-    register the models.
+    """Configure database.
+
+    Establish the database, create an engine if needed, and register the
+    models.
 
     :param options: Mapping of configuration options
     """
@@ -53,7 +54,7 @@ def clear_db():
 
 
 def get_session(autocommit=True, expire_on_commit=False):
-    """Helper method to grab session"""
+    """Helper method to grab session."""
     global _MAKER, _ENGINE
     if not _MAKER:
         assert _ENGINE
@@ -64,14 +65,14 @@ def get_session(autocommit=True, expire_on_commit=False):
 
 
 def register_models():
-    """Register Models and create properties"""
+    """Register Models and create properties."""
     global _ENGINE
     assert _ENGINE
     BASE.metadata.create_all(_ENGINE)
 
 
 def unregister_models():
-    """Unregister Models, useful clearing out data before testing"""
+    """Unregister Models, useful clearing out data before testing."""
     global _ENGINE
     assert _ENGINE
     BASE.metadata.drop_all(_ENGINE)
@@ -97,13 +98,14 @@ def network_list(tenant_id):
 
 def network_id(net_name):
     session = get_session()
-    try:
-        return (session.query(models.Network).
+    networks = (session.query(models.Network).
                 options(joinedload(models.Network.ports)).
                 filter_by(name=net_name).
                 all())
-    except exc.NoResultFound, e:
-        raise q_exc.NetworkNotFound(net_name=net_name)
+    if networks:
+        return networks
+
+    raise q_exc.NetworkNotFound(net_name=net_name)
 
 
 def network_get(net_id):
@@ -113,7 +115,7 @@ def network_get(net_id):
             options(joinedload(models.Network.ports)). \
             filter_by(uuid=net_id).\
             one()
-    except exc.NoResultFound, e:
+    except exc.NoResultFound:
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 
@@ -147,7 +149,7 @@ def validate_network_ownership(tenant_id, net_id):
                 filter_by(uuid=net_id).
                 filter_by(tenant_id=tenant_id).
                 one())
-    except exc.NoResultFound, e:
+    except exc.NoResultFound:
         raise q_exc.NetworkNotFound(net_id=net_id)
 
 

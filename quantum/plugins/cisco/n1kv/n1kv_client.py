@@ -297,9 +297,9 @@ class Client(object):
         """
         return self._delete(self.ip_pool_path % (subnet_name))
 
-    # TODO: Removing tenantId from the request as a temp fix to allow
-    #       port create. VSM CLI needs to be fixed. Should not interfere
-    #       since VSM is not using tenantId as of now.
+    # TODO(abhraut): Removing tenantId from the request as a temp fix to allow
+    #                port create. VSM CLI needs to be fixed. Should not
+    #                interfere since VSM is not using tenantId as of now.
     def create_vm_network(self, port, vm_network_name, policy_profile):
         """
         Create a VM network on the VSM

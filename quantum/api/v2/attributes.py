@@ -32,7 +32,8 @@ SHARED = 'shared'
 
 
 def _verify_dict_keys(expected_keys, target_dict, strict=True):
-    """ Allows to verify keys in a dictionary.
+    """Allows to verify keys in a dictionary.
+
     :param expected_keys: A list of keys expected to be present.
     :param target_dict: The dictionary which should be verified.
     :param strict: Specifies whether additional keys are allowed to be present.
@@ -41,7 +42,7 @@ def _verify_dict_keys(expected_keys, target_dict, strict=True):
     if not isinstance(target_dict, dict):
         msg = (_("Invalid input. '%(target_dict)s' must be a dictionary "
                  "with keys: %(expected_keys)s") %
-               dict(target_dict=target_dict, expected_keys=expected_keys))
+               {'target_dict': target_dict, 'expected_keys': expected_keys})
         return msg
 
     expected_keys = set(expected_keys)
@@ -52,7 +53,9 @@ def _verify_dict_keys(expected_keys, target_dict, strict=True):
     if not predicate(provided_keys):
         msg = (_("Validation of dictionary's keys failed."
                  "Expected keys: %(expected_keys)s "
-                 "Provided keys: %(provided_keys)s") % locals())
+                 "Provided keys: %(provided_keys)s") %
+               {'expected_keys': expected_keys,
+                'provided_keys': provided_keys})
         return msg
 
 
@@ -63,7 +66,7 @@ def is_attr_set(attribute):
 def _validate_values(data, valid_values=None):
     if data not in valid_values:
         msg = (_("'%(data)s' is not in %(valid_values)s") %
-               dict(data=data, valid_values=valid_values))
+               {'data': data, 'valid_values': valid_values})
         LOG.debug(msg)
         return msg
 
@@ -76,7 +79,16 @@ def _validate_string(data, max_len=None):
 
     if max_len is not None and len(data) > max_len:
         msg = (_("'%(data)s' exceeds maximum length of %(max_len)s") %
-               dict(data=data, max_len=max_len))
+               {'data': data, 'max_len': max_len})
+        LOG.debug(msg)
+        return msg
+
+
+def _validate_boolean(data, valid_values=None):
+    try:
+        convert_to_boolean(data)
+    except q_exc.InvalidInput:
+        msg = _("'%s' is not a valid boolean value") % data
         LOG.debug(msg)
         return msg
 
@@ -86,16 +98,25 @@ def _validate_range(data, valid_values=None):
     max_value = valid_values[1]
     if not min_value <= data <= max_value:
         msg = _("'%(data)s' is not in range %(min_value)s through "
-                "%(max_value)s") % dict(data=data,
-                                        min_value=min_value,
-                                        max_value=max_value)
+                "%(max_value)s") % {'data': data,
+                                    'min_value': min_value,
+                                    'max_value': max_value}
         LOG.debug(msg)
         return msg
 
 
+def _validate_no_whitespace(data):
+    """Validates that input has no whitespace."""
+    if len(data.split()) > 1:
+        msg = _("'%s' contains whitespace") % data
+        LOG.debug(msg)
+        raise q_exc.InvalidInput(error_message=msg)
+    return data
+
+
 def _validate_mac_address(data, valid_values=None):
     try:
-        netaddr.EUI(data)
+        netaddr.EUI(_validate_no_whitespace(data))
     except Exception:
         msg = _("'%s' is not a valid MAC address") % data
         LOG.debug(msg)
@@ -104,7 +125,7 @@ def _validate_mac_address(data, valid_values=None):
 
 def _validate_ip_address(data, valid_values=None):
     try:
-        netaddr.IPAddress(data)
+        netaddr.IPAddress(_validate_no_whitespace(data))
     except Exception:
         msg = _("'%s' is not a valid IP address") % data
         LOG.debug(msg)
@@ -112,10 +133,9 @@ def _validate_ip_address(data, valid_values=None):
 
 
 def _validate_ip_pools(data, valid_values=None):
-    """Validate that start and end IP addresses are present
+    """Validate that start and end IP addresses are present.
 
     In addition to this the IP addresses will also be validated
-
     """
     if not isinstance(data, list):
         msg = _("Invalid data format for IP pool: '%s'") % data
@@ -225,7 +245,7 @@ def _validate_ip_address_or_none(data, valid_values=None):
 
 def _validate_subnet(data, valid_values=None):
     try:
-        netaddr.IPNetwork(data)
+        netaddr.IPNetwork(_validate_no_whitespace(data))
         if len(data.split('/')) == 2:
             return
     except Exception:
@@ -283,7 +303,6 @@ def _validate_dict(data, key_specs=None):
         msg = _("'%s' is not a dictionary") % data
         LOG.debug(msg)
         return msg
-
     # Do not perform any further validation, if no constraints are supplied
     if not key_specs:
         return
@@ -326,6 +345,11 @@ def _validate_dict_or_none(data, key_specs=None):
 
 def _validate_dict_or_empty(data, key_specs=None):
     if data != {}:
+        return _validate_dict(data, key_specs)
+
+
+def _validate_dict_or_nodata(data, key_specs=None):
+    if data:
         return _validate_dict(data, key_specs)
 
 
@@ -432,6 +456,7 @@ MAC_PATTERN = "^%s[aceACE02468](:%s{2}){5}$" % (HEX_ELEM, HEX_ELEM)
 validators = {'type:dict': _validate_dict,
               'type:dict_or_none': _validate_dict_or_none,
               'type:dict_or_empty': _validate_dict_or_empty,
+              'type:dict_or_nodata': _validate_dict_or_nodata,
               'type:fixed_ips': _validate_fixed_ips,
               'type:hostroutes': _validate_hostroutes,
               'type:ip_address': _validate_ip_address,
@@ -447,8 +472,16 @@ validators = {'type:dict': _validate_dict,
               'type:uuid': _validate_uuid,
               'type:uuid_or_none': _validate_uuid_or_none,
               'type:uuid_list': _validate_uuid_list,
-              'type:values': _validate_values}
+              'type:values': _validate_values,
+              'type:boolean': _validate_boolean}
 
+# Define constants for base resource name
+NETWORK = 'network'
+NETWORKS = '%ss' % NETWORK
+PORT = 'port'
+PORTS = '%ss' % PORT
+SUBNET = 'subnet'
+SUBNETS = '%ss' % SUBNET
 # Note: a default of ATTR_NOT_SPECIFIED indicates that an
 # attribute is not required, but will be generated by the plugin
 # if it is not specified.  Particularly, a value of ATTR_NOT_SPECIFIED
@@ -473,7 +506,7 @@ validators = {'type:dict': _validate_dict,
 # mechanism, ie: there might be rules which refer to this attribute.
 
 RESOURCE_ATTRIBUTE_MAP = {
-    'networks': {
+    NETWORKS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -502,7 +535,7 @@ RESOURCE_ATTRIBUTE_MAP = {
                  'required_by_policy': True,
                  'enforce_policy': True},
     },
-    'ports': {
+    PORTS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -544,7 +577,7 @@ RESOURCE_ATTRIBUTE_MAP = {
         'status': {'allow_post': False, 'allow_put': False,
                    'is_visible': True},
     },
-    'subnets': {
+    SUBNETS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -600,17 +633,15 @@ RESOURCE_ATTRIBUTE_MAP = {
     }
 }
 
-# Associates to each resource its own parent resource
-# Resources without parents, such as networks, are not in this list
+# Identify the attribute used by a resource to reference another resource
 
-RESOURCE_HIERARCHY_MAP = {
-    'ports': {'parent': 'networks', 'identified_by': 'network_id'},
-    'subnets': {'parent': 'networks', 'identified_by': 'network_id'}
+RESOURCE_FOREIGN_KEYS = {
+    NETWORKS: 'network_id'
 }
 
-PLURALS = {'networks': 'network',
-           'ports': 'port',
-           'subnets': 'subnet',
+PLURALS = {NETWORKS: NETWORK,
+           PORTS: PORT,
+           SUBNETS: SUBNET,
            'dns_nameservers': 'dns_nameserver',
            'host_routes': 'host_route',
            'allocation_pools': 'allocation_pool',

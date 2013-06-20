@@ -15,9 +15,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import os
 import socket
+import urllib2
 
 import mock
+from oslo.config import cfg
 import testtools
 import webob
 import webob.exc
@@ -27,6 +30,11 @@ from quantum.common import constants
 from quantum.common import exceptions as exception
 from quantum.tests import base
 from quantum import wsgi
+
+CONF = cfg.CONF
+
+TEST_VAR_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                               '..', 'var'))
 
 
 class TestWSGIServer(base.BaseTestCase):
@@ -74,7 +82,7 @@ class TestWSGIServer(base.BaseTestCase):
                     mock_listen.assert_called_once_with(
                         ('fe80::204:acff:fe96:da87%eth0', 1234, 0, 2),
                         family=socket.AF_INET6,
-                        backlog=128
+                        backlog=cfg.CONF.backlog
                     )
 
                     mock_pool.spawn.assert_has_calls([
@@ -84,12 +92,29 @@ class TestWSGIServer(base.BaseTestCase):
                             mock_listen.return_value)
                     ])
 
+    def test_app(self):
+        greetings = 'Hello, World!!!'
+
+        def hello_world(env, start_response):
+            if env['PATH_INFO'] != '/':
+                start_response('404 Not Found',
+                               [('Content-Type', 'text/plain')])
+                return ['Not Found\r\n']
+            start_response('200 OK', [('Content-Type', 'text/plain')])
+            return [greetings]
+
+        server = wsgi.Server("test_app")
+        server.start(hello_world, 0, host="127.0.0.1")
+
+        response = urllib2.urlopen('http://127.0.0.1:%d/' % server.port)
+        self.assertEquals(greetings, response.read())
+
+        server.stop()
+
 
 class SerializerTest(base.BaseTestCase):
     def test_serialize_unknown_content_type(self):
-        """
-        Test serialize verifies that exception InvalidContentType is raised
-        """
+        """Verify that exception InvalidContentType is raised."""
         input_dict = {'servers': {'test': 'pass'}}
         content_type = 'application/unknown'
         serializer = wsgi.Serializer()
@@ -99,10 +124,7 @@ class SerializerTest(base.BaseTestCase):
             input_dict, content_type)
 
     def test_get_deserialize_handler_unknown_content_type(self):
-        """
-        Test get deserialize verifies
-        that exception InvalidContentType is raised
-        """
+        """Verify that exception InvalidContentType is raised."""
         content_type = 'application/unknown'
         serializer = wsgi.Serializer()
 
@@ -111,9 +133,7 @@ class SerializerTest(base.BaseTestCase):
             serializer.get_deserialize_handler, content_type)
 
     def test_serialize_content_type_json(self):
-        """
-        Test serialize with content type json
-        """
+        """Test serialize with content type json."""
         input_data = {'servers': ['test=pass']}
         content_type = 'application/json'
         serializer = wsgi.Serializer(default_xmlns="fake")
@@ -122,9 +142,7 @@ class SerializerTest(base.BaseTestCase):
         self.assertEqual('{"servers": ["test=pass"]}', result)
 
     def test_serialize_content_type_xml(self):
-        """
-        Test serialize with content type xml
-        """
+        """Test serialize with content type xml."""
         input_data = {'servers': ['test=pass']}
         content_type = 'application/xml'
         serializer = wsgi.Serializer(default_xmlns="fake")
@@ -141,9 +159,7 @@ class SerializerTest(base.BaseTestCase):
         self.assertEqual(expected, result)
 
     def test_deserialize_raise_bad_request(self):
-        """
-        Test serialize verifies that exception is raises
-        """
+        """Test serialize verifies that exception is raises."""
         content_type = 'application/unknown'
         data_string = 'test'
         serializer = wsgi.Serializer(default_xmlns="fake")
@@ -153,9 +169,7 @@ class SerializerTest(base.BaseTestCase):
             serializer.deserialize, data_string, content_type)
 
     def test_deserialize_json_content_type(self):
-        """
-        Test Serializer.deserialize with content type json
-        """
+        """Test Serializer.deserialize with content type json."""
         content_type = 'application/json'
         data_string = '{"servers": ["test=pass"]}'
         serializer = wsgi.Serializer(default_xmlns="fake")
@@ -164,9 +178,7 @@ class SerializerTest(base.BaseTestCase):
         self.assertEqual({'body': {u'servers': [u'test=pass']}}, result)
 
     def test_deserialize_xml_content_type(self):
-        """
-        Test deserialize with content type xml
-        """
+        """Test deserialize with content type xml."""
         content_type = 'application/xml'
         data_string = (
             '<servers xmlns="fake">'
@@ -181,28 +193,26 @@ class SerializerTest(base.BaseTestCase):
         self.assertEqual(expected, result)
 
     def test_deserialize_xml_content_type_with_meta(self):
-        """
-        Test deserialize with content type xml with meta
-        """
+        """Test deserialize with content type xml with meta."""
         content_type = 'application/xml'
         data_string = (
-            '<servers xmlns="fake">'
+            '<servers>'
+            '<server name="s1">'
             '<test test="a">passed</test>'
+            '</server>'
             '</servers>'
         )
 
-        metadata = {'plurals': ['servers', 'test'], 'xmlns': 'fake'}
+        metadata = {'plurals': {'servers': 'server'}, 'xmlns': 'fake'}
         serializer = wsgi.Serializer(
             default_xmlns="fake", metadata=metadata)
         result = serializer.deserialize(data_string, content_type)
-        expected = {'body': {'servers': ['passed']}}
+        expected = {'body': {'servers': [{'name': 's1', 'test': 'passed'}]}}
 
         self.assertEqual(expected, result)
 
     def test_serialize_xml_root_key_is_dict(self):
-        """
-        Test Serializer.serialize with content type xml with meta dict
-        """
+        """Test Serializer.serialize with content type xml with meta dict."""
         content_type = 'application/xml'
         data = {'servers': {'network': (2, 3)}}
         metadata = {'xmlns': 'fake'}
@@ -220,9 +230,7 @@ class SerializerTest(base.BaseTestCase):
         self.assertEqual(result, expected)
 
     def test_serialize_xml_root_key_is_list(self):
-        """
-        Test serialize with content type xml with meta list
-        """
+        """Test serialize with content type xml with meta list."""
         input_dict = {'servers': ['test=pass']}
         content_type = 'application/xml'
         metadata = {'application/xml': {
@@ -278,9 +286,7 @@ class RequestDeserializerTest(testtools.TestCase):
         self.deserializer = wsgi.RequestDeserializer(self.body_deserializers)
 
     def test_get_deserializer(self):
-        """
-        Test RequestDeserializer.get_body_deserializer
-        """
+        """Test RequestDeserializer.get_body_deserializer."""
         expected_json_serializer = self.deserializer.get_body_deserializer(
             'application/json')
         expected_xml_serializer = self.deserializer.get_body_deserializer(
@@ -294,9 +300,7 @@ class RequestDeserializerTest(testtools.TestCase):
             self.body_deserializers['application/xml'])
 
     def test_get_expected_content_type(self):
-        """
-        Test RequestDeserializer.get_expected_content_type
-        """
+        """Test RequestDeserializer.get_expected_content_type."""
         request = wsgi.Request.blank('/')
         request.headers['Accept'] = 'application/json'
 
@@ -305,9 +309,7 @@ class RequestDeserializerTest(testtools.TestCase):
             'application/json')
 
     def test_get_action_args(self):
-        """
-        Test RequestDeserializer.get_action_args
-        """
+        """Test RequestDeserializer.get_action_args."""
         env = {
             'wsgiorg.routing_args': [None, {
                 'controller': None,
@@ -320,9 +322,7 @@ class RequestDeserializerTest(testtools.TestCase):
             self.deserializer.get_action_args(env), expected)
 
     def test_deserialize(self):
-        """
-        Test RequestDeserializer.deserialize
-        """
+        """Test RequestDeserializer.deserialize."""
         with mock.patch.object(
             self.deserializer, 'get_action_args') as mock_method:
             mock_method.return_value = {'action': 'create'}
@@ -334,10 +334,7 @@ class RequestDeserializerTest(testtools.TestCase):
             self.assertEqual(expected, deserialized)
 
     def test_get_body_deserializer_unknown_content_type(self):
-        """
-        Test get body deserializer verifies
-         that exception InvalidContentType is raised
-        """
+        """Verify that exception InvalidContentType is raised."""
         content_type = 'application/unknown'
         deserializer = wsgi.RequestDeserializer()
         self.assertRaises(
@@ -369,28 +366,20 @@ class ResponseSerializerTest(testtools.TestCase):
             self.body_serializers, HeadersSerializer())
 
     def test_serialize_unknown_content_type(self):
-        """
-        Test serialize verifies
-        that exception InvalidContentType is raised
-        """
+        """Verify that exception InvalidContentType is raised."""
         self.assertRaises(
             exception.InvalidContentType,
             self.serializer.serialize,
             {}, 'application/unknown')
 
     def test_get_body_serializer(self):
-        """
-        Test get body serializer verifies
-        that exception InvalidContentType is raised
-        """
+        """Verify that exception InvalidContentType is raised."""
         self.assertRaises(
             exception.InvalidContentType,
             self.serializer.get_body_serializer, 'application/unknown')
 
     def test_get_serializer(self):
-        """
-        Test ResponseSerializer.get_body_serializer
-        """
+        """Test ResponseSerializer.get_body_serializer."""
         content_type = 'application/json'
         self.assertEqual(
             self.serializer.get_body_serializer(content_type),
@@ -513,9 +502,7 @@ class RequestTest(base.BaseTestCase):
 
 class ActionDispatcherTest(base.BaseTestCase):
     def test_dispatch(self):
-        """
-        Test ActionDispatcher.dispatch
-        """
+        """Test ActionDispatcher.dispatch."""
         serializer = wsgi.ActionDispatcher()
         serializer.create = lambda x: x
 
@@ -524,9 +511,7 @@ class ActionDispatcherTest(base.BaseTestCase):
             'pants')
 
     def test_dispatch_action_None(self):
-        """
-        Test ActionDispatcher.dispatch with none action
-        """
+        """Test ActionDispatcher.dispatch with none action."""
         serializer = wsgi.ActionDispatcher()
         serializer.create = lambda x: x + ' pants'
         serializer.default = lambda x: x + ' trousers'
@@ -585,6 +570,24 @@ class JSONDictSerializerTest(base.BaseTestCase):
 
         self.assertEqual(result, expected_json)
 
+    def test_json_with_utf8(self):
+        input_dict = dict(servers=dict(a=(2, '\xe7\xbd\x91\xe7\xbb\x9c')))
+        expected_json = '{"servers":{"a":[2,"\\u7f51\\u7edc"]}}'
+        serializer = wsgi.JSONDictSerializer()
+        result = serializer.serialize(input_dict)
+        result = result.replace('\n', '').replace(' ', '')
+
+        self.assertEqual(result, expected_json)
+
+    def test_json_with_unicode(self):
+        input_dict = dict(servers=dict(a=(2, u'\u7f51\u7edc')))
+        expected_json = '{"servers":{"a":[2,"\\u7f51\\u7edc"]}}'
+        serializer = wsgi.JSONDictSerializer()
+        result = serializer.serialize(input_dict)
+        result = result.replace('\n', '').replace(' ', '')
+
+        self.assertEqual(result, expected_json)
+
 
 class TextDeserializerTest(base.BaseTestCase):
 
@@ -615,15 +618,30 @@ class JSONDeserializerTest(base.BaseTestCase):
             deserializer.deserialize(data), as_dict)
 
     def test_default_raise_Malformed_Exception(self):
-        """
-        Test verifies JsonDeserializer.default
-        raises exception MalformedRequestBody correctly
+        """Test JsonDeserializer.default.
+
+        Test verifies JsonDeserializer.default raises exception
+        MalformedRequestBody correctly.
         """
         data_string = ""
         deserializer = wsgi.JSONDeserializer()
 
         self.assertRaises(
             exception.MalformedRequestBody, deserializer.default, data_string)
+
+    def test_json_with_utf8(self):
+        data = '{"a": "\xe7\xbd\x91\xe7\xbb\x9c"}'
+        as_dict = {'body': {'a': u'\u7f51\u7edc'}}
+        deserializer = wsgi.JSONDeserializer()
+        self.assertEqual(
+            deserializer.deserialize(data), as_dict)
+
+    def test_json_with_unicode(self):
+        data = '{"a": "\u7f51\u7edc"}'
+        as_dict = {'body': {'a': u'\u7f51\u7edc'}}
+        deserializer = wsgi.JSONDeserializer()
+        self.assertEqual(
+            deserializer.deserialize(data), as_dict)
 
 
 class XMLDeserializerTest(base.BaseTestCase):
@@ -643,14 +661,20 @@ class XMLDeserializerTest(base.BaseTestCase):
             {'body': {u'a': {u'b': u'test'}}}, deserializer(xml))
 
     def test_default_raise_Malformed_Exception(self):
-        """
-        Test verifies that exception MalformedRequestBody is raised
-        """
+        """Verify that exception MalformedRequestBody is raised."""
         data_string = ""
         deserializer = wsgi.XMLDeserializer()
 
         self.assertRaises(
             exception.MalformedRequestBody, deserializer.default, data_string)
+
+    def test_xml_with_utf8(self):
+        xml = '<a>\xe7\xbd\x91\xe7\xbb\x9c</a>'
+        as_dict = {'body': {'a': u'\u7f51\u7edc'}}
+        deserializer = wsgi.XMLDeserializer()
+
+        self.assertEqual(
+            deserializer.deserialize(xml), as_dict)
 
 
 class RequestHeadersDeserializerTest(base.BaseTestCase):
@@ -1014,3 +1038,77 @@ class XMLDictSerializerTest(base.BaseTestCase):
         result = serializer(data)
         result = result.replace('\n', '').replace(' ', '')
         self.assertEqual(expected, result)
+
+    def test_xml_with_utf8(self):
+        data = {'servers': '\xe7\xbd\x91\xe7\xbb\x9c'}
+        serializer = wsgi.XMLDictSerializer()
+        expected = (
+            '<?xmlversion=\'1.0\'encoding=\'UTF-8\'?>'
+            '<serversxmlns="http://openstack.org/quantum/api/v2.0"'
+            'xmlns:quantum="http://openstack.org/quantum/api/v2.0"'
+            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            '\xe7\xbd\x91\xe7\xbb\x9c</servers>'
+        )
+        result = serializer(data)
+        result = result.replace('\n', '').replace(' ', '')
+        self.assertEqual(expected, result)
+
+    def test_xml_with_unicode(self):
+        data = {'servers': u'\u7f51\u7edc'}
+        serializer = wsgi.XMLDictSerializer()
+        expected = (
+            '<?xmlversion=\'1.0\'encoding=\'UTF-8\'?>'
+            '<serversxmlns="http://openstack.org/quantum/api/v2.0"'
+            'xmlns:quantum="http://openstack.org/quantum/api/v2.0"'
+            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            '\xe7\xbd\x91\xe7\xbb\x9c</servers>'
+        )
+        result = serializer(data)
+        result = result.replace('\n', '').replace(' ', '')
+        self.assertEqual(expected, result)
+
+
+class TestWSGIServerWithSSL(base.BaseTestCase):
+    """WSGI server tests."""
+
+    def test_app_using_ssl(self):
+        CONF.set_default('use_ssl', True)
+        CONF.set_default("ssl_cert_file",
+                         os.path.join(TEST_VAR_DIR, 'certificate.crt'))
+        CONF.set_default("ssl_key_file",
+                         os.path.join(TEST_VAR_DIR, 'privatekey.key'))
+
+        greetings = 'Hello, World!!!'
+
+        @webob.dec.wsgify
+        def hello_world(req):
+            return greetings
+
+        server = wsgi.Server("test_app")
+        server.start(hello_world, 0, host="127.0.0.1")
+
+        response = urllib2.urlopen('https://127.0.0.1:%d/' % server.port)
+        self.assertEquals(greetings, response.read())
+
+        server.stop()
+
+    def test_app_using_ipv6_and_ssl(self):
+        CONF.set_default('use_ssl', True)
+        CONF.set_default("ssl_cert_file",
+                         os.path.join(TEST_VAR_DIR, 'certificate.crt'))
+        CONF.set_default("ssl_key_file",
+                         os.path.join(TEST_VAR_DIR, 'privatekey.key'))
+
+        greetings = 'Hello, World!!!'
+
+        @webob.dec.wsgify
+        def hello_world(req):
+            return greetings
+
+        server = wsgi.Server("test_app")
+        server.start(hello_world, 0, host="::1")
+
+        response = urllib2.urlopen('https://[::1]:%d/' % server.port)
+        self.assertEquals(greetings, response.read())
+
+        server.stop()

@@ -15,17 +15,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import eventlet
-
 from quantum.common import topics
 
 from quantum.openstack.common import log as logging
-from quantum.openstack.common.notifier import api
-from quantum.openstack.common.notifier import rpc_notifier
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
 from quantum.openstack.common import timeutils
-from quantum.openstack.common import uuidutils
 
 
 LOG = logging.getLogger(__name__)
@@ -58,11 +53,11 @@ class PluginReportStateAPI(proxy.RpcProxy):
             topic=topic, default_version=self.BASE_RPC_API_VERSION)
 
     def report_state(self, context, agent_state):
-        return self.cast(context,
+        return self.call(context,
                          self.make_msg('report_state',
                                        agent_state={'agent_state':
                                                     agent_state},
-                                       time=timeutils.utcnow()),
+                                       time=timeutils.strtime()),
                          topic=self.topic)
 
 

@@ -19,30 +19,30 @@
 # @author: Rohit Agarwalla, Cisco Systems, Inc.
 #
 
-from copy import deepcopy
 import inspect
 import logging
+import sys
 
 from novaclient.v1_1 import client as nova_client
 from oslo.config import cfg
 
-from quantum.db import l3_db
-from quantum.manager import QuantumManager
+from quantum.db import api as db_api
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
-from quantum.plugins.cisco.db import network_db_v2 as cdb
+from quantum.plugins.cisco.common import cisco_exceptions as cexc
 from quantum.plugins.cisco.common import config as conf
+from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.openvswitch import ovs_db_v2 as odb
 from quantum import quantum_plugin_base_v2
-from quantum.db import api as db_api
-from quantum.db.db_base_plugin_v2 import QuantumDbPluginV2
+
 
 LOG = logging.getLogger(__name__)
 
 
-class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
-    """
+class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
+    """Virtual Physical Switch Model.
+
     This implementation works with OVS and Nexus plugin for the
     following topology:
     One or more servers to a nexus switch.
@@ -61,19 +61,18 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
                             'create_or_update_agent', 'report_state']
 
     def __init__(self):
-        """
-        Initialize the segmentation manager, check which device plugins are
-        configured, and load the inventories those device plugins for which the
-        inventory is configured
+        """Initialize the segmentation manager.
+
+        Checks which device plugins are configured, and load the inventories
+        those device plugins for which the inventory is configured.
         """
         conf.CiscoConfigOptions()
 
         for key in conf.CISCO_PLUGINS.keys():
             plugin_obj = conf.CISCO_PLUGINS[key]
-            if plugin_obj is not None:
-                self._plugins[key] = importutils.import_object(plugin_obj)
-                LOG.debug(_("Loaded device plugin %s\n"),
-                          conf.CISCO_PLUGINS[key])
+            self._plugins[key] = importutils.import_object(plugin_obj)
+            LOG.debug(_("Loaded device plugin %s\n"),
+                      conf.CISCO_PLUGINS[key])
 
         if ((const.VSWITCH_PLUGIN in self._plugins) and
             hasattr(self._plugins[const.VSWITCH_PLUGIN],
@@ -94,7 +93,8 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
                    'name': self.__class__.__name__})
 
     def __getattribute__(self, name):
-        """
+        """Delegate calls to OVS sub-plugin.
+
         This delegates the calls to the methods implemented only by the OVS
         sub-plugin. Note: Currently, bulking is handled by the caller
         (PluginV2), and this model class expects to receive only non-bulking
@@ -116,20 +116,23 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
             return getattr(plugin, name)
 
     def _func_name(self, offset=0):
-        """Get the name of the calling function"""
+        """Get the name of the calling function."""
         frame_record = inspect.stack()[1 + offset]
         func_name = frame_record[3]
         return func_name
 
     def _invoke_plugin_per_device(self, plugin_key, function_name, args):
-        """
+        """Invoke plugin per device.
+
         Invokes a device plugin's relevant functions (based on the
         plugin implementation) for completing this operation.
         """
         if plugin_key not in self._plugins:
             LOG.info(_("No %s Plugin loaded"), plugin_key)
             LOG.info(_("%(plugin_key)s: %(function_name)s with args %(args)s "
-                     "ignored"), locals())
+                     "ignored"),
+                     {'plugin_key': plugin_key, 'function_name': function_name,
+                      'args': args})
             return
 
         device_params = {const.DEVICE_IP: []}
@@ -137,7 +140,8 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
                                     device_params)]
 
     def _invoke_plugin(self, plugin_key, function_name, args, kwargs):
-        """
+        """Invoke plugin.
+
         Invokes the relevant function on a device plugin's
         implementation for completing this operation.
         """
@@ -157,15 +161,11 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
             else:
                 return func(*args)
 
-    def _get_segmentation_id(self, context, network_id):
-        vswitch_plugin = cfg.CONF.CISCO_PLUGINS.vswitch_plugin
-        if vswitch_plugin.endswith('OVSQuantumPluginV2'):
-            binding_seg_id = odb.get_network_binding(None, network_id)
-            return binding_seg_id.segmentation_id
-        else:
-            return self._invoke_plugin(const.VSWITCH_PLUGIN,
-                                       '_get_segmentation_id',
-                                       context, network_id)
+    def _get_segmentation_id(self, network_id):
+        binding_seg_id = odb.get_network_binding(None, network_id)
+        if not binding_seg_id:
+            raise cexc.NetworkSegmentIDNotFound(net_id=network_id)
+        return binding_seg_id.segmentation_id
 
     def _get_all_segmentation_ids(self):
         vlan_ids = cdb.get_ovs_vlans()
@@ -197,81 +197,57 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
         return host
 
     def create_network(self, context, network):
-        """
+        """Create network.
+
         Perform this operation in the context of the configured device
         plugins.
         """
         LOG.debug(_("create_network() called"))
-        try:
-            args = [context, network]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
-            if not self._validate_vlan_id(vlan_id):
-                return ovs_output[0]
-            vlan_name = conf.CISCO.vlan_name_prefix + str(vlan_id)
-            vlanids = self._get_all_segmentation_ids()
-            args = [ovs_output[0]['tenant_id'], ovs_output[0]['name'],
-                    ovs_output[0]['id'], vlan_name, vlan_id,
-                    {'vlan_ids': vlanids}]
-            return ovs_output[0]
-        except:
-            # TODO (Sumit): Check if we need to perform any rollback here
-            raise
+        args = [context, network]
+        ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                    self._func_name(),
+                                                    args)
+        return ovs_output[0]
 
     def update_network(self, context, id, network):
-        """
+        """Update network.
+
         Perform this operation in the context of the configured device
         plugins.
+
+        Note that the Nexus sub-plugin does not need to be notified
+        (and the Nexus switch does not need to be [re]configured)
+        for an update network operation because the Nexus sub-plugin
+        is agnostic of all network-level attributes except the
+        segmentation ID. Furthermore, updating of the segmentation ID
+        is not supported by the OVS plugin since it is considered a
+        provider attribute, so it is not supported by this method.
         """
         LOG.debug(_("update_network() called"))
         args = [context, id, network]
         ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                     self._func_name(),
                                                     args)
-        vlan_id = self._get_segmentation_id(context, ovs_output[0]['id'])
-        if not self._validate_vlan_id(vlan_id):
-            return ovs_output[0]
-        vlanids = self._get_all_segmentation_ids()
-        args = [ovs_output[0]['tenant_id'], id, {'vlan_id': vlan_id},
-                {'net_admin_state': ovs_output[0]['admin_state_up']},
-                {'vlan_ids': vlanids}]
-        nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
-                                                      self._func_name(),
-                                                      args)
         return ovs_output[0]
 
     def delete_network(self, context, id):
-        """
+        """Delete network.
+
         Perform this operation in the context of the configured device
         plugins.
         """
-        try:
-            base_plugin_ref = QuantumManager.get_plugin()
-            n = base_plugin_ref.get_network(context, id)
-            tenant_id = n['tenant_id']
-            vlan_id = self._get_segmentation_id(context, id)
-            args = [context, id]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-            args = [tenant_id, id, {const.VLANID: vlan_id},
-                    {const.CONTEXT: context},
-                    {const.BASE_PLUGIN_REF: base_plugin_ref}]
-            if self._validate_vlan_id(vlan_id):
-                self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
-                                               self._func_name(), args)
-            return ovs_output[0]
-        except:
-            raise
+        args = [context, id]
+        ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                    self._func_name(),
+                                                    args)
+        return ovs_output[0]
 
     def get_network(self, context, id, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def get_networks(self, context, filters=None, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def _invoke_nexus_for_net_create(self, context, tenant_id, net_id,
@@ -293,60 +269,69 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
 
         return nexus_output
 
+    @staticmethod
+    def _should_call_create_net(device_owner, instance_id):
+        return (instance_id and device_owner != 'network:dhcp')
+
     def create_port(self, context, port):
-        """
+        """Create port.
+
         Perform this operation in the context of the configured device
         plugins.
         """
         LOG.debug(_("create_port() called"))
+        args = [context, port]
+        ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                    self._func_name(),
+                                                    args)
         try:
-            args = [context, port]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
-
             instance_id = port['port']['device_id']
             device_owner = port['port']['device_owner']
 
-            if conf.CISCO_TEST.host is not None:
-                host = conf.CISCO_TEST.host
-            elif device_owner == 'network:dhcp':
-                return ovs_output[0]
-            elif instance_id:
+            if self._should_call_create_net(device_owner, instance_id):
                 net_id = port['port']['network_id']
                 tenant_id = port['port']['tenant_id']
                 self._invoke_nexus_for_net_create(
                     context, tenant_id, net_id, instance_id)
 
-            return ovs_output[0]
-        except:
-            # TODO (asomya): Check if we need to perform any rollback here
-            raise
+        except Exception:
+            # Create network on the Nexus plugin has failed, so we need
+            # to rollback the port creation on the VSwitch plugin.
+            exc_info = sys.exc_info()
+            try:
+                id = ovs_output[0]['id']
+                args = [context, id]
+                ovs_output = self._invoke_plugin_per_device(
+                    const.VSWITCH_PLUGIN,
+                    'delete_port',
+                    args)
+            finally:
+                # Re-raise the original exception
+                raise exc_info[0], exc_info[1], exc_info[2]
+        return ovs_output[0]
 
     def get_port(self, context, id, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def get_ports(self, context, filters=None, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def update_port(self, context, id, port):
-        """
+        """Update port.
+
         Perform this operation in the context of the configured device
         plugins.
         """
         LOG.debug(_("update_port() called"))
+        old_port = self.get_port(context, id)
+        old_device = old_port['device_id']
+        args = [context, id, port]
+        ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                    self._func_name(),
+                                                    args)
         try:
-            # Get port
-            old_port = self.get_port(context, id)
-            # Check old port device_id
-            old_device = old_port['device_id']
-            # Update port with vswitch plugin
-            args = [context, id, port]
-            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
-                                                        self._func_name(),
-                                                        args)
             net_id = old_port['network_id']
             instance_id = ''
             if 'device_id' in port['port']:
@@ -359,47 +344,133 @@ class VirtualPhysicalSwitchModelV2(QuantumDbPluginV2):
                     context, tenant_id, net_id, instance_id)
 
             return ovs_output[0]
-        except:
-            raise
+        except Exception:
+            exc_info = sys.exc_info()
+            LOG.error(_("Unable to update port '%s' on Nexus switch"),
+                      old_port['name'], exc_info=exc_info)
+            try:
+                # Roll back vSwitch plugin to original port attributes.
+                args = [context, id, {'port': old_port}]
+                ovs_output = self._invoke_plugin_per_device(
+                    const.VSWITCH_PLUGIN,
+                    self._func_name(),
+                    args)
+            finally:
+                # Re-raise the original exception
+                raise exc_info[0], exc_info[1], exc_info[2]
 
     def delete_port(self, context, id):
-        """
+        """Delete port.
+
         Perform this operation in the context of the configured device
         plugins.
         """
         LOG.debug(_("delete_port() called"))
+        port = self.get_port(context, id)
+        vlan_id = self._get_segmentation_id(port['network_id'])
+        n_args = [port['device_id'], vlan_id]
+        self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
+                                       self._func_name(),
+                                       n_args)
         try:
             args = [context, id]
-            port = self.get_port(context, id)
-            vlan_id = self._get_segmentation_id(context, port['network_id'])
-            n_args = [port['device_id'], vlan_id]
             ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
                                                         self._func_name(),
                                                         args)
+        except Exception:
+            exc_info = sys.exc_info()
+            # Roll back the delete port on the Nexus plugin
+            try:
+                tenant_id = port['tenant_id']
+                net_id = port['network_id']
+                instance_id = port['device_id']
+                self._invoke_nexus_for_net_create(context, tenant_id,
+                                                  net_id, instance_id)
+            finally:
+                # Raise the original exception.
+                raise exc_info[0], exc_info[1], exc_info[2]
+
+        return ovs_output[0]
+
+    def add_router_interface(self, context, router_id, interface_info):
+        """Add a router interface on a subnet.
+
+        Only invoke the Nexus plugin to create SVI if a Nexus
+        plugin is loaded, otherwise send it to the vswitch plugin
+        """
+        nexus_driver = cfg.CONF.CISCO.nexus_driver
+        if nexus_driver.endswith('CiscoNEXUSDriver'):
+            LOG.debug(_("Nexus plugin loaded, creating SVI on switch"))
+            if 'subnet_id' not in interface_info:
+                raise cexc.SubnetNotSpecified()
+            if 'port_id' in interface_info:
+                raise cexc.PortIdForNexusSvi()
+            subnet = self.get_subnet(context, interface_info['subnet_id'])
+            gateway_ip = subnet['gateway_ip']
+            # Get gateway IP address and netmask
+            cidr = subnet['cidr']
+            netmask = cidr.split('/', 1)[1]
+            gateway_ip = gateway_ip + '/' + netmask
+            network_id = subnet['network_id']
+            vlan_id = self._get_segmentation_id(network_id)
+            vlan_name = conf.CISCO.vlan_name_prefix + str(vlan_id)
+
+            n_args = [vlan_name, vlan_id, subnet['id'], gateway_ip, router_id]
             nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
                                                           self._func_name(),
                                                           n_args)
-            return ovs_output[0]
-        except:
-            # TODO (asomya): Check if we need to perform any rollback here
-            raise
+            return nexus_output
+        else:
+            LOG.debug(_("No Nexus plugin, sending to vswitch"))
+            n_args = [context, router_id, interface_info]
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                        self._func_name(),
+                                                        n_args)
+            return ovs_output
+
+    def remove_router_interface(self, context, router_id, interface_info):
+        """Remove a router interface.
+
+        Only invoke the Nexus plugin to delete SVI if a Nexus
+        plugin is loaded, otherwise send it to the vswitch plugin
+        """
+        nexus_driver = cfg.CONF.CISCO.nexus_driver
+        if nexus_driver.endswith('CiscoNEXUSDriver'):
+            LOG.debug(_("Nexus plugin loaded, deleting SVI from switch"))
+
+            subnet = self.get_subnet(context, interface_info['subnet_id'])
+            network_id = subnet['network_id']
+            vlan_id = self._get_segmentation_id(network_id)
+            n_args = [vlan_id, router_id]
+
+            nexus_output = self._invoke_plugin_per_device(const.NEXUS_PLUGIN,
+                                                          self._func_name(),
+                                                          n_args)
+            return nexus_output
+        else:
+            LOG.debug(_("No Nexus plugin, sending to vswitch"))
+            n_args = [context, router_id, interface_info]
+            ovs_output = self._invoke_plugin_per_device(const.VSWITCH_PLUGIN,
+                                                        self._func_name(),
+                                                        n_args)
+            return ovs_output
 
     def create_subnet(self, context, subnet):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def update_subnet(self, context, id, subnet):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def get_subnet(self, context, id, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def delete_subnet(self, context, id, kwargs):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass
 
     def get_subnets(self, context, filters=None, fields=None):
-        """For this model this method will be delegated to vswitch plugin"""
+        """For this model this method will be delegated to vswitch plugin."""
         pass

@@ -30,12 +30,11 @@ down_revision = '49332180ca96'
 # Change to ['*'] if this migration applies to all plugins
 
 migration_for_plugins = [
-    'quantum.plugins.nicira.nicira_nvp_plugin.QuantumPlugin.NvpPluginV2'
+    'quantum.plugins.nicira.QuantumPlugin.NvpPluginV2'
 ]
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
 
 from quantum.db import migration
 

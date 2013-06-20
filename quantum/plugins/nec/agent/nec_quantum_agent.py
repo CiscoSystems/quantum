@@ -23,7 +23,6 @@
 # @author: Akihiro MOTOKI
 
 import socket
-import sys
 import time
 
 import eventlet
@@ -51,7 +50,7 @@ class NECPluginApi(agent_rpc.PluginApi):
 
     def update_ports(self, context, agent_id, datapath_id,
                      port_added, port_removed):
-        """RPC to update information of ports on Quantum Server"""
+        """RPC to update information of ports on Quantum Server."""
         LOG.info(_("Update ports: added=%(added)s, "
                    "removed=%(removed)s"),
                  {'added': port_added, 'removed': port_removed})
@@ -63,7 +62,7 @@ class NECPluginApi(agent_rpc.PluginApi):
                                     datapath_id=datapath_id,
                                     port_added=port_added,
                                     port_removed=port_removed))
-        except Exception as e:
+        except Exception:
             LOG.warn(_("update_ports() failed."))
             return
 
@@ -169,7 +168,8 @@ class NECQuantumAgent(object):
 
         report_interval = config.CONF.AGENT.report_interval
         if report_interval:
-            heartbeat = loopingcall.LoopingCall(self._report_state)
+            heartbeat = loopingcall.FixedIntervalLoopingCall(
+                self._report_state)
             heartbeat.start(interval=report_interval)
 
     def _report_state(self):
@@ -240,8 +240,6 @@ def main():
 
     # Start everything.
     agent.daemon_loop()
-
-    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -42,7 +42,8 @@ SQL_CONNECTION_DEFAULT = 'sqlite://'
 database_opts = [
     cfg.StrOpt('sql_connection',
                help=_('The SQLAlchemy connection string used to connect to '
-                      'the database')),
+                      'the database'),
+               secret=True),
     cfg.IntOpt('sql_max_retries', default=-1,
                help=_('Database reconnection retry times')),
     cfg.IntOpt('reconnect_interval', default=2,
@@ -63,9 +64,17 @@ database_opts = [
                 default=False,
                 help=_("Enable the use of eventlet's db_pool for MySQL")),
     cfg.IntOpt('sqlalchemy_pool_size',
-               default=5,
+               default=None,
                help=_("Maximum number of SQL connections to keep open in a "
                       "QueuePool in SQLAlchemy")),
+    cfg.IntOpt('sqlalchemy_max_overflow',
+               default=None,
+               help=_("If set, use this value for max_overflow with "
+                      "sqlalchemy")),
+    cfg.IntOpt('sqlalchemy_pool_timeout',
+               default=None,
+               help=_("If set, use this value for pool_timeout with "
+                      "sqlalchemy")),
 ]
 
 cfg.CONF.register_opts(database_opts, "DATABASE")
@@ -76,10 +85,7 @@ BASE = model_base.BASEV2
 
 
 class MySQLPingListener(object):
-
-    """
-    Ensures that MySQL connections checked out of the
-    pool are alive.
+    """Ensures that MySQL connections checked out of the pool are alive.
 
     Borrowed from:
     http://groups.google.com/group/sqlalchemy/msg/a4ce563d802c929f
@@ -88,7 +94,7 @@ class MySQLPingListener(object):
     def checkout(self, dbapi_con, con_record, con_proxy):
         try:
             dbapi_con.cursor().execute('select 1')
-        except dbapi_con.OperationalError, ex:
+        except dbapi_con.OperationalError as ex:
             if ex.args[0] in (2006, 2013, 2014, 2045, 2055):
                 LOG.warn(_('Got mysql server has gone away: %s'), ex)
                 raise DisconnectionError(_("Database server went away"))
@@ -97,8 +103,7 @@ class MySQLPingListener(object):
 
 
 class SqliteForeignKeysListener(PoolListener):
-    """
-    Ensures that the foreign key constraints are enforced in SQLite.
+    """Ensures that the foreign key constraints are enforced in SQLite.
 
     The foreign key constraints are disabled by default in SQLite,
     so the foreign key constraints will be enabled here for every
@@ -109,9 +114,10 @@ class SqliteForeignKeysListener(PoolListener):
 
 
 def configure_db():
-    """
-    Establish the database, create an engine if needed, and
-    register the models.
+    """Configure database.
+
+    Establish the database, create an engine if needed, and register
+    the models.
     """
     global _ENGINE
     if not _ENGINE:
@@ -119,15 +125,24 @@ def configure_db():
         if not sql_connection:
             LOG.warn(_("Option 'sql_connection' not specified "
                        "in any config file - using default "
-                       "value '%s'" % SQL_CONNECTION_DEFAULT))
+                       "value '%s'") % SQL_CONNECTION_DEFAULT)
             sql_connection = SQL_CONNECTION_DEFAULT
         connection_dict = sql.engine.url.make_url(sql_connection)
         engine_args = {
             'pool_recycle': 3600,
             'echo': False,
             'convert_unicode': True,
-            'pool_size': cfg.CONF.DATABASE.sqlalchemy_pool_size,
         }
+
+        if cfg.CONF.DATABASE.sqlalchemy_pool_size is not None:
+            pool_size = cfg.CONF.DATABASE.sqlalchemy_pool_size
+            engine_args['pool_size'] = pool_size
+        if cfg.CONF.DATABASE.sqlalchemy_max_overflow is not None:
+            max_overflow = cfg.CONF.DATABASE.sqlalchemy_max_overflow
+            engine_args['max_overflow'] = max_overflow
+        if cfg.CONF.DATABASE.sqlalchemy_pool_timeout is not None:
+            pool_timeout = cfg.CONF.DATABASE.sqlalchemy_pool_timeout
+            engine_args['pool_timeout'] = pool_timeout
 
         if 'mysql' in connection_dict.drivername:
             engine_args['listeners'] = [MySQLPingListener()]
@@ -142,8 +157,16 @@ def configure_db():
                     'max_size': cfg.CONF.DATABASE.sql_max_pool_size,
                     'max_idle': cfg.CONF.DATABASE.sql_idle_timeout
                 }
-                creator = db_pool.ConnectionPool(MySQLdb, **pool_args)
-                engine_args['creator'] = creator.create
+                pool = db_pool.ConnectionPool(MySQLdb, **pool_args)
+
+                def creator():
+                    conn = pool.create()
+                    # NOTE(belliott) eventlet >= 0.10 returns a tuple
+                    if isinstance(conn, tuple):
+                        _1, _2, conn = conn
+                    return conn
+
+                engine_args['creator'] = creator
             if (MySQLdb is None and cfg.CONF.DATABASE.sql_dbpool_enable):
                 LOG.warn(_("Eventlet connection pooling will not work without "
                            "python-mysqldb!"))
@@ -176,7 +199,7 @@ def clear_db(base=BASE):
 
 
 def get_session(autocommit=True, expire_on_commit=False):
-    """Helper method to grab session"""
+    """Helper method to grab session."""
     global _MAKER, _ENGINE
     if not _MAKER:
         assert _ENGINE
@@ -197,14 +220,15 @@ def retry_registration(remaining, reconnect_interval, base=BASE):
             remaining -= 1
         LOG.info(_("Unable to connect to database, %(remaining)s attempts "
                    "left. Retrying in %(reconnect_interval)s seconds"),
-                 locals())
+                 {'remaining': remaining,
+                  'reconnect_interval': reconnect_interval})
         time.sleep(reconnect_interval)
         if register_models(base):
             break
 
 
 def register_models(base=BASE):
-    """Register Models and create properties"""
+    """Register Models and create properties."""
     global _ENGINE
     assert _ENGINE
     try:
@@ -216,17 +240,18 @@ def register_models(base=BASE):
 
 
 def unregister_models(base=BASE):
-    """Unregister Models, useful clearing out data before testing"""
+    """Unregister Models, useful clearing out data before testing."""
     global _ENGINE
     assert _ENGINE
     base.metadata.drop_all(_ENGINE)
 
 
 def greenthread_yield(dbapi_con, con_record):
-    """
-    Ensure other greenthreads get a chance to execute by forcing a context
-    switch. With common database backends (eg MySQLdb and sqlite), there is
-    no implicit yield caused by network I/O since they are implemented by
-    C libraries that eventlet cannot monkey patch.
+    """Ensure other greenthreads get a chance to execute.
+
+    This is done by forcing a context switch. With common database
+    backends (eg MySQLdb and sqlite), there is no implicit yield caused
+    by network I/O since they are implemented by C libraries that
+    eventlet cannot monkey patch.
     """
     greenthread.sleep(0)

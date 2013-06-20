@@ -29,13 +29,13 @@ from oslo.config import cfg as q_conf
 from quantum import policy
 
 from quantum.agent import securitygroups_rpc as sg_rpc
-from quantum.api.v2 import attributes
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
+from quantum.api.v2 import attributes
 
 from quantum.common import exceptions as q_exc
-from quantum.common import topics
 from quantum.common import rpc as q_rpc
+from quantum.common import topics
 
 from quantum.db import agents_db
 from quantum.db import agentschedulers_db
@@ -54,8 +54,8 @@ from quantum.openstack.common.rpc import proxy
 
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
-from quantum.plugins.cisco.common import config as c_conf
 from quantum.plugins.cisco.common import cisco_exceptions
+from quantum.plugins.cisco.common import config as c_conf
 from quantum.plugins.cisco.db import n1kv_db_v2
 from quantum.plugins.cisco.db import network_db_v2
 from quantum.plugins.cisco.extensions import n1kv_profile
@@ -274,7 +274,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                               network)
 
     def _extend_network_dict_provider(self, context, network):
-        """ Add extended network parameters """
+        """Add extended network parameters."""
         binding = n1kv_db_v2.get_network_binding(context.session,
                                                  network['id'])
         network[providernet.NETWORK_TYPE] = binding.network_type
@@ -328,14 +328,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                         "(5000+)")
                 raise q_exc.InvalidInput(error_message=msg)
         else:
-            msg = _("provider:network_type %s not supported" % network_type)
+            msg = _("provider:network_type %s not supported"), network_type
             raise q_exc.InvalidInput(error_message=msg)
 
         if network_type in [c_const.TYPE_VLAN]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
-                    msg = _("unknown provider:physical_network %s" %
-                            physical_network)
+                    msg = _("unknown provider:physical_network %s"),
+                             physical_network
                     raise q_exc.InvalidInput(error_message=msg)
             elif 'default' in self.network_vlan_ranges:
                 physical_network = 'default'
@@ -346,7 +346,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return (network_type, physical_network, segmentation_id)
 
     def _check_provider_update(self, context, attrs):
-        """ Handle Provider network updates """
+        """Handle Provider network updates."""
         network_type = attrs.get(providernet.NETWORK_TYPE)
         physical_network = attrs.get(providernet.PHYSICAL_NETWORK)
         segmentation_id = attrs.get(providernet.SEGMENTATION_ID)
@@ -367,19 +367,19 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         raise q_exc.InvalidInput(error_message=msg)
 
     def _extend_network_dict_profile(self, context, network):
-        """ Add the extended parameter network profile to the network """
+        """Add the extended parameter network profile to the network."""
         binding = n1kv_db_v2.get_network_binding(context.session,
                                                  network['id'])
         network[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _extend_port_dict_profile(self, context, port):
-        """ Add the extended parameter port profile to the port """
+        """Add the extended parameter port profile to the port."""
         binding = n1kv_db_v2.get_port_binding(context.session,
                                               port['id'])
         port[n1kv_profile.PROFILE_ID] = binding.profile_id
 
     def _process_network_profile(self, context, attrs):
-        """ Validate network profile exists """
+        """Validate network profile exists."""
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
@@ -391,7 +391,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         return (profile_id)
 
     def _process_policy_profile(self, context, attrs):
-        """ Validates whether policy profile exists """
+        """Validates whether policy profile exists."""
         profile_id = attrs.get(n1kv_profile.PROFILE_ID)
         profile_id_set = attributes.is_attr_set(profile_id)
         if not profile_id_set:
@@ -965,9 +965,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self.vxlan_id_ranges = []
             self.vxlan_id_ranges.append((int(seg_min), int(seg_max)))
             n1kv_db_v2.sync_vxlan_allocations(self.vxlan_id_ranges)
-        # TODO: VSM currently does not support logical network creation.
-        #      Uncomment the following once VSM supports creation via REST api.
-        # self._send_create_logical_network_request(_network_profile)
+        # TODO(abhraut): VSM currently does not support logical network
+        #                creation. Uncomment the following once VSM supports
+        #                creation via REST api.self._send_create_logical_
+        #                network_request(_network_profile)
         try:
             self._send_create_network_profile_request(context,
                                                       _network_profile)

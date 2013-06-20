@@ -17,14 +17,19 @@
 
 """Base Test Case for all Unit Tests"""
 
+import logging
 import os
 
 import fixtures
 from oslo.config import cfg
+import stubout
 import testtools
+
+from quantum.openstack.common import exception
 
 CONF = cfg.CONF
 TRUE_STRING = ['True', '1']
+LOG_FORMAT = "%(asctime)s %(levelname)8s [%(name)s] %(message)s"
 
 
 class BaseTestCase(testtools.TestCase):
@@ -32,8 +37,11 @@ class BaseTestCase(testtools.TestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
 
-        self.useFixture(fixtures.FakeLogger(
-            format="%(asctime)s %(levelname)8s [%(name)s] %(message)s"))
+        if os.environ.get('OS_DEBUG') in TRUE_STRING:
+            _level = logging.DEBUG
+        else:
+            _level = logging.INFO
+        self.useFixture(fixtures.FakeLogger(format=LOG_FORMAT, level=_level))
 
         test_timeout = int(os.environ.get('OS_TEST_TIMEOUT', 0))
         if test_timeout == -1:
@@ -47,16 +55,17 @@ class BaseTestCase(testtools.TestCase):
 
         self.addCleanup(CONF.reset)
 
-        if os.environ.get('OS_STDOUT_NOCAPTURE') not in TRUE_STRING:
+        if os.environ.get('OS_STDOUT_CAPTURE') in TRUE_STRING:
             stdout = self.useFixture(fixtures.StringStream('stdout')).stream
             self.useFixture(fixtures.MonkeyPatch('sys.stdout', stdout))
-        if os.environ.get('OS_STDERR_NOCAPTURE') not in TRUE_STRING:
+        if os.environ.get('OS_STDERR_CAPTURE') in TRUE_STRING:
             stderr = self.useFixture(fixtures.StringStream('stderr')).stream
             self.useFixture(fixtures.MonkeyPatch('sys.stderr', stderr))
+        self.stubs = stubout.StubOutForTesting()
+        self.stubs.Set(exception, '_FATAL_EXCEPTION_FORMAT_ERRORS', True)
 
     def config(self, **kw):
-        """
-        Override some configuration values.
+        """Override some configuration values.
 
         The keyword arguments are the names of configuration options to
         override and their values.

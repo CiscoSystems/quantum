@@ -15,9 +15,17 @@
 #    under the License.
 
 import netaddr
+from oslo.config import cfg
 
 from quantum.agent.linux import utils
 from quantum.common import exceptions
+
+
+OPTS = [
+    cfg.BoolOpt('ip_lib_force_root',
+                default=False,
+                help=_('Force ip_lib calls to use the root helper')),
+]
 
 
 LOOPBACK_DEVNAME = 'lo'
@@ -27,10 +35,20 @@ class SubProcessBase(object):
     def __init__(self, root_helper=None, namespace=None):
         self.root_helper = root_helper
         self.namespace = namespace
+        try:
+            self.force_root = cfg.CONF.ip_lib_force_root
+        except cfg.NoSuchOptError:
+            # Only callers that need to force use of the root helper
+            # need to register the option.
+            self.force_root = False
 
     def _run(self, options, command, args):
         if self.namespace:
             return self._as_root(options, command, args)
+        elif self.force_root:
+            # Force use of the root helper to ensure that commands
+            # will execute in dom0 when running under XenServer/XCP.
+            return self._execute(options, command, args, self.root_helper)
         else:
             return self._execute(options, command, args)
 
@@ -90,12 +108,19 @@ class IPWrapper(SubProcessBase):
         self._as_root('', 'tuntap', ('add', name, 'mode', mode))
         return IPDevice(name, self.root_helper, self.namespace)
 
-    def add_veth(self, name1, name2):
-        self._as_root('', 'link',
-                      ('add', name1, 'type', 'veth', 'peer', 'name', name2))
+    def add_veth(self, name1, name2, namespace2=None):
+        args = ['add', name1, 'type', 'veth', 'peer', 'name', name2]
+
+        if namespace2 is None:
+            namespace2 = self.namespace
+        else:
+            self.ensure_namespace(namespace2)
+            args += ['netns', namespace2]
+
+        self._as_root('', 'link', tuple(args))
 
         return (IPDevice(name1, self.root_helper, self.namespace),
-                IPDevice(name2, self.root_helper, self.namespace))
+                IPDevice(name2, self.root_helper, namespace2))
 
     def ensure_namespace(self, name):
         if not self.netns.exists(name):
@@ -344,8 +369,7 @@ class IpRouteCommand(IpDeviceCommandBase):
         return retval
 
     def pullup_route(self, interface_name):
-        """
-        Ensures that the route entry for the interface is before all
+        """Ensures that the route entry for the interface is before all
         others on the same subnet.
         """
         device_list = []
@@ -354,7 +378,7 @@ class IpRouteCommand(IpDeviceCommandBase):
         for device_route_line in device_route_list_lines:
             try:
                 subnet = device_route_line.split()[0]
-            except:
+            except Exception:
                 continue
             subnet_route_list_lines = self._run('list', 'proto', 'kernel',
                                                 'match', subnet).split('\n')
@@ -367,7 +391,7 @@ class IpRouteCommand(IpDeviceCommandBase):
                     while(i.next() != 'src'):
                         pass
                     src = i.next()
-                except:
+                except Exception:
                     src = ''
                 if device != interface_name:
                     device_list.append((device, src))

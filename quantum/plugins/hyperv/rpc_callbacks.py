@@ -47,11 +47,11 @@ class HyperVRpcCallbacks(
         return q_rpc.PluginRpcDispatcher([self])
 
     def get_device_details(self, rpc_context, **kwargs):
-        """Agent requests device details"""
+        """Agent requests device details."""
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = self._db.get_port(device)
         if port:
             binding = self._db.get_network_binding(None, port['network_id'])
@@ -70,12 +70,12 @@ class HyperVRpcCallbacks(
         return entry
 
     def update_device_down(self, rpc_context, **kwargs):
-        """Device no longer exists on agent"""
-        # (TODO) garyk - live migration and port status
+        """Device no longer exists on agent."""
+        # TODO(garyk) - live migration and port status
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = self._db.get_port(device)
         if port:
             entry = {'device': device,
@@ -89,8 +89,11 @@ class HyperVRpcCallbacks(
         return entry
 
     def tunnel_sync(self, rpc_context, **kwargs):
-        """Dummy function for ovs agent running on Linux to
-        work with Hyper-V plugin and agent."""
+        """Tunnel sync.
+
+        Dummy function for ovs agent running on Linux to
+        work with Hyper-V plugin and agent.
+        """
         entry = dict()
         entry['tunnels'] = {}
         # Return the list of tunnels IP's to the agent

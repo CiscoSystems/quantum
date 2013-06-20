@@ -17,14 +17,12 @@
 # @author: Mark McClain, DreamHost
 
 import os
-import sys
 
 from alembic import command as alembic_command
 from alembic import config as alembic_config
 from alembic import util as alembic_util
 from oslo.config import cfg
 
-from quantum import manager
 
 _core_opts = [
     cfg.StrOpt('core_plugin',
@@ -53,7 +51,7 @@ CONF.register_opts(_quota_opts, 'QUOTAS')
 def do_alembic_command(config, cmd, *args, **kwargs):
     try:
         getattr(alembic_command, cmd)(config, *args, **kwargs)
-    except alembic_util.CommandError, e:
+    except alembic_util.CommandError as e:
         alembic_util.err(str(e))
 
 
