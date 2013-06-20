@@ -114,7 +114,7 @@ class CSR1kv_OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                      'segmentation_id': binding.segmentation_id,
                      'physical_network': binding.physical_network}
             # Bob - Patch to handle trunk ports.
-            self.plugin.extend_port_dict_trunks(self, rpc_context, entry)
+            self.plugin.extend_port_dict_trunks(rpc_context, entry)
             # Bob - End of patch
             new_status = (q_const.PORT_STATUS_ACTIVE if port['admin_state_up']
                           else q_const.PORT_STATUS_DOWN)
