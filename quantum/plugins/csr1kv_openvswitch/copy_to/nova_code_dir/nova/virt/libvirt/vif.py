@@ -571,12 +571,12 @@ class LibvirtHybridOVSBridgeDriver(LibvirtGenericVIFDriver):
         return self.unplug_ovs_hybrid(instance, vif)
 
 # Bob - Patch to handle trunk ports with csr1kv_ovs plugin.
-TRUNK_BR_PREFIX = 'tbr-'
+TRUNK_BR_PREFIX = 'tbr'
 TRUNK_BR_NAME_LEN = 14
 # Name prefixes for veth device pair linking the integration bridge
 # with a device (i.e., VM) specific bridge for trunking.
-VETH_TR_BR_PREFIX = 'tr-'
-VETH_INT_BR_PREFIX = 'int-'
+VETH_TR_BR_PREFIX = 'tbs'
+VETH_INT_BR_PREFIX = 'ibs'
 
 
 class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
@@ -588,10 +588,10 @@ class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
         return (TRUNK_BR_PREFIX + port_id)[:TRUNK_BR_NAME_LEN]
 
     def _get_trunk_side_veth_pair_name(self, bridge_name):
-        return VETH_TR_BR_PREFIX + bridge_name
+        return VETH_TR_BR_PREFIX + bridge_name[3:]
 
     def _get_br_int_side_veth_pair_name(self, bridge_name):
-        return VETH_INT_BR_PREFIX + bridge_name
+        return VETH_INT_BR_PREFIX + bridge_name[3:]
 
     def _create_ovs_bridge(self, bridge_name):
         utils.execute('ovs-vsctl', '--', '--may-exist', 'add-br',
@@ -649,19 +649,24 @@ class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
 
         try:
             network, mapping = vif
+			# backup name of integration bridge
             tr_br_name = self._get_trunk_bridge_name(mapping['vif_uuid'])
             v1_name = self._get_trunk_side_veth_pair_name(tr_br_name)
             v2_name = self._get_br_int_side_veth_pair_name(tr_br_name)
             # unplug and delete veth devices
-            linux_net.delete_ovs_vif_port(self.get_bridge_name(network),
+            linux_net.delete_ovs_vif_port(self.get_bridge_name(network), 
                                           v2_name)
+            br_name_bak = network.get('bridge')
+            network['bridge'] = tr_br_name
+            res = super(LibvirtTrunkHybridOVSBridgeDriver, self).unplug(
+                instance, vif)
             self._delete_ovs_bridge(tr_br_name)
+            if br_name_bak is None:
+                network.pop('bridge')
+            else:
+                network['bridge'] = br_name_bak
         except processutils.ProcessExecutionError:
             LOG.exception(_("Failed while unplugging vif"), instance=instance)
-
-        return super(LibvirtTrunkHybridOVSBridgeDriver, self).unplug(instance,
-                                                                     vif)
-
 # Bob - End of patch
 
 
