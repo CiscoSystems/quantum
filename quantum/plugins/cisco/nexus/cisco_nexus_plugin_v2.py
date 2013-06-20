@@ -30,6 +30,7 @@ from quantum.common import exceptions as exc
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as cred
+from quantum.plugins.cisco.common import cisco_exceptions as cisco_exc
 from quantum.plugins.cisco.common import config as conf
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 from quantum.plugins.cisco.db import nexus_db_v2 as nxos_db
@@ -40,15 +41,11 @@ LOG = logging.getLogger(__name__)
 
 
 class NexusPlugin(L2DevicePluginBase):
-    """
-    Nexus PLugIn Main Class
-    """
+    """Nexus PlugIn Main Class."""
     _networks = {}
 
     def __init__(self):
-        """
-        Extracts the configuration parameters from the configuration file
-        """
+        """Extract configuration parameters from the configuration file."""
         self._client = importutils.import_object(conf.CISCO.nexus_driver)
         LOG.debug(_("Loaded driver %s"), conf.CISCO.nexus_driver)
         self._nexus_switches = conf.get_nexus_dictionary()
@@ -65,9 +62,9 @@ class NexusPlugin(L2DevicePluginBase):
         return self.credentials[nexus_ip]
 
     def get_all_networks(self, tenant_id):
-        """
-        Returns a dictionary containing all
-        <network_uuid, network_name> for
+        """Get all networks.
+
+        Returns a dictionary containing all <network_uuid, network_name> for
         the specified tenant.
         """
         LOG.debug(_("NexusPlugin:get_all_networks() called"))
@@ -75,24 +72,27 @@ class NexusPlugin(L2DevicePluginBase):
 
     def create_network(self, tenant_id, net_name, net_id, vlan_name, vlan_id,
                        host, instance):
-        """
-        Create a VLAN in the appropriate switch/port,
-        and configure the appropriate interfaces
-        for this VLAN
+        """Create network.
+
+        Create a VLAN in the appropriate switch/port, and configure the
+        appropriate interfaces for this VLAN.
         """
         LOG.debug(_("NexusPlugin:create_network() called"))
         # Grab the switch IP and port for this host
-        switch_ip = ''
-        port_id = ''
-        for keys in self._nexus_switches.keys():
-            if str(keys[1]) == str(host):
-                switch_ip = keys[0]
-                port_id = self._nexus_switches[keys[0], keys[1]]
+        for switch_ip, attr in self._nexus_switches:
+            if str(attr) == str(host):
+                port_id = self._nexus_switches[switch_ip, attr]
+                break
+        else:
+            raise cisco_exc.NexusComputeHostNotConfigured(host=host)
 
         # Check if this network is already in the DB
-        binding = nxos_db.get_port_vlan_switch_binding(
-            port_id, vlan_id, switch_ip)
-        if not binding:
+        vlan_created = False
+        vlan_enabled = False
+
+        try:
+            nxos_db.get_port_vlan_switch_binding(port_id, vlan_id, switch_ip)
+        except cisco_exc.NexusPortBindingNotFound:
             _nexus_ip = switch_ip
             _nexus_ports = (port_id,)
             _nexus_ssh_port = \
@@ -101,13 +101,15 @@ class NexusPlugin(L2DevicePluginBase):
             _nexus_username = _nexus_creds['username']
             _nexus_password = _nexus_creds['password']
             # Check for vlan/switch binding
-            vbinding = nxos_db.get_nexusvlan_binding(vlan_id, switch_ip)
-            if not vbinding:
+            try:
+                nxos_db.get_nexusvlan_binding(vlan_id, switch_ip)
+            except cisco_exc.NexusPortBindingNotFound:
                 # Create vlan and trunk vlan on the port
                 self._client.create_vlan(
                     vlan_name, str(vlan_id), _nexus_ip,
                     _nexus_username, _nexus_password,
                     _nexus_ports, _nexus_ssh_port, vlan_id)
+                vlan_created = True
             else:
                 # Only trunk vlan on the port
                 man = self._client.nxos_connect(_nexus_ip,
@@ -115,11 +117,30 @@ class NexusPlugin(L2DevicePluginBase):
                                                 _nexus_username,
                                                 _nexus_password)
                 self._client.enable_vlan_on_trunk_int(man,
+                                                      _nexus_ip,
                                                       port_id,
                                                       vlan_id)
+                vlan_enabled = True
 
-        nxos_db.add_nexusport_binding(port_id, str(vlan_id),
-                                      switch_ip, instance)
+        try:
+            nxos_db.add_nexusport_binding(port_id, str(vlan_id),
+                                          switch_ip, instance)
+        except Exception as e:
+            try:
+                # Add binding failed, roll back any vlan creation/enabling
+                if vlan_created:
+                    self._client.delete_vlan(
+                        str(vlan_id), _nexus_ip,
+                        _nexus_username, _nexus_password,
+                        _nexus_ports, _nexus_ssh_port)
+                if vlan_enabled:
+                    self._client.disable_vlan_on_trunk_int(man,
+                                                           port_id,
+                                                           vlan_id)
+            finally:
+                # Raise the original exception
+                raise e
+
         new_net_dict = {const.NET_ID: net_id,
                         const.NET_NAME: net_name,
                         const.NET_PORTS: {},
@@ -128,65 +149,153 @@ class NexusPlugin(L2DevicePluginBase):
         self._networks[net_id] = new_net_dict
         return new_net_dict
 
+    def add_router_interface(self, vlan_name, vlan_id, subnet_id,
+                             gateway_ip, router_id):
+        """Create VLAN SVI on the Nexus switch."""
+        # Find a switch to create the SVI on
+        switch_ip = self._find_switch_for_svi()
+        if not switch_ip:
+            raise cisco_exc.NoNexusSwitch()
+
+        _nexus_ip = switch_ip
+        _nexus_ssh_port = self._nexus_switches[switch_ip, 'ssh_port']
+        _nexus_creds = self.get_credential(_nexus_ip)
+        _nexus_username = _nexus_creds['username']
+        _nexus_password = _nexus_creds['password']
+
+        # Check if this vlan exists on the switch already
+        try:
+            nxos_db.get_nexusvlan_binding(vlan_id, switch_ip)
+        except cisco_exc.NexusPortBindingNotFound:
+            # Create vlan and trunk vlan on the port
+            self._client.create_vlan(
+                vlan_name, str(vlan_id), _nexus_ip,
+                _nexus_username, _nexus_password,
+                [], _nexus_ssh_port, vlan_id)
+
+        # Check if a router interface has already been created
+        try:
+            nxos_db.get_nexusvm_binding(vlan_id, router_id)
+            raise cisco_exc.SubnetInterfacePresent(subnet_id=subnet_id,
+                                                   router_id=router_id)
+        except cisco_exc.NexusPortBindingNotFound:
+            self._client.create_vlan_svi(vlan_id, _nexus_ip, _nexus_username,
+                                         _nexus_password, _nexus_ssh_port,
+                                         gateway_ip)
+            nxos_db.add_nexusport_binding('router', str(vlan_id),
+                                          switch_ip, router_id)
+
+            return True
+
+    def remove_router_interface(self, vlan_id, router_id):
+        """Remove VLAN SVI from the Nexus Switch."""
+        # Grab switch_ip from database
+        row = nxos_db.get_nexusvm_binding(vlan_id, router_id)
+
+        # Delete the SVI interface from the switch
+        _nexus_ip = row['switch_ip']
+        _nexus_ssh_port = self._nexus_switches[_nexus_ip, 'ssh_port']
+        _nexus_creds = self.get_credential(_nexus_ip)
+        _nexus_username = _nexus_creds['username']
+        _nexus_password = _nexus_creds['password']
+
+        self._client.delete_vlan_svi(vlan_id, _nexus_ip, _nexus_username,
+                                     _nexus_password, _nexus_ssh_port)
+
+        # Invoke delete_port to delete this row
+        # And delete vlan if required
+        return self.delete_port(router_id, vlan_id)
+
+    def _find_switch_for_svi(self):
+        """Get a switch to create the SVI on."""
+        LOG.debug(_("Grabbing a switch to create SVI"))
+        if conf.CISCO.svi_round_robin:
+            LOG.debug(_("Using round robin to create SVI"))
+            switch_dict = dict(
+                (switch_ip, 0) for switch_ip, _ in self._nexus_switches)
+            try:
+                bindings = nxos_db.get_nexussvi_bindings()
+                # Build a switch dictionary with weights
+                for binding in bindings:
+                    switch_ip = binding.switch_ip
+                    if switch_ip not in switch_dict:
+                        switch_dict[switch_ip] = 1
+                    else:
+                        switch_dict[switch_ip] += 1
+                # Search for the lowest value in the dict
+                if switch_dict:
+                    switch_ip = min(switch_dict.items(), key=switch_dict.get)
+                    return switch_ip[0]
+            except cisco_exc.NexusPortBindingNotFound:
+                pass
+
+        LOG.debug(_("No round robin or zero weights, using first switch"))
+        # Return the first switch in the config
+        for switch_ip, attr in self._nexus_switches:
+            return switch_ip
+
     def delete_network(self, tenant_id, net_id, **kwargs):
-        """
+        """Delete network.
+
         Deletes the VLAN in all switches, and removes the VLAN configuration
-        from the relevant interfaces
+        from the relevant interfaces.
         """
         LOG.debug(_("NexusPlugin:delete_network() called"))
 
     def get_network_details(self, tenant_id, net_id, **kwargs):
-        """
-        Returns the details of a particular network
-        """
+        """Return the details of a particular network."""
         LOG.debug(_("NexusPlugin:get_network_details() called"))
         network = self._get_network(tenant_id, net_id)
         return network
 
     def update_network(self, tenant_id, net_id, **kwargs):
-        """
-        Updates the properties of a particular
-        Virtual Network.
-        """
+        """Update the properties of a particular Virtual Network."""
         LOG.debug(_("NexusPlugin:update_network() called"))
 
     def get_all_ports(self, tenant_id, net_id, **kwargs):
-        """
+        """Get all ports.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
         LOG.debug(_("NexusPlugin:get_all_ports() called"))
 
     def create_port(self, tenant_id, net_id, port_state, port_id, **kwargs):
-        """
+        """Create port.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
         LOG.debug(_("NexusPlugin:create_port() called"))
 
     def delete_port(self, device_id, vlan_id):
-        """
-        Delete port bindings from the database and scan
-        whether the network is still required on
-        the interfaces trunked
+        """Delete port.
+
+        Delete port bindings from the database and scan whether the network
+        is still required on the interfaces trunked.
         """
         LOG.debug(_("NexusPlugin:delete_port() called"))
         # Delete DB row for this port
-        row = nxos_db.get_nexusvm_binding(vlan_id, device_id)
-        if row:
-            nxos_db.remove_nexusport_binding(row['port_id'], row['vlan_id'],
-                                             row['switch_ip'],
-                                             row['instance_id'])
-            # Check for any other bindings with the same vlan_id and switch_ip
-            bindings = nxos_db.get_nexusvlan_binding(
-                row['vlan_id'], row['switch_ip'])
+        try:
+            row = nxos_db.get_nexusvm_binding(vlan_id, device_id)
+        except cisco_exc.NexusPortBindingNotFound:
+            return
 
-            if not bindings:
+        nxos_db.remove_nexusport_binding(row['port_id'], row['vlan_id'],
+                                         row['switch_ip'],
+                                         row['instance_id'])
+        # Check for any other bindings with the same vlan_id and switch_ip
+        try:
+            nxos_db.get_nexusvlan_binding(row['vlan_id'], row['switch_ip'])
+        except cisco_exc.NexusPortBindingNotFound:
+            try:
                 # Delete this vlan from this switch
                 _nexus_ip = row['switch_ip']
-                _nexus_ports = (row['port_id'],)
-                _nexus_ssh_port = \
-                    self._nexus_switches[_nexus_ip, 'ssh_port']
+                _nexus_ports = ()
+                if row['port_id'] != 'router':
+                    _nexus_ports = (row['port_id'],)
+                _nexus_ssh_port = (self._nexus_switches[_nexus_ip,
+                                                        'ssh_port'])
                 _nexus_creds = self.get_credential(_nexus_ip)
                 _nexus_username = _nexus_creds['username']
                 _nexus_password = _nexus_creds['password']
@@ -194,18 +303,33 @@ class NexusPlugin(L2DevicePluginBase):
                     str(row['vlan_id']), _nexus_ip,
                     _nexus_username, _nexus_password,
                     _nexus_ports, _nexus_ssh_port)
+            except Exception as e:
+                # The delete vlan operation on the Nexus failed,
+                # so this delete_port request has failed. For
+                # consistency, roll back the Nexus database to what
+                # it was before this request.
+                try:
+                    nxos_db.add_nexusport_binding(row['port_id'],
+                                                  row['vlan_id'],
+                                                  row['switch_ip'],
+                                                  row['instance_id'])
+                finally:
+                    # Raise the original exception
+                    raise e
 
-            return row['instance_id']
+        return row['instance_id']
 
     def update_port(self, tenant_id, net_id, port_id, port_state, **kwargs):
-        """
+        """Update port.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
         LOG.debug(_("NexusPlugin:update_port() called"))
 
     def get_port_details(self, tenant_id, net_id, port_id, **kwargs):
-        """
+        """Get port details.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
@@ -213,14 +337,16 @@ class NexusPlugin(L2DevicePluginBase):
 
     def plug_interface(self, tenant_id, net_id, port_id, remote_interface_id,
                        **kwargs):
-        """
+        """Plug interfaces.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
         LOG.debug(_("NexusPlugin:plug_interface() called"))
 
     def unplug_interface(self, tenant_id, net_id, port_id, **kwargs):
-        """
+        """Unplug interface.
+
         This is probably not applicable to the Nexus plugin.
         Delete if not required.
         """
@@ -228,16 +354,12 @@ class NexusPlugin(L2DevicePluginBase):
 
     def _get_vlan_id_for_network(self, tenant_id, network_id, context,
                                  base_plugin_ref):
-        """
-        Obtain the VLAN ID given the Network ID
-        """
+        """Obtain the VLAN ID given the Network ID."""
         vlan = cdb.get_vlan_binding(network_id)
         return vlan.vlan_id
 
     def _get_network(self, tenant_id, network_id, context, base_plugin_ref):
-        """
-        Gets the NETWORK ID
-        """
+        """Get the Network ID."""
         network = base_plugin_ref._get_network(context, network_id)
         if not network:
             raise exc.NetworkNotFound(net_id=network_id)

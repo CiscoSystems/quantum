@@ -47,13 +47,18 @@ class SecurityGroupCannotRemoveDefault(qexception.InUse):
     message = _("Removing default security group not allowed.")
 
 
+class SecurityGroupCannotUpdateDefault(qexception.InUse):
+    message = _("Updating default security group not allowed.")
+
+
 class SecurityGroupDefaultAlreadyExists(qexception.InUse):
     message = _("Default security group already exists.")
 
 
 class SecurityGroupRuleInvalidProtocol(qexception.InvalidInput):
     message = _("Security group rule protocol %(protocol)s not supported. "
-                "Only protocol values %(values)s supported.")
+                "Only protocol values %(values)s and their integer "
+                "representation (0 to 255) are supported.")
 
 
 class SecurityGroupRulesNotSingleTenant(qexception.InvalidInput):
@@ -91,11 +96,20 @@ class SecurityGroupRuleExists(qexception.InUse):
     message = _("Security group rule already exists. Group id is %(id)s.")
 
 
-def convert_protocol_to_case_insensitive(value):
+def convert_protocol(value):
     if value is None:
-        return value
+        return
     try:
-        return value.lower()
+        val = int(value)
+        if val >= 0 and val <= 255:
+            return val
+        raise SecurityGroupRuleInvalidProtocol(
+            protocol=value, values=sg_supported_protocols)
+    except (ValueError, TypeError):
+        if value.lower() in sg_supported_protocols:
+            return value.lower()
+        raise SecurityGroupRuleInvalidProtocol(
+            protocol=value, values=sg_supported_protocols)
     except AttributeError:
         raise SecurityGroupRuleInvalidProtocol(
             protocol=value, values=sg_supported_protocols)
@@ -149,10 +163,10 @@ RESOURCE_ATTRIBUTE_MAP = {
                'validate': {'type:uuid': None},
                'is_visible': True,
                'primary_key': True},
-        'name': {'allow_post': True, 'allow_put': False,
+        'name': {'allow_post': True, 'allow_put': True,
                  'is_visible': True, 'default': '',
                  'validate': {'type:name_not_default': None}},
-        'description': {'allow_post': True, 'allow_put': False,
+        'description': {'allow_post': True, 'allow_put': True,
                         'is_visible': True, 'default': ''},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'required_by_policy': True,
@@ -174,8 +188,7 @@ RESOURCE_ATTRIBUTE_MAP = {
                       'validate': {'type:values': ['ingress', 'egress']}},
         'protocol': {'allow_post': True, 'allow_put': False,
                      'is_visible': True, 'default': None,
-                     'convert_to': convert_protocol_to_case_insensitive,
-                     'validate': {'type:values': sg_supported_protocols}},
+                     'convert_to': convert_protocol},
         'port_range_min': {'allow_post': True, 'allow_put': False,
                            'convert_to': convert_validate_port_value,
                            'default': None, 'is_visible': True},
@@ -265,7 +278,8 @@ class Securitygroup(extensions.ExtensionDescriptor):
 
     def get_extended_resources(self, version):
         if version == "2.0":
-            return EXTENDED_ATTRIBUTES_2_0
+            return dict(EXTENDED_ATTRIBUTES_2_0.items() +
+                        RESOURCE_ATTRIBUTE_MAP.items())
         else:
             return {}
 
@@ -275,6 +289,10 @@ class SecurityGroupPluginBase(object):
 
     @abstractmethod
     def create_security_group(self, context, security_group):
+        pass
+
+    @abstractmethod
+    def update_security_group(self, context, id, security_group):
         pass
 
     @abstractmethod

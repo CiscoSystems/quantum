@@ -18,6 +18,7 @@ import mock
 from quantum.db import api as db
 from quantum.openstack.common import importutils
 from quantum.plugins.cisco.common import cisco_constants as const
+from quantum.plugins.cisco.common import cisco_exceptions as cisco_exc
 from quantum.plugins.cisco.nexus import cisco_nexus_plugin_v2
 from quantum.tests import base
 
@@ -36,17 +37,15 @@ NEXUS_DRIVER = ('quantum.plugins.cisco.nexus.'
 class TestCiscoNexusPlugin(base.BaseTestCase):
 
     def setUp(self):
-        """
-        Set up function
-        """
+        """Set up function."""
         super(TestCiscoNexusPlugin, self).setUp()
         self.tenant_id = "test_tenant_cisco1"
         self.net_name = "test_network_cisco1"
-        self.net_id = 000007
+        self.net_id = 7
         self.vlan_name = "q-" + str(self.net_id) + "vlan"
         self.vlan_id = 267
         self.second_net_name = "test_network_cisco2"
-        self.second_net_id = 000005
+        self.second_net_id = 5
         self.second_vlan_name = "q-" + str(self.second_net_id) + "vlan"
         self.second_vlan_id = 265
         self._nexus_switches = {
@@ -84,9 +83,7 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
         self.addCleanup(self.patch_obj.stop)
 
     def test_create_networks(self):
-        """
-        Tests creation of two new Virtual Networks.
-        """
+        """Tests creation of two new Virtual Networks."""
         tenant_id = self.tenant_id
         net_name = self.net_name
         net_id = self.net_id
@@ -117,9 +114,7 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
         self.assertEqual(new_net_dict[const.NET_VLAN_ID], self.second_vlan_id)
 
     def test_nexus_delete_port(self):
-        """
-        Test deletion of a vlan.
-        """
+        """Test deletion of a vlan."""
         self._cisco_nexus_plugin.create_network(
             self.tenant_id, self.net_name, self.net_id, self.vlan_name,
             self.vlan_id, self._hostname, INSTANCE)
@@ -128,3 +123,40 @@ class TestCiscoNexusPlugin(base.BaseTestCase):
             INSTANCE, self.vlan_id)
 
         self.assertEqual(expected_instance_id, INSTANCE)
+
+    def test_nexus_add_remove_router_interface(self):
+        """Tests addition of a router interface."""
+        vlan_name = self.vlan_name
+        vlan_id = self.vlan_id
+        gateway_ip = '10.0.0.1/24'
+        router_id = '00000R1'
+        subnet_id = '00001'
+
+        result = self._cisco_nexus_plugin.add_router_interface(vlan_name,
+                                                               vlan_id,
+                                                               subnet_id,
+                                                               gateway_ip,
+                                                               router_id)
+        self.assertTrue(result)
+        result = self._cisco_nexus_plugin.remove_router_interface(vlan_id,
+                                                                  router_id)
+        self.assertEqual(result, router_id)
+
+    def test_nexus_add_router_interface_fail(self):
+        """Tests deletion of a router interface."""
+        vlan_name = self.vlan_name
+        vlan_id = self.vlan_id
+        gateway_ip = '10.0.0.1/24'
+        router_id = '00000R1'
+        subnet_id = '00001'
+
+        self._cisco_nexus_plugin.add_router_interface(vlan_name,
+                                                      vlan_id,
+                                                      subnet_id,
+                                                      gateway_ip,
+                                                      router_id)
+
+        self.assertRaises(
+            cisco_exc.SubnetInterfacePresent,
+            self._cisco_nexus_plugin.add_router_interface,
+            vlan_name, vlan_id, subnet_id, gateway_ip, router_id)

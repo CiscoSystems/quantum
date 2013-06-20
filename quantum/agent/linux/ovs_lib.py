@@ -20,8 +20,10 @@
 
 import re
 
+from quantum.agent.linux import ip_lib
 from quantum.agent.linux import utils
 from quantum.openstack.common import log as logging
+from quantum.plugins.openvswitch.common import constants
 
 LOG = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ class OVSBridge:
         full_args = ["ovs-vsctl", "--timeout=2"] + args
         try:
             return utils.execute(full_args, root_helper=self.root_helper)
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': full_args, 'exception': e})
 
@@ -93,7 +95,7 @@ class OVSBridge:
         full_args = ["ovs-ofctl", cmd, self.br_name] + args
         try:
             return utils.execute(full_args, root_helper=self.root_helper)
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': full_args, 'exception': e})
 
@@ -162,9 +164,17 @@ class OVSBridge:
         flow_str = ",".join(flow_expr_arr)
         self.run_ofctl("del-flows", [flow_str])
 
-    def add_tunnel_port(self, port_name, remote_ip):
+    def add_tunnel_port(self, port_name, remote_ip,
+                        tunnel_type=constants.TYPE_GRE,
+                        vxlan_udp_port=constants.VXLAN_UDP_PORT):
         self.run_vsctl(["add-port", self.br_name, port_name])
-        self.set_db_attribute("Interface", port_name, "type", "gre")
+        self.set_db_attribute("Interface", port_name, "type", tunnel_type)
+        if tunnel_type == constants.TYPE_VXLAN:
+            # Only set the VXLAN UDP port if it's not the default
+            if vxlan_udp_port != constants.VXLAN_UDP_PORT:
+                self.set_db_attribute("Interface", port_name,
+                                      "options:dst_port",
+                                      vxlan_udp_port)
         self.set_db_attribute("Interface", port_name, "options:remote_ip",
                               remote_ip)
         self.set_db_attribute("Interface", port_name, "options:in_key", "flow")
@@ -215,7 +225,7 @@ class OVSBridge:
                 "param-key=nicira-iface-id", "uuid=%s" % xs_vif_uuid]
         try:
             return utils.execute(args, root_helper=self.root_helper).strip()
-        except Exception, e:
+        except Exception as e:
             LOG.error(_("Unable to execute %(cmd)s. Exception: %(exception)s"),
                       {'cmd': args, 'exception': e})
 
@@ -270,7 +280,7 @@ class OVSBridge:
             port_name = match.group('port_name')
             ofport = int(match.group('ofport'))
             return VifPort(port_name, ofport, vif_id, vif_mac, self)
-        except Exception, e:
+        except Exception as e:
             LOG.info(_("Unable to parse regex results. Exception: %s"), e)
             return
 
@@ -282,6 +292,15 @@ class OVSBridge:
 
         for port_name in port_names:
             self.delete_port(port_name)
+
+    def get_local_port_mac(self):
+        """Retrieve the mac of the bridge's local port."""
+        address = ip_lib.IPDevice(self.br_name, self.root_helper).link.address
+        if address:
+            return address
+        else:
+            msg = _('Unable to determine mac address for %s') % self.br_name
+            raise Exception(msg)
 
 
 def get_bridge_for_iface(root_helper, iface):
@@ -297,6 +316,28 @@ def get_bridges(root_helper):
     args = ["ovs-vsctl", "--timeout=2", "list-br"]
     try:
         return utils.execute(args, root_helper=root_helper).strip().split("\n")
-    except Exception, e:
+    except Exception as e:
         LOG.exception(_("Unable to retrieve bridges. Exception: %s"), e)
         return []
+
+
+def get_installed_ovs_usr_version(root_helper):
+    args = ["ovs-vsctl", "--version"]
+    try:
+        cmd = utils.execute(args, root_helper=root_helper)
+        ver = re.findall("\d+\.\d+", cmd)[0]
+        return ver
+    except Exception:
+        LOG.exception(_("Unable to retrieve OVS userspace version."))
+
+
+def get_installed_ovs_klm_version():
+    args = ["modinfo", "openvswitch"]
+    try:
+        cmd = utils.execute(args)
+        for line in cmd.split('\n'):
+            if 'version: ' in line and not 'srcversion' in line:
+                ver = re.findall("\d+\.\d+", line)
+                return ver[0]
+    except Exception:
+        LOG.exception(_("Unable to retrieve OVS kernel module version."))

@@ -66,12 +66,13 @@ class DhcpBase(object):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, conf, network, root_helper='sudo',
-                 device_delegate=None, namespace=None):
+                 device_delegate=None, namespace=None, version=None):
         self.conf = conf
         self.network = network
         self.root_helper = root_helper
         self.device_delegate = device_delegate
         self.namespace = namespace
+        self.version = version
 
     @abc.abstractmethod
     def enable(self):
@@ -97,6 +98,12 @@ class DhcpBase(object):
     @classmethod
     def existing_dhcp_networks(cls, conf, root_helper):
         """Return a list of existing networks ids that we have configs for."""
+
+        raise NotImplementedError
+
+    @classmethod
+    def check_version(cls):
+        """Execute version checks on DHCP server."""
 
         raise NotImplementedError
 
@@ -150,7 +157,7 @@ class DhcpLocalProcess(DhcpBase):
         conf_dir = os.path.join(confs_dir, self.network.id)
         if ensure_conf_dir:
             if not os.path.isdir(conf_dir):
-                os.makedirs(conf_dir, 0755)
+                os.makedirs(conf_dir, 0o755)
 
         return os.path.join(conf_dir, kind)
 
@@ -215,6 +222,26 @@ class Dnsmasq(DhcpLocalProcess):
 
     QUANTUM_NETWORK_ID_KEY = 'QUANTUM_NETWORK_ID'
     QUANTUM_RELAY_SOCKET_PATH_KEY = 'QUANTUM_RELAY_SOCKET_PATH'
+    MINIMUM_VERSION = 2.59
+
+    @classmethod
+    def check_version(cls):
+        ver = 0
+        try:
+            cmd = ['dnsmasq', '--version']
+            out = utils.execute(cmd)
+            ver = re.findall("\d+.\d+", out)[0]
+            is_valid_version = float(ver) >= cls.MINIMUM_VERSION
+            if not is_valid_version:
+                LOG.warning(_('FAILED VERSION REQUIREMENT FOR DNSMASQ. '
+                              'DHCP AGENT MAY NOT RUN CORRECTLY! '
+                              'Please ensure that its version is %s '
+                              'or above!'), cls.MINIMUM_VERSION)
+        except (OSError, RuntimeError, IndexError, ValueError):
+            LOG.warning(_('Unable to determine dnsmasq version. '
+                          'Please ensure that its version is %s '
+                          'or above!'), cls.MINIMUM_VERSION)
+        return float(ver)
 
     @classmethod
     def existing_dhcp_networks(cls, conf, root_helper):
@@ -268,8 +295,12 @@ class Dnsmasq(DhcpLocalProcess):
                 # TODO(mark): how do we indicate other options
                 # ra-only, slaac, ra-nameservers, and ra-stateless.
                 mode = 'static'
-            cmd.append('--dhcp-range=set:%s,%s,%s,%ss' %
-                       (self._TAG_PREFIX % i,
+            if self.version >= self.MINIMUM_VERSION:
+                set_tag = 'set:'
+            else:
+                set_tag = ''
+            cmd.append('--dhcp-range=%s%s,%s,%s,%ss' %
+                       (set_tag, self._TAG_PREFIX % i,
                         netaddr.IPNetwork(subnet.cidr).network,
                         mode,
                         self.conf.dhcp_lease_time))
@@ -301,8 +332,11 @@ class Dnsmasq(DhcpLocalProcess):
 
         self._output_hosts_file()
         self._output_opts_file()
-        cmd = ['kill', '-HUP', self.pid]
-        utils.execute(cmd, self.root_helper)
+        if self.active:
+            cmd = ['kill', '-HUP', self.pid]
+            utils.execute(cmd, self.root_helper)
+        else:
+            LOG.debug(_('Pid %d is stale, relaunching dnsmasq'), self.pid)
         LOG.debug(_('Reloading allocations for network: %s'), self.network.id)
 
     def _output_hosts_file(self):
@@ -394,7 +428,11 @@ class Dnsmasq(DhcpLocalProcess):
                             'quantum-dhcp-agent-dnsmasq-lease-update')
 
     def _format_option(self, index, option_name, *args):
-        return ','.join(('tag:' + self._TAG_PREFIX % index,
+        if self.version >= self.MINIMUM_VERSION:
+            set_tag = 'tag:'
+        else:
+            set_tag = ''
+        return ','.join((set_tag + self._TAG_PREFIX % index,
                          'option:%s' % option_name) + args)
 
     @classmethod

@@ -19,7 +19,10 @@
 # @author: Dan Wendlandt, Nicira Networks, Inc.
 # @author: Dave Lapsley, Nicira Networks, Inc.
 # @author: Aaron Rosen, Nicira Networks, Inc.
+# @author: Seetharama Ayyadevara, Freescale Semiconductor, Inc.
+# @author: Kyle Mestery, Cisco Systems, Inc.
 
+import distutils.version as dist_version
 import sys
 import time
 
@@ -28,7 +31,6 @@ from oslo.config import cfg
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import ovs_lib
-from quantum.agent.linux import utils
 from quantum.agent import rpc as agent_rpc
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.common import config as logging_config
@@ -39,6 +41,7 @@ from quantum import context
 from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import loopingcall
+from quantum.openstack.common.rpc import common as rpc_common
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.openvswitch.common import config  # noqa
 from quantum.plugins.openvswitch.common import constants
@@ -47,7 +50,7 @@ from quantum.plugins.openvswitch.common import constants
 LOG = logging.getLogger(__name__)
 
 # A placeholder for dead vlans.
-DEAD_VLAN_TAG = "4095"
+DEAD_VLAN_TAG = str(q_const.MAX_VLAN_TAG + 1)
 
 
 # A class to represent a VIF (i.e., a port that has 'iface-id' and 'vif-mac'
@@ -139,12 +142,6 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
     modifying, or stripping VLAN tags as necessary.
     '''
 
-    # Lower bound on available vlans.
-    MIN_VLAN_TAG = 1
-
-    # Upper bound on available vlans.
-    MAX_VLAN_TAG = 4094
-
     # history
     #   1.0 Initial version
     #   1.1 Support Security Group RPC
@@ -152,7 +149,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
     def __init__(self, integ_br, tun_br, local_ip,
                  bridge_mappings, root_helper,
-                 polling_interval, enable_tunneling):
+                 polling_interval, tunnel_type=constants.TYPE_NONE):
         '''Constructor.
 
         :param integ_br: name of the integration bridge.
@@ -161,21 +158,27 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         :param bridge_mappings: mappings from physical network name to bridge.
         :param root_helper: utility to use when running shell cmds.
         :param polling_interval: interval (secs) to poll DB.
-        :param enable_tunneling: if True enable GRE networks.
+        :param tunnel_type: Either gre or vxlan. If set, will automatically
+               set enable_tunneling to True.
         '''
         self.root_helper = root_helper
-        self.available_local_vlans = set(
-            xrange(OVSQuantumAgent.MIN_VLAN_TAG,
-                   OVSQuantumAgent.MAX_VLAN_TAG))
+        self.available_local_vlans = set(xrange(q_const.MIN_VLAN_TAG,
+                                                q_const.MAX_VLAN_TAG))
         self.int_br = self.setup_integration_br(integ_br)
         self.setup_physical_bridges(bridge_mappings)
         self.local_vlan_map = {}
 
         self.polling_interval = polling_interval
 
-        self.enable_tunneling = enable_tunneling
+        if tunnel_type in constants.TUNNEL_NETWORK_TYPES:
+            self.enable_tunneling = True
+        else:
+            self.enable_tunneling = False
         self.local_ip = local_ip
         self.tunnel_count = 0
+        self.tunnel_type = tunnel_type
+        self.vxlan_udp_port = cfg.CONF.AGENT.vxlan_udp_port
+        self._check_ovs_version()
         if self.enable_tunneling:
             self.setup_tunnel_br(tun_br)
         self.agent_state = {
@@ -184,13 +187,19 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             'topic': q_const.L2_AGENT_TOPIC,
             'configurations': bridge_mappings,
             'agent_type': q_const.AGENT_TYPE_OVS,
+            'tunnel_type': self.tunnel_type,
             'start_flag': True}
-        self.setup_rpc(integ_br)
+        self.setup_rpc()
 
         # Security group agent supprot
         self.sg_agent = OVSSecurityGroupAgent(self.context,
                                               self.plugin_rpc,
                                               root_helper)
+
+    def _check_ovs_version(self):
+        if self.enable_tunneling and self.tunnel_type == constants.TYPE_VXLAN:
+            check_ovs_version(constants.MINIMUM_OVS_VXLAN_VERSION,
+                              self.root_helper)
 
     def _report_state(self):
         try:
@@ -204,8 +213,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         except Exception:
             LOG.exception(_("Failed reporting state!"))
 
-    def setup_rpc(self, integ_br):
-        mac = utils.get_interface_mac(integ_br)
+    def setup_rpc(self):
+        mac = self.int_br.get_local_port_mac()
         self.agent_id = '%s%s' % ('ovs', (mac.replace(":", "")))
         self.topic = topics.AGENT
         self.plugin_rpc = OVSPluginApi(topics.PLUGIN)
@@ -261,14 +270,17 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.treat_vif_port(vif_port, port['id'], port['network_id'],
                             network_type, physical_network,
                             segmentation_id, port['admin_state_up'])
-        if port['admin_state_up']:
-            # update plugin about port status
-            self.plugin_rpc.update_device_up(self.context, port['id'],
-                                             self.agent_id)
-        else:
-            # update plugin about port status
-            self.plugin_rpc.update_device_down(self.context, port['id'],
-                                               self.agent_id)
+        try:
+            if port['admin_state_up']:
+                # update plugin about port status
+                self.plugin_rpc.update_device_up(self.context, port['id'],
+                                                 self.agent_id)
+            else:
+                # update plugin about port status
+                self.plugin_rpc.update_device_down(self.context, port['id'],
+                                                   self.agent_id)
+        except rpc_common.Timeout:
+            LOG.error(_("RPC timeout while updating port %s"), port['id'])
 
     def tunnel_update(self, context, **kwargs):
         LOG.debug(_("tunnel_update received"))
@@ -278,8 +290,9 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         tunnel_id = kwargs.get('tunnel_id')
         if tunnel_ip == self.local_ip:
             return
-        tun_name = 'gre-%s' % tunnel_id
-        self.tun_br.add_tunnel_port(tun_name, tunnel_ip)
+        tun_name = '%s-%s' % (self.tunnel_type, tunnel_id)
+        self.tun_br.add_tunnel_port(tun_name, tunnel_ip, self.tunnel_type,
+                                    self.vxlan_udp_port)
 
     def create_rpc_dispatcher(self):
         '''Get the rpc dispatcher for this manager.
@@ -294,7 +307,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         '''Provisions a local VLAN.
 
         :param net_uuid: the uuid of the network associated with this vlan.
-        :param network_type: the network type ('gre', 'vlan', 'flat', 'local')
+        :param network_type: the network type ('gre', 'vxlan', 'vlan', 'flat',
+                                               'local')
         :param physical_network: the physical network for 'vlan' or 'flat'
         :param segmentation_id: the VID for 'vlan' or tunnel ID for 'tunnel'
         '''
@@ -310,7 +324,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                                          physical_network,
                                                          segmentation_id)
 
-        if network_type == constants.TYPE_GRE:
+        if network_type in constants.TUNNEL_NETWORK_TYPES:
             if self.enable_tunneling:
                 # outbound
                 self.tun_br.add_flow(priority=4, in_port=self.patch_int_ofport,
@@ -325,8 +339,10 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                     actions="mod_vlan_vid:%s,output:%s" %
                     (lvid, self.patch_int_ofport))
             else:
-                LOG.error(_("Cannot provision GRE network for net-id=%s "
-                          "- tunneling disabled"), net_uuid)
+                LOG.error(_("Cannot provision %(network_type)s network for "
+                          "net-id=%(net_uuid)s - tunneling disabled"),
+                          {'network_type': network_type,
+                           'net_uuid': net_uuid})
         elif network_type == constants.TYPE_FLAT:
             if physical_network in self.phys_brs:
                 # outbound
@@ -387,7 +403,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                  {'vlan_id': lvm.vlan,
                   'net_uuid': net_uuid})
 
-        if lvm.network_type == constants.TYPE_GRE:
+        if lvm.network_type in constants.TUNNEL_NETWORK_TYPES:
             if self.enable_tunneling:
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id)
                 self.tun_br.delete_flows(dl_vlan=lvm.vlan)
@@ -442,7 +458,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         lvm = self.local_vlan_map[net_uuid]
         lvm.vif_ports[port.vif_id] = port
 
-        if network_type == constants.TYPE_GRE:
+        if network_type in constants.TUNNEL_NETWORK_TYPES:
             if self.enable_tunneling:
                 # inbound unicast
                 self.tun_br.add_flow(priority=3, tun_id=segmentation_id,
@@ -472,14 +488,14 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                      net_uuid)
             return
         lvm = self.local_vlan_map[net_uuid]
-        if lvm.network_type == 'gre':
-            if self.enable_tunneling:
+
+        vif_port = lvm.vif_ports.pop(vif_id, None)
+        if vif_port:
+            if self.enable_tunneling and lvm.network_type in (
+                    constants.TUNNEL_NETWORK_TYPES):
                 # remove inbound unicast flow
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id,
-                                         dl_dst=lvm.vif_ports[vif_id].vif_mac)
-
-        if vif_id in lvm.vif_ports:
-            del lvm.vif_ports[vif_id]
+                                         dl_dst=vif_port.vif_mac)
         else:
             LOG.info(_('port_unbound: vif_id %s not in local_vlan_map'),
                      vif_id)
@@ -679,8 +695,10 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             tunnels = details['tunnels']
             for tunnel in tunnels:
                 if self.local_ip != tunnel['ip_address']:
-                    tun_name = 'gre-%s' % tunnel['id']
-                    self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'])
+                    tun_name = '%s-%s' % (self.tunnel_type, tunnel['id'])
+                    self.tun_br.add_tunnel_port(tun_name, tunnel['ip_address'],
+                                                self.tunnel_type,
+                                                self.vxlan_udp_port)
         except Exception as e:
             LOG.debug(_("Unable to sync tunnel IP %(local_ip)s: %(e)s"),
                       {'local_ip': self.local_ip, 'e': e})
@@ -733,6 +751,44 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.rpc_loop()
 
 
+def check_ovs_version(min_required_version, root_helper):
+    LOG.debug(_("Checking OVS version for VXLAN support"))
+    installed_klm_version = ovs_lib.get_installed_ovs_klm_version()
+    installed_usr_version = ovs_lib.get_installed_ovs_usr_version(root_helper)
+    # First check the userspace version
+    if installed_usr_version:
+        if dist_version.StrictVersion(
+                installed_usr_version) < dist_version.StrictVersion(
+                min_required_version):
+            LOG.error(_('Failed userspace version check for Open '
+                        'vSwitch with VXLAN support. To use '
+                        'VXLAN tunnels with OVS, please ensure '
+                        'the OVS version is %s '
+                        'or newer!'), min_required_version)
+            sys.exit(1)
+        # Now check the kernel version
+        if installed_klm_version:
+            if dist_version.StrictVersion(
+                    installed_klm_version) < dist_version.StrictVersion(
+                    min_required_version):
+                LOG.error(_('Failed kernel version check for Open '
+                            'vSwitch with VXLAN support. To use '
+                            'VXLAN tunnels with OVS, please ensure '
+                            'the OVS version is %s or newer!'),
+                          min_required_version)
+                sys.exti(1)
+            else:
+                LOG.warning(_('Cannot determine kernel Open vSwitch version, '
+                              'please ensure your Open vSwitch kernel module '
+                              'is at least version %s to support VXLAN '
+                              'tunnels.'), min_required_version)
+    else:
+        LOG.warning(_('Unable to determine Open vSwitch version. Please '
+                      'ensure that its version is %s or newer to use VXLAN '
+                      'tunnels with OVS.'), min_required_version)
+        sys.exit(1)
+
+
 def create_agent_config_map(config):
     """Create a map of agent config parameters.
 
@@ -751,12 +807,13 @@ def create_agent_config_map(config):
         bridge_mappings=bridge_mappings,
         root_helper=config.AGENT.root_helper,
         polling_interval=config.AGENT.polling_interval,
-        enable_tunneling=config.OVS.enable_tunneling,
+        tunnel_type=config.AGENT.tunnel_type,
     )
 
-    if kwargs['enable_tunneling'] and not kwargs['local_ip']:
-        msg = _('Tunnelling cannot be enabled without a valid local_ip.')
-        raise ValueError(msg)
+    if kwargs['tunnel_type'] in constants.TUNNEL_NETWORK_TYPES:
+        if not kwargs['local_ip']:
+            msg = _('Tunneling cannot be enabled without a valid local_ip.')
+            raise ValueError(msg)
 
     return kwargs
 
@@ -764,6 +821,7 @@ def create_agent_config_map(config):
 def main():
     eventlet.monkey_patch()
     cfg.CONF(project='quantum')
+    cfg.CONF.register_opts(ip_lib.OPTS)
     logging_config.setup_logging(cfg.CONF)
 
     try:
@@ -771,6 +829,12 @@ def main():
     except ValueError as e:
         LOG.error(_('%s Agent terminated!'), e)
         sys.exit(1)
+
+    is_xen_compute_host = 'rootwrap-xen-dom0' in agent_config['root_helper']
+    if is_xen_compute_host:
+        # Force ip_lib to always use the root helper to ensure that ip
+        # commands target xen dom0 rather than domU.
+        cfg.CONF.set_default('ip_lib_force_root', True)
 
     plugin = OVSQuantumAgent(**agent_config)
 

@@ -26,6 +26,8 @@ import inspect
 import json
 import logging
 
+from oslo.config import cfg
+
 #FIXME(danwent): I'd like this file to get to the point where it has
 # no quantum-specific logic in it
 from quantum.common import constants
@@ -40,8 +42,6 @@ HTTP_GET = "GET"
 HTTP_POST = "POST"
 HTTP_DELETE = "DELETE"
 HTTP_PUT = "PUT"
-# Default transport type for logical switches
-DEF_TRANSPORT_TYPE = "stt"
 # Prefix to be used for all NVP API calls
 URI_PREFIX = "/ws.v1"
 # Resources exposed by NVP API
@@ -224,7 +224,9 @@ def do_multi_request(*args, **kwargs):
 # Network functions
 # -------------------------------------------------------------------
 def find_port_and_cluster(clusters, port_id):
-    """Return (url, cluster_id) of port or (None, None) if port does not exist.
+    """Find port and cluster.
+
+    Returns (url, cluster_id) of port or (None, None) if port does not exist.
     """
     for c in clusters:
         query = "/ws.v1/lswitch/*/lport?uuid=%s&fields=*" % port_id
@@ -294,10 +296,11 @@ def create_lswitch(cluster, tenant_id, display_name,
     nvp_binding_type = transport_type
     if transport_type in ('flat', 'vlan'):
         nvp_binding_type = 'bridge'
-    transport_zone_config = {"zone_uuid": (transport_zone_uuid or
-                                           cluster.default_tz_uuid),
-                             "transport_type": (nvp_binding_type or
-                                                DEF_TRANSPORT_TYPE)}
+    transport_zone_config = (
+        {"zone_uuid": (transport_zone_uuid or
+                       cluster.default_tz_uuid),
+         "transport_type": (nvp_binding_type or
+                            cfg.CONF.NVP.default_transport_type)})
     lswitch_obj = {"display_name": _check_and_truncate_name(display_name),
                    "transport_zones": [transport_zone_config],
                    "tags": [{"tag": tenant_id, "scope": "os_tid"},
@@ -378,8 +381,9 @@ def create_l2_gw_service(cluster, tenant_id, display_name, devices):
             json.dumps(gwservice_obj), cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to create L2 Gateway Service "
+                        "%(name)s for tenant %(id)s.")
+                      % {'name': display_name, 'id': tenant_id})
         raise
 
 
@@ -416,8 +420,9 @@ def create_lrouter(cluster, tenant_id, display_name, nexthop):
                                             cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to create Router "
+                        "%(name)s for tenant %(id)s.")
+                      % {'name': display_name, 'id': tenant_id})
         raise
 
 
@@ -429,8 +434,8 @@ def delete_lrouter(cluster, lrouter_id):
                           cluster=cluster)
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to delete Router "
+                        "Service %s."), lrouter_id)
         raise
 
 
@@ -442,8 +447,8 @@ def delete_l2_gw_service(cluster, gateway_id):
                           cluster=cluster)
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to delete L2 Gateway "
+                        "Service %s."), gateway_id)
         raise
 
 
@@ -456,8 +461,8 @@ def get_lrouter(cluster, lrouter_id):
                           cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to get Router "
+                        "Service %s."), lrouter_id)
         raise
 
 
@@ -469,8 +474,8 @@ def get_l2_gw_service(cluster, gateway_id):
                           cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to get L2 Gateway "
+                        "Service %s."), gateway_id)
         raise
 
 
@@ -517,8 +522,9 @@ def update_l2_gw_service(cluster, gateway_id, display_name):
                           cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to update L2 Gateway Service "
+                        "%(id)s with name %(name)s.") %
+                      {'id': gateway_id, 'name': display_name})
         raise
 
 
@@ -543,15 +549,18 @@ def update_lrouter(cluster, lrouter_id, display_name, nexthop):
                           cluster=cluster))
     except NvpApiClient.NvpApiException:
         # just log and re-raise - let the caller handle it
-        LOG.exception(_("An exception occured while communicating with "
-                        "the NVP controller for cluster:%s"), cluster.name)
+        LOG.exception(_("Unable to update Router "
+                        "%(id)s with name %(name)s.") %
+                      {'id': lrouter_id, 'name': display_name})
         raise
 
 
 def get_all_networks(cluster, tenant_id, networks):
-    """Append the quantum network uuids we can find in the given cluster to
-       "networks"
-       """
+    """Get all networks.
+
+    Append the quantum network uuids we can find in the given cluster
+    to "networks".
+    """
     uri = "/ws.v1/lswitch?fields=*&tag=%s&tag_scope=os_tid" % tenant_id
     try:
         resp_obj = do_single_request(HTTP_GET, uri, cluster=cluster)
@@ -646,26 +655,8 @@ def delete_port(cluster, switch, port):
         raise exception.QuantumException()
 
 
-def get_logical_port_status(cluster, switch, port):
-    query = ("/ws.v1/lswitch/" + switch + "/lport/"
-             + port + "?relations=LogicalPortStatus")
-    try:
-        res_obj = do_single_request(HTTP_GET, query, cluster=cluster)
-    except NvpApiClient.ResourceNotFound as e:
-        LOG.error(_("Port or Network not found, Error: %s"), str(e))
-        raise exception.PortNotFound(port_id=port, net_id=switch)
-    except NvpApiClient.NvpApiException as e:
-        raise exception.QuantumException()
-    res = json.loads(res_obj)
-    # copy over admin_status_enabled
-    res["_relations"]["LogicalPortStatus"]["admin_status_enabled"] = (
-        res["admin_status_enabled"])
-    return res["_relations"]["LogicalPortStatus"]
-
-
 def get_port_by_display_name(clusters, lswitch, display_name):
-    """Return (url, cluster_id) of port or raises ResourceNotFound
-    """
+    """Return (url, cluster_id) of port or raises PortNotFound."""
     query = ("/ws.v1/lswitch/%s/lport?display_name=%s&fields=*" %
              (lswitch, display_name))
     LOG.debug(_("Looking for port with display_name "
@@ -685,8 +676,10 @@ def get_port_by_display_name(clusters, lswitch, display_name):
 
 
 def get_port_by_quantum_tag(cluster, lswitch_uuid, quantum_port_id):
-    """Return the NVP UUID of the logical port with tag q_port_id
-    equal to quantum_port_id or None if the port is not Found.
+    """Get port by quantum tag.
+
+    Returns the NVP UUID of the logical port with tag q_port_id equal to
+    quantum_port_id or None if the port is not Found.
     """
     uri = _build_uri_path(LSWITCHPORT_RESOURCE,
                           parent_resource_id=lswitch_uuid,
@@ -732,7 +725,8 @@ def get_port(cluster, network, port, relations=None):
 
 
 def _configure_extensions(lport_obj, mac_address, fixed_ips,
-                          port_security_enabled, security_profiles, queue_id):
+                          port_security_enabled, security_profiles,
+                          queue_id, mac_learning_enabled):
     lport_obj['allowed_address_pairs'] = []
     if port_security_enabled:
         for fixed_ip in fixed_ips:
@@ -747,12 +741,16 @@ def _configure_extensions(lport_obj, mac_address, fixed_ips,
              "ip_address": "0.0.0.0"})
     lport_obj['security_profiles'] = list(security_profiles or [])
     lport_obj['queue_uuid'] = queue_id
+    if mac_learning_enabled is not None:
+        lport_obj["mac_learning"] = mac_learning_enabled
+        lport_obj["type"] = "LogicalSwitchPortConfig"
 
 
 def update_port(cluster, lswitch_uuid, lport_uuid, quantum_port_id, tenant_id,
                 display_name, device_id, admin_status_enabled,
                 mac_address=None, fixed_ips=None, port_security_enabled=None,
-                security_profiles=None, queue_id=None):
+                security_profiles=None, queue_id=None,
+                mac_learning_enabled=None):
     # device_id can be longer than 40 so we rehash it
     hashed_device_id = hashlib.sha1(device_id).hexdigest()
     lport_obj = dict(
@@ -765,7 +763,7 @@ def update_port(cluster, lswitch_uuid, lport_uuid, quantum_port_id, tenant_id,
 
     _configure_extensions(lport_obj, mac_address, fixed_ips,
                           port_security_enabled, security_profiles,
-                          queue_id)
+                          queue_id, mac_learning_enabled)
 
     path = "/ws.v1/lswitch/" + lswitch_uuid + "/lport/" + lport_uuid
     try:
@@ -785,7 +783,8 @@ def update_port(cluster, lswitch_uuid, lport_uuid, quantum_port_id, tenant_id,
 def create_lport(cluster, lswitch_uuid, tenant_id, quantum_port_id,
                  display_name, device_id, admin_status_enabled,
                  mac_address=None, fixed_ips=None, port_security_enabled=None,
-                 security_profiles=None, queue_id=None):
+                 security_profiles=None, queue_id=None,
+                 mac_learning_enabled=None):
     """Creates a logical port on the assigned logical switch."""
     # device_id can be longer than 40 so we rehash it
     hashed_device_id = hashlib.sha1(device_id).hexdigest()
@@ -801,7 +800,7 @@ def create_lport(cluster, lswitch_uuid, tenant_id, quantum_port_id,
 
     _configure_extensions(lport_obj, mac_address, fixed_ips,
                           port_security_enabled, security_profiles,
-                          queue_id)
+                          queue_id, mac_learning_enabled)
 
     path = _build_uri_path(LSWITCHPORT_RESOURCE,
                            parent_resource_id=lswitch_uuid)
@@ -938,10 +937,11 @@ def plug_router_port_attachment(cluster, router_id, port_id,
                                 attachment_uuid, nvp_attachment_type,
                                 attachment_vlan=None):
     """Attach a router port to the given attachment.
-       Current attachment types:
+
+    Current attachment types:
        - PatchAttachment [-> logical switch port uuid]
        - L3GatewayAttachment [-> L3GatewayService uuid]
-       For the latter attachment type a VLAN ID can be specified as well
+    For the latter attachment type a VLAN ID can be specified as well.
     """
     uri = _build_uri_path(LROUTERPORT_RESOURCE, port_id, router_id,
                           is_attachment=True)
@@ -1036,6 +1036,7 @@ TENANT_ID_SCOPE = 'os_tid'
 
 def format_exception(etype, e, execption_locals, request=None):
     """Consistent formatting for exceptions.
+
     :param etype: a string describing the exception type.
     :param e: the exception.
     :param request: the request object.

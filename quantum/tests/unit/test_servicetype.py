@@ -19,19 +19,24 @@
 
 import contextlib
 import logging
+import os
+import tempfile
 
+import fixtures
 import mock
 from oslo.config import cfg
 import webob.exc as webexc
 import webtest
 
 from quantum.api import extensions
+from quantum.api.v2 import attributes
 from quantum import context
 from quantum.db import api as db_api
 from quantum.db import servicetype_db
 from quantum.extensions import servicetype
 from quantum import manager
 from quantum.plugins.common import constants
+from quantum.tests import base
 from quantum.tests.unit import dummy_plugin as dp
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_db_plugin
@@ -51,6 +56,13 @@ class TestServiceTypeExtensionManager(object):
     """Mock extensions manager."""
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            servicetype.RESOURCE_ATTRIBUTE_MAP)
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(dp.RESOURCE_ATTRIBUTE_MAP)
         return (servicetype.Servicetype.get_resources() +
                 dp.Dummy.get_resources())
 
@@ -244,7 +256,7 @@ class ServiceTypeManagerTestCase(ServiceTypeTestCaseBase):
         servicetype_db.ServiceTypeManager._instance = None
         plugin_name = "%s.%s" % (dp.__name__, dp.DummyServicePlugin.__name__)
         cfg.CONF.set_override('service_definition', ['dummy:%s' % plugin_name],
-                              group='DEFAULT_SERVICETYPE')
+                              group='default_servicetype')
         self.addCleanup(db_api.clear_db)
         super(ServiceTypeManagerTestCase, self).setUp()
 
@@ -257,9 +269,9 @@ class ServiceTypeManagerTestCase(ServiceTypeTestCaseBase):
             service_defs = [{'service_class': constants.DUMMY,
                              'plugin': dp.DUMMY_PLUGIN_NAME}]
         res = self._create_service_type(name, service_defs)
-        svc_type = self.deserialize(res)
         if res.status_int >= 400:
             raise webexc.HTTPClientError(code=res.status_int)
+        svc_type = self.deserialize(res)
         yield svc_type
 
         if do_delete:
@@ -459,3 +471,41 @@ class ServiceTypeManagerTestCase(ServiceTypeTestCaseBase):
 
 class ServiceTypeManagerTestCaseXML(ServiceTypeManagerTestCase):
     fmt = 'xml'
+
+
+class CompatServiceTypeConfigTestCase(base.BaseTestCase):
+
+    def setUp(self):
+        super(CompatServiceTypeConfigTestCase, self).setUp()
+        self.useFixture(fixtures.NestedTempfile())
+        self.conf = cfg.ConfigOpts()
+        self.conf.register_opts(servicetype_db.default_servicetype_opts,
+                                'default_servicetype')
+
+    def _write_quantum_conf(self, contents):
+        (fd, path) = tempfile.mkstemp(prefix='quantum-', suffix='.conf')
+        try:
+            os.write(fd, contents)
+        finally:
+            os.close(fd)
+        return path
+
+    def _test_default_servicetype_section(self, section_name):
+        path = self._write_quantum_conf(
+            '[%(section_name)s]\n'
+            'description = test service type\n'
+            'service_definition=test:testing.QuantumTestPlugin\n' %
+            {'section_name': section_name})
+
+        self.conf(['--config-file', path])
+
+        self.assertEqual(self.conf.default_servicetype.description,
+                         'test service type')
+        self.assertEqual(self.conf.default_servicetype.service_definition,
+                         ['test:testing.QuantumTestPlugin'])
+
+    def test_default_servicetype_lowercase(self):
+        self._test_default_servicetype_section('default_servicetype')
+
+    def test_default_servicetype_uppercase(self):
+        self._test_default_servicetype_section('DEFAULT_SERVICETYPE')

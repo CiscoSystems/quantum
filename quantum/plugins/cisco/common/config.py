@@ -19,12 +19,6 @@ from oslo.config import cfg
 from quantum.agent.common import config
 
 
-cisco_test_opts = [
-    cfg.StrOpt('host',
-               default=None,
-               help=_("Cisco test host option.")),
-]
-
 cisco_plugins_opts = [
     cfg.StrOpt('vswitch_plugin',
                default='quantum.plugins.openvswitch.ovs_quantum_plugin.'
@@ -50,6 +44,8 @@ cisco_opts = [
                help=_("Maximum Port Profile value")),
     cfg.StrOpt('max_networks', default='65568',
                help=_("Maximum Network value")),
+    cfg.BoolOpt('svi_round_robin', default=False,
+                help=_("Distribute SVI interfaces over all switches")),
     cfg.StrOpt('model_class',
                default='quantum.plugins.cisco.models.virt_phy_sw_v2.'
                        'VirtualPhysicalSwitchModelV2',
@@ -59,20 +55,19 @@ cisco_opts = [
                        'l2network_vlan_mgr_v2.L2NetworkVLANMgr',
                help=_("Manager Class")),
     cfg.StrOpt('nexus_driver',
-               default='quantum.plugins.cisco.tests.unit.v2.nexus.'
+               default='quantum.plugins.cisco.test.nexus.'
                        'fake_nexus_driver.CiscoNEXUSFakeDriver',
                help=_("Nexus Driver Name")),
 ]
 
 cfg.CONF.register_opts(cisco_opts, "CISCO")
 cfg.CONF.register_opts(cisco_plugins_opts, "CISCO_PLUGINS")
-cfg.CONF.register_opts(cisco_test_opts, "CISCO_TEST")
 config.register_root_helper(cfg.CONF)
 
 # shortcuts
+CONF = cfg.CONF
 CISCO = cfg.CONF.CISCO
 CISCO_PLUGINS = cfg.CONF.CISCO_PLUGINS
-CISCO_TEST = cfg.CONF.CISCO_TEST
 
 #
 # When populated the nexus_dictionary format is:
@@ -81,6 +76,7 @@ CISCO_TEST = cfg.CONF.CISCO_TEST
 # Example:
 # {('1.1.1.1', 'username'): 'admin',
 #  ('1.1.1.1', 'password'): 'mySecretPassword',
+#  ('1.1.1.1', 'ssh_port'): 22,
 #  ('1.1.1.1', 'compute1'): '1/1', ...}
 #
 nexus_dictionary = {}
@@ -88,13 +84,14 @@ nexus_dictionary = {}
 
 class CiscoConfigOptions():
     """Cisco Configuration Options Class."""
+
     def __init__(self):
         self._create_nexus_dictionary()
 
     def _create_nexus_dictionary(self):
-        """
-        Create the Nexus dictionary from the cisco_plugins.ini
-        NEXUS_SWITCH section(s).
+        """Create the Nexus dictionary.
+
+        Reads data from cisco_plugins.ini NEXUS_SWITCH section(s).
         """
         for parsed_file in cfg.CONF._cparser.parsed:
             for parsed_item in parsed_file.keys():

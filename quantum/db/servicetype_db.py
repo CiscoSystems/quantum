@@ -29,7 +29,6 @@ from quantum.db import api as db
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.openstack.common import log as logging
-from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
@@ -44,13 +43,13 @@ default_servicetype_opts = [
                            'using the format: <service>:<plugin>[:<driver>]'))
 ]
 
-cfg.CONF.register_opts(default_servicetype_opts, 'DEFAULT_SERVICETYPE')
+cfg.CONF.register_opts(default_servicetype_opts, 'default_servicetype')
 
 
 def parse_service_definition_opt():
     """Parse service definition opts and returns result."""
     results = []
-    svc_def_opt = cfg.CONF.DEFAULT_SERVICETYPE.service_definition
+    svc_def_opt = cfg.CONF.default_servicetype.service_definition
     try:
         for svc_def_str in svc_def_opt:
             split = svc_def_str.split(':')
@@ -73,7 +72,7 @@ def parse_service_definition_opt():
 class NoDefaultServiceDefinition(q_exc.QuantumException):
     message = _("No default service definition in configuration file. "
                 "Please add service definitions using the service_definition "
-                "variable in the [DEFAULT_SERVICETYPE] section")
+                "variable in the [default_servicetype] section")
 
 
 class ServiceTypeNotFound(q_exc.NotFound):
@@ -130,12 +129,12 @@ class ServiceTypeManager(object):
         self._initialize_db()
         ctx = context.get_admin_context()
         # Init default service type from configuration file
-        svc_defs = cfg.CONF.DEFAULT_SERVICETYPE.service_definition
+        svc_defs = cfg.CONF.default_servicetype.service_definition
         if not svc_defs:
             raise NoDefaultServiceDefinition()
         def_service_type = {'name': DEFAULT_SVCTYPE_NAME,
                             'description':
-                            cfg.CONF.DEFAULT_SERVICETYPE.description,
+                            cfg.CONF.default_servicetype.description,
                             'service_definitions':
                             parse_service_definition_opt(),
                             'default': True}
@@ -198,14 +197,6 @@ class ServiceTypeManager(object):
                 context.session.add(ServiceDefinition(**svc_def))
         return svc_type_db
 
-    def _check_service_type_view_auth(self, context, service_type):
-        # FIXME(salvatore-orlando): This should be achieved via policy
-        # engine without need for explicit checks in manager code.
-        # Also, the policy in this way does not make a lot of sense
-        return policy.check(context,
-                            "extension:service_type:view_extended",
-                            service_type)
-
     def _get_service_type(self, context, svc_type_id):
         try:
             query = context.session.query(ServiceType)
@@ -232,21 +223,17 @@ class ServiceTypeManager(object):
 
         def _make_svc_def_dict(svc_def_db):
             svc_def = {'service_class': svc_def_db['service_class']}
-            if self._check_service_type_view_auth(context,
-                                                  svc_type.as_dict()):
-                svc_def.update({'plugin': svc_def_db['plugin'],
-                                'driver': svc_def_db['driver']})
+            svc_def.update({'plugin': svc_def_db['plugin'],
+                            'driver': svc_def_db['driver']})
             return svc_def
 
         res = {'id': svc_type['id'],
                'name': svc_type['name'],
                'default': svc_type['default'],
+               'num_instances': svc_type['num_instances'],
                'service_definitions':
                [_make_svc_def_dict(svc_def) for svc_def
                 in svc_type['service_definitions']]}
-        if self._check_service_type_view_auth(context,
-                                              svc_type.as_dict()):
-            res['num_instances'] = svc_type['num_instances']
         # Field selection
         if fields:
             return dict(((k, v) for k, v in res.iteritems()
@@ -268,7 +255,7 @@ class ServiceTypeManager(object):
                 if column:
                     query = query.filter(column.in_(value))
         return [self._make_svc_type_dict(context, svc_type, fields)
-                for svc_type in query.all()]
+                for svc_type in query]
 
     def create_service_type(self, context, service_type):
         """Create a new service type."""

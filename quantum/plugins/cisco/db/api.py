@@ -30,9 +30,10 @@ BASE = models.BASE
 
 
 def configure_db(options):
-    """
-    Establish the database, create an engine if needed, and
-    register the models.
+    """Configure database.
+
+    Establish the database, create an engine if needed, and register the
+    models.
 
     :param options: Mapping of configuration options
     """
@@ -97,13 +98,14 @@ def network_list(tenant_id):
 
 def network_id(net_name):
     session = get_session()
-    try:
-        return (session.query(models.Network).
+    networks = (session.query(models.Network).
                 options(joinedload(models.Network.ports)).
                 filter_by(name=net_name).
                 all())
-    except exc.NoResultFound:
-        raise q_exc.NetworkNotFound(net_name=net_name)
+    if networks:
+        return networks
+
+    raise q_exc.NetworkNotFound(net_name=net_name)
 
 
 def network_get(net_id):

@@ -4,6 +4,7 @@ build-stamp
 ChangeLog
 .coverage
 covhtml/
+dist/
 doc/build
 *.DS_Store
 *.pyc
@@ -18,3 +19,5 @@ subunit.log
 .tox/
 .venv/
 *.mo
+*.swp
+*.swo

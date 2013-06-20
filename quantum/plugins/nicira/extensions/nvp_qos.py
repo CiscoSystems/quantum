@@ -122,16 +122,19 @@ EXTENDED_ATTRIBUTES_2_0 = {
                       'allow_put': False,
                       'is_visible': False,
                       'default': 1,
+                      'enforce_policy': True,
                       'convert_to': convert_to_unsigned_int_or_none},
 
         QUEUE: {'allow_post': False,
                 'allow_put': False,
                 'is_visible': True,
-                'default': False}},
+                'default': False,
+                'enforce_policy': True}},
     'networks': {QUEUE: {'allow_post': True,
                          'allow_put': True,
                          'is_visible': True,
-                         'default': False}}
+                         'default': False,
+                         'enforce_policy': True}}
 
 }
 
@@ -179,7 +182,8 @@ class Nvp_qos(object):
 
     def get_extended_resources(self, version):
         if version == "2.0":
-            return EXTENDED_ATTRIBUTES_2_0
+            return dict(EXTENDED_ATTRIBUTES_2_0.items() +
+                        RESOURCE_ATTRIBUTE_MAP.items())
         else:
             return {}
 

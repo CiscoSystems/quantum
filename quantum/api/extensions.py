@@ -42,7 +42,8 @@ class PluginInterface(object):
 
     @classmethod
     def __subclasshook__(cls, klass):
-        """
+        """Checking plugin class.
+
         The __subclasshook__ method is a class method
         that will be called everytime a class is tested
         using issubclass(klass, PluginInterface).
@@ -134,7 +135,7 @@ class ExtensionDescriptor(object):
         return request_exts
 
     def get_extended_resources(self, version):
-        """retrieve extended resources or attributes for core resources.
+        """Retrieve extended resources or attributes for core resources.
 
         Extended attributes are implemented by a core plugin similarly
         to the attributes defined in the core, and can appear in
@@ -151,8 +152,8 @@ class ExtensionDescriptor(object):
         return {}
 
     def get_plugin_interface(self):
-        """
-        Returns an abstract class which defines contract for the plugin.
+        """Returns an abstract class which defines contract for the plugin.
+
         The abstract class should inherit from extesnions.PluginInterface,
         Methods in this abstract class  should be decorated as abstractmethod
         """
@@ -160,7 +161,7 @@ class ExtensionDescriptor(object):
 
     def update_attributes_map(self, extended_attributes,
                               extension_attrs_map=None):
-        """Update attributes map for this extension
+        """Update attributes map for this extension.
 
         This is default method for extending an extension's attributes map.
         An extension can use this method and supplying its own resource
@@ -447,23 +448,47 @@ class ExtensionManager(object):
         wants to extend this map.
         """
         update_exts = []
-        for ext in self.extensions.itervalues():
-            if not hasattr(ext, 'get_extended_resources'):
-                continue
-            if hasattr(ext, 'update_attributes_map'):
-                update_exts.append(ext)
-            try:
-                extended_attrs = ext.get_extended_resources(version)
-                for resource, resource_attrs in extended_attrs.iteritems():
-                    if attr_map.get(resource, None):
-                        attr_map[resource].update(resource_attrs)
-                    else:
-                        attr_map[resource] = resource_attrs
-                if extended_attrs:
-                    attributes.EXT_NSES[ext.get_alias()] = ext.get_namespace()
-            except AttributeError:
-                LOG.exception(_("Error fetching extended attributes for "
-                                "extension '%s'"), ext.get_name())
+        processed_exts = set()
+        exts_to_process = self.extensions.copy()
+        # Iterate until there are unprocessed extensions or if no progress
+        # is made in a whole iteration
+        while exts_to_process:
+            processed_ext_count = len(processed_exts)
+            for ext_name, ext in exts_to_process.items():
+                if not hasattr(ext, 'get_extended_resources'):
+                    del exts_to_process[ext_name]
+                    continue
+                if hasattr(ext, 'update_attributes_map'):
+                    update_exts.append(ext)
+                if hasattr(ext, 'get_required_extensions'):
+                    # Process extension only if all required extensions
+                    # have been processed already
+                    required_exts_set = set(ext.get_required_extensions())
+                    if required_exts_set - processed_exts:
+                        continue
+                try:
+                    extended_attrs = ext.get_extended_resources(version)
+                    for resource, resource_attrs in extended_attrs.iteritems():
+                        if attr_map.get(resource, None):
+                            attr_map[resource].update(resource_attrs)
+                        else:
+                            attr_map[resource] = resource_attrs
+                    if extended_attrs:
+                        attributes.EXT_NSES[ext.get_alias()] = (
+                            ext.get_namespace())
+                except AttributeError:
+                    LOG.exception(_("Error fetching extended attributes for "
+                                    "extension '%s'"), ext.get_name())
+                processed_exts.add(ext_name)
+                del exts_to_process[ext_name]
+            if len(processed_exts) == processed_ext_count:
+                # Exit loop as no progress was made
+                break
+        if exts_to_process:
+            # NOTE(salv-orlando): Consider wheter this error should be fatal
+            LOG.error(_("It was impossible to process the following "
+                        "extensions: %s because of missing requirements."),
+                      ','.join(exts_to_process.keys()))
 
         """Extending extensions' attributes map."""
         for ext in update_exts:
