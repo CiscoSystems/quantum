@@ -26,6 +26,8 @@ from quantum.db.models_v2 import model_base, HasId
 from quantum.plugins.cisco.common import cisco_constants
 from quantum.plugins.cisco.common import cisco_exceptions
 from sqlalchemy.orm import exc
+from sqlalchemy.orm import object_mapper
+
 
 LOG = logging.getLogger(__name__)
 SEGMENT_TYPE_VLAN = 'vlan'

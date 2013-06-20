@@ -23,15 +23,14 @@
 import quantum.db.api as db
 import re
 
-from quantum.api.v2.attributes import _validate_ip_address
 from quantum.common import exceptions as q_exc
 from quantum.db import models_v2
 from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.db import n1kv_models_v2
-from sqlalchemy.sql import and_
 from sqlalchemy.orm import exc
+from sqlalchemy.sql import and_
 
 LOG = logging.getLogger(__name__)
 
@@ -180,9 +179,10 @@ def delete_vlan_allocations(network_vlan_ranges):
             for alloc in allocs:
                 if alloc.vlan_id in vlan_ids:
                     if not alloc.allocated:
-                        LOG.debug(_("removing vlan %s on physical network "
-                                  "%s from pool") %
-                                 (alloc.vlan_id, physical_network))
+                        LOG.debug(_("removing vlan %(vlan)s on physical "
+                                    "network %(network)s from pool"),
+                                  {'vlan': alloc.vlan_id,
+                                   'network': physical_network})
                         db_session.delete(alloc)
 
 
@@ -298,12 +298,14 @@ def reserve_specific_vlan(db_session, physical_network, vlan_id):
                 else:
                     raise q_exc.VlanIdInUse(vlan_id=vlan_id,
                                             physical_network=physical_network)
-            LOG.debug(_("reserving specific vlan %s on physical network %s "
-                      "from pool") % (vlan_id, physical_network))
+            LOG.debug(_("Reserving specific vlan %(vlan)s on physical "
+                        "network %(network)s from pool"),
+                      {'vlan': vlan_id, 'network': physical_network})
             alloc.allocated = True
         except exc.NoResultFound:
-            LOG.debug(_("reserving specific vlan %s on physical network %s "
-                      "outside pool") % (vlan_id, physical_network))
+            LOG.debug(_("Reserving specific vlan %(vlan)s on physical "
+                        "network %(network)s outside pool"),
+                      {'vlan': vlan_id, 'network': physical_network})
             alloc = n1kv_models_v2.N1kvVlanAllocation(physical_network,
                                                       vlan_id)
             alloc.allocated = True
@@ -332,14 +334,18 @@ def release_vlan(db_session, physical_network, vlan_id, network_vlan_ranges):
                 if vlan_range[0] <= vlan_id <= vlan_range[1]:
                     inside = True
                     break
-            if not inside:
+            if inside:
+                msg = _("Releasing vlan %(vlan)s on physical "
+                        "network %(network)s to pool")
+            else:
+                msg = _("Releasing vlan %(vlan)s on physical "
+                        "network %(network)s outside pool")
                 db_session.delete(alloc)
-            LOG.debug(_("releasing vlan %s on physical network %s %s pool") %
-                      (vlan_id, physical_network,
-                       inside and "to" or "outside"))
+            LOG.debug(msg, {'vlan': vlan_id, 'network': physical_network})
         except exc.NoResultFound:
-            LOG.warning(_("vlan_id %s on physical network %s not found") %
-                        (vlan_id, physical_network))
+            LOG.warning(_("vlan_id %(vlan)s on physical network %(network)s "
+                          "not found"),
+                        {'vlan': vlan_id, 'network': physical_network})
 
 
 def sync_vxlan_allocations(vxlan_id_ranges):
@@ -353,7 +359,7 @@ def sync_vxlan_allocations(vxlan_id_ranges):
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
         if tun_max + 1 - tun_min > 1000000:
-            LOG.error(_("Skipping unreasonable vxlan ID range %s:%s") %
+            LOG.error(_("Skipping unreasonable vxlan ID range %s"),
                       vxlan_id_range)
         else:
             vxlan_ids |= set(xrange(tun_min, tun_max + 1))
@@ -379,7 +385,7 @@ def delete_vxlan_allocations(vxlan_id_ranges):
     for vxlan_id_range in vxlan_id_ranges:
         tun_min, tun_max = vxlan_id_range
         if tun_max + 1 - tun_min > 1000000:
-            LOG.error(_("Skipping unreasonable vxlan ID range %s:%s") %
+            LOG.error(_("Skipping unreasonable vxlan ID range %s"),
                       vxlan_id_range)
         else:
             vxlan_ids |= set(xrange(tun_min, tun_max + 1))
@@ -454,12 +460,14 @@ def release_vxlan(db_session, vxlan_id, vxlan_id_ranges):
                 if vxlan_id_range[0] <= vxlan_id <= vxlan_id_range[1]:
                     inside = True
                     break
-            if not inside:
+            if inside:
+                msg = _("releasing vxlan %s to pool")
+            else:
+                msg = _("releasing vxlan %s outside pool")
                 db_session.delete(alloc)
-            LOG.debug(_("releasing vxlan %s %s pool") %
-                      (vxlan_id, inside and "to" or "outside"))
+            LOG.debug(msg, vxlan_id)
         except exc.NoResultFound:
-            LOG.warning(_("vxlan_id %s not found") % vxlan_id)
+            LOG.warning(_("vxlan_id %s not found"), vxlan_id)
 
 
 def set_port_status(port_id, status):
@@ -854,7 +862,7 @@ class NetworkProfile_db_mixin(object):
 
     def network_profile_exists(self, context, id):
         try:
-            profile = get_network_profile(id)
+            get_network_profile(id)
             return True
         except exc.NoResultFound:
             raise c_exc.NetworkProfileIdNotFound(profile_id=id)
@@ -972,8 +980,8 @@ class NetworkProfile_db_mixin(object):
                 name = prfl.name
                 segment_range = prfl.segment_range
                 if net_p['name'] == name:
-                    msg = _("NetworkProfile name %s already exists"),
-                             net_p['name']
+                    msg = (_("NetworkProfile name %s already exists"),
+                           net_p['name'])
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
                 seg_min, seg_max = self._get_segment_range(
@@ -1064,7 +1072,7 @@ class PolicyProfile_db_mixin(object):
 
     def policy_profile_exists(self, context, id):
         try:
-            profile = get_policy_profile(id)
+            get_policy_profile(id)
             return True
         except exc.NoResultFound:
             raise c_exc.PolicyProfileIdNotFound(profile_id=id)

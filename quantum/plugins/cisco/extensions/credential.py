@@ -1,6 +1,5 @@
-"""
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-#
+
 # Copyright 2012 Cisco Systems, Inc.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,21 +14,21 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
+# @author: Ying Liu, Cisco Systems, Inc.
 # @author: Abhishek Raut, Cisco Systems, Inc
 #
-"""
 
-from abc import abstractmethod
+from webob import exc
 
-from oslo.config import cfg
-
-from quantum import manager as QuantumManager
-from quantum import quota
-
-from quantum.common import exceptions as qexception
-from quantum.api.v2 import attributes as attr
-from quantum.api.v2 import base
+from quantum.api import api_common as common
 from quantum.api import extensions
+from quantum.api.v2 import attributes as attr
+from quantum.manager import QuantumManager
+from quantum.plugins.cisco.common import cisco_exceptions as exception
+from quantum.plugins.cisco.common import cisco_faults as faults
+from quantum.plugins.cisco.extensions import (_credential_view as
+                                              credential_view)
+from quantum import wsgi
 
 
 # Attribute Map

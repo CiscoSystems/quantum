@@ -20,7 +20,6 @@
 # @author: Sergey Sudakovich, Cisco Systems, Inc.
 
 
-import sys
 import threading
 import time
 
@@ -47,7 +46,6 @@ from quantum.db import securitygroups_rpc_base as sg_db_rpc
 
 from quantum.extensions import providernet
 
-from quantum.openstack.common import context
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
@@ -240,7 +238,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     cmd = profile[c_const.PROPERTIES]['cmd']
                     cmds = cmd.split(';')
                     cmdwords = cmds[1].split()
-                    time = profile[c_const.PROPERTIES]['time']
                     profile_name = profile[c_const.PROPERTIES][c_const.NAME]
                     # Delete the policy profile from db if it's deleted on VSM
                     if 'no' in cmdwords[0]:
@@ -334,8 +331,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if network_type in [c_const.TYPE_VLAN]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
-                    msg = _("unknown provider:physical_network %s"),
-                             physical_network
+                    msg = (_("unknown provider:physical_network %s"),
+                           physical_network)
                     raise q_exc.InvalidInput(error_message=msg)
             elif 'default' in self.network_vlan_ranges:
                 physical_network = 'default'
@@ -622,9 +619,14 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 (physical_network, network_type, segmentation_id,
                     multicast_ip) = n1kv_db_v2.alloc_network(session,
                                                              profile_id)
-                LOG.debug(_('Physical_network %s, seg_type %s, seg_id %s,'
-                          'multicast_ip %s'), physical_network, network_type,
-                          segmentation_id, multicast_ip)
+                LOG.debug(_('Physical_network %(phys_net)s, '
+                            'seg_type %(net_type)s, '
+                            'seg_id %(seg_id)s, '
+                            'multicast_ip %(multicast_ip)s'),
+                          {'phy_net': physical_network,
+                           'net_type': network_type,
+                           'seg_id': segmentation_id,
+                           'multicast_ip': multicast_ip})
                 if not segmentation_id:
                     raise q_exc.TenantNetworksDisabled()
             else:
@@ -801,8 +803,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         LOG.debug(_("Update port: %s"), id)
         if self.agent_vsm:
-            original_port = super(N1kvQuantumPluginV2, self).get_port(context,
-                                                                      id)
+            super(N1kvQuantumPluginV2, self).get_port(context, id)
         port = super(N1kvQuantumPluginV2, self).update_port(context, id, port)
         self._extend_port_dict_profile(context, port)
         return port

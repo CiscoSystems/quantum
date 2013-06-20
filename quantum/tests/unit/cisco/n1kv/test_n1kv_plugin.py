@@ -116,7 +116,6 @@ class N1kvPluginTestCase(test_plugin.QuantumDbPluginV2TestCase):
         alloc_obj.allocated = False
         segment_range = "100-900"
         segment_type = 'vlan'
-        tunnel_id = 200
         physical_network = 'phys1'
         profile_obj = n1kv_models_v2.NetworkProfile("test_np",
                                                     segment_type,

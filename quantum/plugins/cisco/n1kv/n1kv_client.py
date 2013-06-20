@@ -137,7 +137,7 @@ class Client(object):
     events_path = "/events"
 
     def __init__(self, **kwargs):
-        """ Initialize a new client for the plugin """
+        """Initialize a new client for the plugin."""
         self.format = 'json'
         self.action_prefix = '/api/hyper-v'
         self.hosts = self._get_vsm_hosts()
@@ -365,7 +365,7 @@ class Client(object):
         to fulfill the HTTP request.
         """
         if status_code == httplib.INTERNAL_SERVER_ERROR:
-            raise c_exc.VSMError(reason=_(replybody))
+            raise c_exc.VSMError(reason=replybody)
         elif status_code == httplib.SERVICE_UNAVAILABLE:
             raise c_exc.VSMConnectionFailed
 
@@ -407,7 +407,7 @@ class Client(object):
             elif 'text/plain' in _content_type:
                 LOG.debug(_("VSM: %s"), replybody)
         elif status_code == httplib.INTERNAL_SERVER_ERROR:
-            raise c_exc.VSMError(reason=_(replybody))
+            raise c_exc.VSMError(reason=replybody)
         elif status_code == httplib.SERVICE_UNAVAILABLE:
             raise c_exc.VSMConnectionFailed
 

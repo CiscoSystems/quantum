@@ -362,7 +362,7 @@ class NetworkProfileTests(unittest2.TestCase):
 
         n1kv_db_v2.delete_network_profile(profile.id)
         try:
-            _profile = self.session.query(NetworkProfile).filter_by(
+            self.session.query(NetworkProfile).filter_by(
                 name=TEST_NETWORK_PROFILE['name']).one()
         except s_exc.NoResultFound:
             pass
@@ -447,7 +447,7 @@ class PolicyProfileTests(unittest2.TestCase):
         profile = _create_test_policy_profile_if_not_there(self.session)
         n1kv_db_v2.delete_policy_profile(profile.id)
         try:
-            _profile = self.session.query(PolicyProfile).filter_by(
+            self.session.query(PolicyProfile).filter_by(
                 name=TEST_POLICY_PROFILE['name']).one()
         except s_exc.NoResultFound:
             pass
@@ -526,7 +526,7 @@ class ProfileBindingTests(unittest2.TestCase):
         n1kv_db_v2.create_profile_binding(test_tenant_id, test_profile_id,
                                           test_profile_type)
         try:
-            binding = self.session.query(ProfileBinding).filter_by(
+            self.session.query(ProfileBinding).filter_by(
                 profile_type=test_profile_type,
                 tenant_id=test_tenant_id,
                 profile_id=test_profile_id).one()
@@ -552,9 +552,9 @@ class ProfileBindingTests(unittest2.TestCase):
         test_tenant_id = "d434dd90-76ec-11e2-bcfd-0800200c9a66"
         test_profile_id = "dd7b9741-76ec-11e2-bcfd-0800200c9a66"
         test_profile_type = "network"
-        binding = self._create_test_binding_if_not_there(test_tenant_id,
-                                                         test_profile_id,
-                                                         test_profile_type)
+        self._create_test_binding_if_not_there(test_tenant_id,
+                                               test_profile_id,
+                                               test_profile_type)
         n1kv_db_v2.delete_profile_binding(test_tenant_id, test_profile_id)
         try:
             self.session.query(ProfileBinding).filter_by(
