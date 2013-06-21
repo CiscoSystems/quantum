@@ -340,7 +340,6 @@ def release_vlan(db_session, physical_network, vlan_id, network_vlan_ranges):
             else:
                 msg = _("Releasing vlan %(vlan)s on physical "
                         "network %(network)s outside pool")
-                db_session.delete(alloc)
             LOG.debug(msg, {'vlan': vlan_id, 'network': physical_network})
         except exc.NoResultFound:
             LOG.warning(_("vlan_id %(vlan)s on physical network %(network)s "
@@ -464,7 +463,6 @@ def release_vxlan(db_session, vxlan_id, vxlan_id_ranges):
                 msg = _("releasing vxlan %s to pool")
             else:
                 msg = _("releasing vxlan %s outside pool")
-                db_session.delete(alloc)
             LOG.debug(msg, vxlan_id)
         except exc.NoResultFound:
             LOG.warning(_("vxlan_id %s not found"), vxlan_id)

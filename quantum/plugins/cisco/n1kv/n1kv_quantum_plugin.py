@@ -168,7 +168,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         2. Establish communication with Cisco Nexus1000V
         """
         n1kv_db_v2.initialize()
-        c_cred.Store.initialize()
+        c_cred.Store.initialize()    
+        self.network_vlan_ranges = {}
         # If no api_extensions_path is provided set the following
         if not q_conf.CONF.api_extensions_path:
             q_conf.CONF.set_override(
@@ -619,7 +620,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 (physical_network, network_type, segmentation_id,
                     multicast_ip) = n1kv_db_v2.alloc_network(session,
                                                              profile_id)
-                LOG.debug(_('Physical_network %(phys_net)s, '
+                LOG.debug(_('Physical_network %(phy_net)s, '
                             'seg_type %(net_type)s, '
                             'seg_id %(seg_id)s, '
                             'multicast_ip %(multicast_ip)s'),
@@ -954,7 +955,6 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         _network_profile = super(N1kvQuantumPluginV2, self).\
             create_network_profile(
                 context, network_profile)
-        self.network_vlan_ranges = {}
         seg_min, seg_max = self.\
             _get_segment_range(_network_profile['segment_range'])
         if _network_profile['segment_type'] == c_const.TYPE_VLAN:
