@@ -413,15 +413,14 @@ def update_qos(tenant_id, qos_id, new_qos_name=None):
                                 tenant_id=tenant_id)
 
 
-def get_all_credentials(tenant_id):
+def get_all_credentials():
     """Lists all the creds for a tenant."""
     session = db.get_session()
-    return (session.query(network_models_v2.Credential).
-            filter_by(tenant_id=tenant_id).all())
+    return (session.query(network_models_v2.Credential).all())
 
 
-def get_credential(tenant_id, credential_id):
-    """Lists the creds for given a cred_id and tenant_id."""
+def get_credential(credential_id):
+    """Lists the creds for given a cred_id."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
@@ -431,8 +430,8 @@ def get_credential(tenant_id, credential_id):
         raise c_exc.CredentialNotFound(credential_id=credential_id)
 
 
-def get_credential_name(tenant_id, credential_name):
-    """Lists the creds for given a cred_name and tenant_id."""
+def get_credential_name(credential_name):
+    """Lists the creds for given a cred_name."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
@@ -442,8 +441,8 @@ def get_credential_name(tenant_id, credential_name):
         raise c_exc.CredentialNameNotFound(credential_name=credential_name)
 
 
-def add_credential(tenant_id, credential_name, user_name, password):
-    """Adds a qos to tenant association."""
+def add_credential(credential_name, user_name, password, type):
+    """Create a credential."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
@@ -457,8 +456,8 @@ def add_credential(tenant_id, credential_name, user_name, password):
         return cred
 
 
-def remove_credential(tenant_id, credential_id):
-    """Removes a credential from a  tenant."""
+def remove_credential(credential_id):
+    """Removes a credential."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
