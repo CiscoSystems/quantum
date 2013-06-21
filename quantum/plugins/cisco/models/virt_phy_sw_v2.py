@@ -256,7 +256,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
         net_dict = self.get_network(context, net_id)
         net_name = net_dict['name']
 
-        vlan_id = self._get_segmentation_id(context, net_id)
+        vlan_id = self._get_segmentation_id(net_id)
         host = self._get_instance_host(tenant_id, instance_id)
 
         # Trunk segmentation id for only this host
