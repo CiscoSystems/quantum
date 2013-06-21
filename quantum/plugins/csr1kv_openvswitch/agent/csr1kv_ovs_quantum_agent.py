@@ -109,12 +109,12 @@ class Port(object):
         return hash(self.id)
 
 
-class OVSPluginApi(agent_rpc.PluginApi,
-                   sg_rpc.SecurityGroupServerRpcApiMixin):
+class CSR1kvOVSPluginApi(agent_rpc.PluginApi,
+                         sg_rpc.SecurityGroupServerRpcApiMixin):
     pass
 
 
-class OVSSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
+class CSR1kvOVSSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
     def __init__(self, context, plugin_rpc, root_helper):
         self.context = context
         self.plugin_rpc = plugin_rpc
@@ -122,7 +122,7 @@ class OVSSecurityGroupAgent(sg_rpc.SecurityGroupAgentRpcMixin):
         self.init_firewall()
 
 
-class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
+class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
     '''Implements OVS-based tunneling, VLANs and flat networks.
 
     Two local bridges are created: an integration bridge (defaults to
@@ -175,8 +175,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         '''
         self.root_helper = root_helper
         self.available_local_vlans = set(
-            xrange(OVSQuantumAgent.MIN_VLAN_TAG,
-                   OVSQuantumAgent.MAX_VLAN_TAG))
+            xrange(CSR1kvOVSQuantumAgent.MIN_VLAN_TAG,
+                   CSR1kvOVSQuantumAgent.MAX_VLAN_TAG))
         self.int_br = self.setup_integration_br(integ_br)
         self.setup_physical_bridges(bridge_mappings)
         self.local_vlan_map = {}
@@ -198,9 +198,9 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         self.setup_rpc(integ_br)
 
         # Security group agent supprot
-        self.sg_agent = OVSSecurityGroupAgent(self.context,
-                                              self.plugin_rpc,
-                                              root_helper)
+        self.sg_agent = CSR1kvOVSSecurityGroupAgent(self.context,
+                                                    self.plugin_rpc,
+                                                    root_helper)
 
     def _report_state(self):
         try:
@@ -218,7 +218,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         mac = utils.get_interface_mac(integ_br)
         self.agent_id = '%s%s' % ('ovs', (mac.replace(":", "")))
         self.topic = topics.AGENT
-        self.plugin_rpc = OVSPluginApi(topics.PLUGIN)
+        self.plugin_rpc = CSR1kvOVSPluginApi(topics.PLUGIN)
         self.state_rpc = agent_rpc.PluginReportStateAPI(topics.PLUGIN)
 
         # RPC network init
@@ -917,7 +917,7 @@ def main():
         LOG.error(_('%s Agent terminated!'), e)
         sys.exit(1)
 
-    plugin = OVSQuantumAgent(**agent_config)
+    plugin = CSR1kvOVSQuantumAgent(**agent_config)
 
     # Start everything.
     LOG.info(_("Agent initialized successfully, now running... "))
