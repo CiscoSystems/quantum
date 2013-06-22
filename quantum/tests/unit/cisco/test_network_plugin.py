@@ -116,12 +116,16 @@ class TestCiscoPortsV2(CiscoNetworkPluginV2TestCase,
                                                  group)
             self.addCleanup(module.cfg.CONF.reset)
 
+        # TODO(Henry): add tests for other devices
+        self.dev_id = 'NEXUS_SWITCH'
         self.switch_ip = '1.1.1.1'
-        nexus_config = {(self.switch_ip, 'username'): 'admin',
-                        (self.switch_ip, 'password'): 'mySecretPassword',
-                        (self.switch_ip, 'ssh_port'): 22,
-                        (self.switch_ip, 'testhost'): '1/1'}
-        mock.patch.dict(cisco_config.nexus_dictionary, nexus_config).start()
+        nexus_config = {
+            (self.dev_id, self.switch_ip, 'username'): 'admin',
+            (self.dev_id, self.switch_ip, 'password'): 'mySecretPassword',
+            (self.dev_id, self.switch_ip, 'ssh_port'): 22,
+            (self.dev_id, self.switch_ip, 'testhost'): '1/1',
+        }
+        mock.patch.dict(cisco_config.device_dictionary, nexus_config).start()
 
         patches = {
             '_should_call_create_net': True,

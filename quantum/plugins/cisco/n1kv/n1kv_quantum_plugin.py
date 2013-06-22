@@ -168,7 +168,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         2. Establish communication with Cisco Nexus1000V
         """
         n1kv_db_v2.initialize()
-        c_cred.Store.initialize()    
+        c_cred.Store.initialize()
         self.network_vlan_ranges = {}
         # If no api_extensions_path is provided set the following
         if not q_conf.CONF.api_extensions_path:
