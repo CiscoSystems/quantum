@@ -114,7 +114,9 @@ class CSR1kv_OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                      'segmentation_id': binding.segmentation_id,
                      'physical_network': binding.physical_network}
             # Bob - Patch to handle trunk ports.
-            self.plugin.extend_port_dict_trunks(rpc_context, entry)
+            self.plugin.extend_resource_dict_trunks(rpc_context, entry,
+                                                    entry['network_id'],
+                                                    extended_info=True)
             # Bob - End of patch
             new_status = (q_const.PORT_STATUS_ACTIVE if port['admin_state_up']
                           else q_const.PORT_STATUS_DOWN)
@@ -363,29 +365,6 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     #               }
     #  }
 
-    def _network_hosts_trunk_ports(self, context, net_id):
-        try:
-            context.session.query(TrunkPortNetwork).filter_by(
-                network_id=net_id).one()
-            return True
-        except exc.NoResultFound:
-            return False
-
-    def get_trunk_mappings(self, context, network_id, extended_info=False):
-        if self._network_hosts_trunk_ports(context, network_id):
-            return self._get_trunk_mappings_by_network_id(context, network_id,
-                                                          extended_info)
-        else:
-            return None
-
-    def extend_port_dict_trunks(self, context, port):
-        port[trunkport.TRUNKED_NETWORKS] = self.get_trunk_mappings(
-            context, port['network_id'], extended_info=True)
-
-    def _extend_network_dict_trunks(self, context, network):
-        network[trunkport.TRUNKED_NETWORKS] = self.get_trunk_mappings(
-            context, network['id'])
-
     def _process_trunk_create(self, context, net_data, net):
         if trunkport.TRUNKED_NETWORKS not in net_data:
             return
@@ -425,54 +404,6 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._update_trunk_mappings(context, net['id'], {})
             self._notify_agent_about_trunk_update(context, net['id'], None)
             net[trunkport.TRUNKED_NETWORKS] = None
-
-    def _notify_agent_about_trunk_update(self, context, net_id,
-                                         trunked_networks):
-        """Notifies agent about trunk mapping change on trunk network."""
-        filters = {'network_id': [net_id]}
-        ports = self.get_ports(context, filters)
-
-        binding = ovs_db_v2.get_network_binding(None, net_id)
-        for port in ports:
-            port[trunkport.TRUNKED_NETWORKS] = trunked_networks
-            self.notifier.port_update(context, port,
-                                      binding.network_type,
-                                      binding.segmentation_id,
-                                      binding.physical_network)
-
-    def _make_extended_trunk_mapping_dict(self, trunk_mappings):
-        res = {}
-        for mapping in trunk_mappings:
-            binding = ovs_db_v2.get_network_binding(
-                None, mapping['trunked_network_id'])
-            res['trunked_network_id'] = {
-                'vlan': mapping['vlan_tag'],
-                'network_type': binding.network_type,
-                'segmentation_id': binding.segmentation_id,
-                'physical_network': binding.physical_network}
-        return res
-
-    def _make_trunk_mapping_dict(self, trunk_mappings):
-        return dict((mapping['trunked_network_id'], mapping['vlan_tag'])
-            for mapping in trunk_mappings)
-
-    def _get_trunk_mappings_by_network_id(self, context, network_id,
-                                          extended_info=False):
-        trunk_mappings = context.session.query(TrunkMapping).filter_by(
-            network_id=network_id).all()
-        if extended_info:
-            return self._make_extended_trunk_mapping_dict(trunk_mappings)
-        else:
-            return self._make_trunk_mapping_dict(trunk_mappings)
-
-    def _get_trunk_mapping(self, context, network_id, trunked_network_id):
-        query = context.session.query(TrunkMapping).filter(
-            TrunkMapping.network_id == network_id,
-            TrunkMapping.trunked_network_id == trunked_network_id)
-        try:
-            return query.one()
-        except exc.NoResultFound, exc.MultipleResultsFound:
-            return
 
     def _update_trunk_mappings(self, context, network_id, trunk_mappings):
         networks_to_trunk = set(trunk_mappings)
@@ -534,6 +465,84 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 del_context.filter_by(network_id=network_id,
                                       trunked_network_id=net_id).delete()
         return trunk_mappings
+
+    def _notify_agent_about_trunk_update(self, context, net_id,
+                                         trunked_networks):
+        """Notifies agent about trunk mapping change on trunk network."""
+        filters = {'network_id': [net_id]}
+        ports = self.get_ports(context, filters)
+
+        binding = ovs_db_v2.get_network_binding(None, net_id)
+        for port in ports:
+            port[trunkport.TRUNKED_NETWORKS] = (
+                self._make_extended_trunk_mapping_dict(trunked_networks))
+            self.notifier.port_update(context, port,
+                                      binding.network_type,
+                                      binding.segmentation_id,
+                                      binding.physical_network)
+
+    def _make_trunk_mapping_dict_from_db(self, trunk_mappings_db):
+        return dict((mapping['trunked_network_id'], mapping['vlan_tag'])
+            for mapping in trunk_mappings_db)
+
+    def _make_extended_trunk_mapping_dict_from_db(self, trunk_mappings_db):
+        res = {}
+        for mapping in trunk_mappings_db:
+            binding = ovs_db_v2.get_network_binding(
+                None, mapping['trunked_network_id'])
+            res[mapping['trunked_network_id']] = {
+                'vlan': mapping['vlan_tag'],
+                'network_type': binding.network_type,
+                'segmentation_id': binding.segmentation_id,
+                'physical_network': binding.physical_network}
+        return res
+
+    def _make_extended_trunk_mapping_dict(self, trunk_mappings):
+        res = {}
+        for network_id, vlan_tag in trunk_mappings.iteritems():
+            binding = ovs_db_v2.get_network_binding(None, network_id)
+            res[network_id] = {
+                'vlan': vlan_tag,
+                'network_type': binding.network_type,
+                'segmentation_id': binding.segmentation_id,
+                'physical_network': binding.physical_network}
+        return res
+
+    def extend_resource_dict_trunks(self, context, resource, network_id,
+                                    extended_info=False):
+        if self._network_hosts_trunk_ports(context, network_id):
+            resource[trunkport.TRUNKED_NETWORKS] = (
+                self._get_trunk_mappings_by_network_id(context, network_id,
+                                                       extended_info))
+        else:
+            resource[trunkport.TRUNKED_NETWORKS] =  None
+
+    def _network_hosts_trunk_ports(self, context, net_id):
+        try:
+            context.session.query(TrunkPortNetwork).filter_by(
+                network_id=net_id).one()
+            return True
+        except exc.NoResultFound:
+            return False
+
+    def _get_trunk_mappings_by_network_id(self, context, network_id,
+                                          extended_info=False):
+        trunk_mappings_db = context.session.query(TrunkMapping).filter_by(
+            network_id=network_id).all()
+        if extended_info:
+            return self._make_extended_trunk_mapping_dict_from_db(
+                trunk_mappings_db)
+        else:
+            return self._make_trunk_mapping_dict_from_db(trunk_mappings_db)
+
+    def _get_trunk_mapping(self, context, network_id, trunked_network_id):
+        query = context.session.query(TrunkMapping).filter(
+            TrunkMapping.network_id == network_id,
+            TrunkMapping.trunked_network_id == trunked_network_id)
+        try:
+            return query.one()
+        except exc.NoResultFound, exc.MultipleResultsFound:
+            return
     # Bob - End of patch
 
     def _parse_network_vlan_ranges(self):
@@ -737,6 +746,38 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def update_network(self, context, id, network):
         self._check_provider_update(context, network['network'])
 
+        # Bob - Ta bort foljande
+        a = 4
+        if a == 0:
+            p_spec = {
+                'port': {
+                    'admin_state_up': True,
+                    'name': 'bob_trunkport',
+                    'network_id': id,
+                    'mac_address': attributes.ATTR_NOT_SPECIFIED,
+                    'fixed_ips': attributes.ATTR_NOT_SPECIFIED,
+                    'device_id': "761a99ef-1111-2689-122e-b12a3c4d27ab",
+                    'device_owner': "nova"}}
+            p_spec['port']['security_groups'] = []
+            self.create_port(context, p_spec)
+        elif a == 1:
+            network['network'][trunkport.TRUNKED_NETWORKS] = {
+                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20}
+        elif a == 2:
+            network['network'][trunkport.TRUNKED_NETWORKS] = {
+                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20,
+                'feb72476-3b8c-457a-a3d4-98b5c4d67583': 21}
+        elif a == 3:
+            network['network'][trunkport.TRUNKED_NETWORKS] = {
+                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20,
+                'feb72476-3b8c-457a-a3d4-98b5c4d67583': 21,
+                '88c19032-6eda-4026-b900-822d3cdbf601': 22}
+        elif a == 4:
+            network['network'][trunkport.TRUNKED_NETWORKS] = {}
+        else:
+            network['network'][trunkport.TRUNKED_NETWORKS] = None
+        # Bob - slut pa ta bort
+
         session = context.session
         with session.begin(subtransactions=True):
             net = super(CSR1kv_OVSQuantumPluginV2, self).update_network(
@@ -772,12 +813,12 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         session = context.session
         with session.begin(subtransactions=True):
             net = super(CSR1kv_OVSQuantumPluginV2, self).get_network(context,
-                                                              id, None)
+                                                                     id, None)
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_l3(context, net)
             # Bob - Patch to add information to networks that trunk
             # ports belong to
-            self._extend_network_dict_trunks(context, net)
+            self.extend_resource_dict_trunks(context, net, net['id'])
             # Bob - End of patch
         return self._fields(net, fields)
 
@@ -794,7 +835,7 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 self._extend_network_dict_l3(context, net)
                 # Bob - Patch to add information to networks that trunk
                 # ports belong to
-                self._extend_network_dict_trunks(context, net)
+                self.extend_resource_dict_trunks(context, net, net['id'])
                 # Bob - End of patch
 
         return [self._fields(net, fields) for net in nets]
@@ -837,7 +878,9 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             binding = ovs_db_v2.get_network_binding(None,
                                                     updated_port['network_id'])
             # Bob - Patch to add information about trunk mappings
-            self.extend_port_dict_trunks(context, updated_port)
+            self.extend_resource_dict_trunks(context, updated_port,
+                                             updated_port['network_id'],
+                                             extended_info=True)
              # Bob - End of patch
             self.notifier.port_update(context, updated_port,
                                       binding.network_type,
