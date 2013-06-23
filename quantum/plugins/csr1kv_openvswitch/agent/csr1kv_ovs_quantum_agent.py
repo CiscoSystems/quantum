@@ -48,12 +48,12 @@ from quantum.plugins.openvswitch.common import constants
 LOG = logging.getLogger(__name__)
 
 # Bob - Patch to handle trunk ports.
-TRUNK_BR_PREFIX = 'tbr-'
+TRUNK_BR_PREFIX = 'tbr'
 TRUNK_BR_NAME_LEN = 14
 # Name prefixes for veth device pair linking the integration bridge
 # with a device (i.e., VM) specific bridge for trunking.
-VETH_TR_BR_PREFIX = 'tr-'
-VETH_INT_BR_PREFIX = 'int-'
+VETH_TR_BR_PREFIX = 'tbs'
+VETH_INT_BR_PREFIX = 'ibs'
  # Bob - End of patch
 
 # A placeholder for dead vlans.
@@ -445,10 +445,10 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         return (TRUNK_BR_PREFIX + port_id)[:TRUNK_BR_NAME_LEN]
 
     def _get_trunk_side_veth_pair_name(self, bridge_name):
-        return VETH_TR_BR_PREFIX + bridge_name
+        return VETH_TR_BR_PREFIX + bridge_name[3:]
 
     def _get_br_int_side_veth_pair_name(self, bridge_name):
-        return VETH_INT_BR_PREFIX + bridge_name
+        return VETH_INT_BR_PREFIX + bridge_name[3:]
 
     def _get_net_uuids(self, vif_id):
         net_ids = []
@@ -460,7 +460,7 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
     def _process_trunked_networks_add(self, port, trunked_networks):
         """Add network trunks to port if port belongs to trunk network
         and update bindings for the trunked networks.
-        :param port: a ovslib.VifPort object.
+        :param port: an ovslib.VifPort object.
         :param trunked_networks: a dict with the link local vlan to be
         used on the port and the information defined in the provider
         network extension.
@@ -470,12 +470,13 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
         bridge_name = self._get_trunk_bridge_name(port.vif_id)
         trunk_bridge = ovs_lib.OVSBridge(bridge_name, self.root_helper)
-        #device's port on trunk bridge has same iface-id as port on br-int
-        vm_port = trunk_bridge.get_vif_port_by_id(port.vif_id)
+        # Device's port on trunk bridge has same iface-id as port on
+        # br-int but with a '_' prefix
+        vm_port = trunk_bridge.get_vif_port_by_id('_' + port.vif_id)
         tr_veth_name = self._get_trunk_side_veth_pair_name(bridge_name)
         tr_veth_ofport = trunk_bridge.get_port_ofport(tr_veth_name)
 
-        if int(tr_veth_ofport.ofport) != -1:
+        if int(tr_veth_ofport) != -1:
             trunk_bridge.delete_flows(in_port=tr_veth_ofport)
 
         link_local_vlan_tags = []
@@ -488,14 +489,14 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             lvm = self.local_vlan_map[net_id]
             lvm.vif_ports[port.vif_id] = port
             host_local_vlan_tags.append(lvm.vlan)
-            # traffic from device, rewrite link local VLAN tag
+            # traffic from trunk bridge, rewrite link local VLAN tag
             self.int_br.add_flow(
                 priority=3,
                 in_port=port.ofport,
                 dl_vlan=info['vlan'],
                 actions="mod_vlan_vid:%s,normal" % lvm.vlan)
             link_local_vlan_tags.append(info['vlan'])
-            # traffic to device, rewrite host local VLAN tag
+            # traffic to trunk bridge, rewrite host local VLAN tag
             trunk_bridge.add_flow(
                 priority=3,
                 in_port=tr_veth_ofport,

@@ -621,7 +621,9 @@ class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
         # make parent's plug(...) function attach veth from linux bridge
         # to trunk bridge instead of integration bridge
         network['bridge'] = tr_br_name
+        mapping['vif_uuid'] = '_' + mapping['vif_uuid']
         super(LibvirtTrunkHybridOVSBridgeDriver, self).plug(instance, vif)
+        mapping['vif_uuid'] = mapping['vif_uuid'][1:]
 
         v1_name = self._get_trunk_side_veth_pair_name(tr_br_name)
         v2_name = self._get_br_int_side_veth_pair_name(tr_br_name)
@@ -629,15 +631,16 @@ class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
             iface_id = self.get_ovs_interfaceid(mapping)
             linux_net._create_veth_pair(v1_name, v2_name)
             # plug veth from trunk bridge into integration bridge
-            linux_net.create_ovs_vif_port(network['bridge'], v1_name, iface_id,
-                                          mapping['mac'], instance['uuid'])
+            linux_net.create_ovs_vif_port(network['bridge'], v1_name, 
+                                          '__' + iface_id, mapping['mac'], 
+                                          instance['uuid'])
             # ensure we use correct name of integration bridge
             if br_name_bak is None:
                 network.pop('bridge')
             else:
                 network['bridge'] = br_name_bak
             linux_net.create_ovs_vif_port(self.get_bridge_name(network),
-                                          v2_name, iface_id, mapping['mac'],
+                                          v2_name, iface_id, mapping['mac'], 
                                           instance['uuid'])
 
     def unplug(self, instance, vif):
@@ -658,8 +661,10 @@ class LibvirtTrunkHybridOVSBridgeDriver(LibvirtHybridOVSBridgeDriver):
                                           v2_name)
             br_name_bak = network.get('bridge')
             network['bridge'] = tr_br_name
+            mapping['vif_uuid'] = '_' + mapping['vif_uuid']
             res = super(LibvirtTrunkHybridOVSBridgeDriver, self).unplug(
                 instance, vif)
+            mapping['vif_uuid'] = mapping['vif_uuid'][1:]
             self._delete_ovs_bridge(tr_br_name)
             if br_name_bak is None:
                 network.pop('bridge')
