@@ -70,7 +70,7 @@ class L3PluginApi(proxy.RpcProxy):
         """Make a remote process call to retrieve the sync data for routers."""
         router_ids = [router_id] if router_id else None
         return self.call(context,
-                         self.make_msg('sync_routers', host=self.host,
+                         self.make_msg('cfg_sync_routers', host=self.host,
                                        fullsync=fullsync,
                                        router_ids=router_ids),
                          topic=self.topic)
