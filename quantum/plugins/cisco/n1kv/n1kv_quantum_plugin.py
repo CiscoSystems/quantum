@@ -1003,7 +1003,13 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
 
 class PollVSM (threading.Thread, N1kvQuantumPluginV2):
+    """
+    Spawn a new thread to poll VSM for policy profiles.
 
+    Poll the VSM for any policy profile updates at specified (POLL_DURATION)
+    interval. Based on the commands returned in the XML, policy profiles will
+    be created or deleted from quantum database.
+    """
     def run(self):
         while True:
             self._poll_policies(event_type="port_profile")
