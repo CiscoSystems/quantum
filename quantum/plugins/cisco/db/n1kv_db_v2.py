@@ -470,6 +470,12 @@ def release_vxlan(db_session, vxlan_id, vxlan_id_ranges):
 
 
 def set_port_status(port_id, status):
+    """
+    Set the status of the port.
+
+    :param port_id: UUID representing the port
+    :param status: string representing the new status
+    """
     db_session = db.get_session()
     try:
         port = db_session.query(models_v2.Port).filter_by(id=port_id).one()
@@ -481,7 +487,13 @@ def set_port_status(port_id, status):
 
 
 def get_vm_network(policy_profile_id, network_id):
-    """Retrieve a vm_network based on policy profile and network id."""
+    """
+    Retrieve a vm_network based on policy profile and network id.
+
+    :param policy_profile_id: UUID representing policy profile
+    :param network_id: UUID representing network
+    :returns: VM network object
+    """
     db_session = db.get_session()
     try:
         vm_network = (db_session.query(n1kv_models_v2.N1kVmNetwork).
@@ -494,10 +506,15 @@ def get_vm_network(policy_profile_id, network_id):
 
 def add_vm_network(name, policy_profile_id, network_id, port_count):
     """
-    Add a vm_network for a unique combination of network and
+    Create a VM network.
+
+    Add a VM network for a unique combination of network and
     policy profile. All ports having the same policy profile
-    on one network will be associated with one vm network.
-    Port count represents the number ports on one vm network.
+    on one network will be associated with one VM network.
+    :param name: string representing the name of the VM network
+    :param policy_profile_id: UUID representing policy profile
+    :param network_id: UUID representing a network
+    :param port_count: integer representing the number of ports on vm network
     """
     db_session = db.get_session()
     try:
@@ -514,7 +531,12 @@ def add_vm_network(name, policy_profile_id, network_id, port_count):
 
 
 def update_vm_network(name, port_count):
-    """Updates a vm network with new port count."""
+    """
+    Update a VM network with new port count.
+
+    :param name: string representing the name of the VM network
+    :param port_count: integer representing the number of ports on VM network
+    """
     db_session = db.get_session()
     try:
         vm_network = (db_session.query(n1kv_models_v2.N1kVmNetwork).
@@ -529,7 +551,13 @@ def update_vm_network(name, port_count):
 
 
 def delete_vm_network(policy_profile_id, network_id):
-    """Deletes a vm network."""
+    """
+    Delete a VM network.
+
+    :param policy_profile_id: UUID representing a policy profile
+    :param network_id: UUID representing a network
+    :returns: deleted VM network object
+    """
     db_session = db.get_session()
     vm_network = get_vm_network(policy_profile_id, network_id)
     with db_session.begin(subtransactions=True):
@@ -541,7 +569,7 @@ def delete_vm_network(policy_profile_id, network_id):
 
 def create_network_profile(network_profile):
     """
-    Create Network Profile
+    Create a network profile
     """
     LOG.debug(_("create_network_profile()"))
     db_session = db.get_session()
