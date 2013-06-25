@@ -322,7 +322,7 @@ def _add_unique_id(msg):
     """Add unique_id for checking duplicate messages."""
     unique_id = uuid.uuid4().hex
     msg.update({UNIQUE_ID: unique_id})
-    LOG.debug(_('UNIQUE_ID is %s.') % (unique_id))
+    #LOG.debug(_('UNIQUE_ID is %s.') % (unique_id))
 
 
 class _ThreadPoolWithWait(object):
@@ -513,10 +513,11 @@ _reply_proxy_create_sem = semaphore.Semaphore()
 
 def multicall(conf, context, topic, msg, timeout, connection_pool):
     """Make a call that returns multiple times."""
-    LOG.debug(_('Making synchronous call on %s ...'), topic)
+    #Hareesh: Commenting out debug message
+    #LOG.debug(_('Making synchronous call on %s ...'), topic)
     msg_id = uuid.uuid4().hex
     msg.update({'_msg_id': msg_id})
-    LOG.debug(_('MSG_ID is %s') % (msg_id))
+    #LOG.debug(_('MSG_ID is %s') % (msg_id))
     _add_unique_id(msg)
     pack_context(msg, context)
 
