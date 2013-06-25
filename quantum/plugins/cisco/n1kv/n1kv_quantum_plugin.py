@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-#
-# Copyright 2011 Cisco Systems, Inc.  All rights reserved.
+
+# Copyright 2013 Cisco Systems, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -18,7 +18,6 @@
 # @author: Rudrajit Tapadar, Cisco Systems, Inc.
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Sergey Sudakovich, Cisco Systems, Inc.
-
 
 import threading
 import time
@@ -168,7 +167,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         2. Establish communication with Cisco Nexus1000V
         """
         n1kv_db_v2.initialize()
-        c_cred.Store.initialize()    
+        c_cred.Store.initialize()
         self.network_vlan_ranges = {}
         # If no api_extensions_path is provided set the following
         if not q_conf.CONF.api_extensions_path:

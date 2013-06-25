@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-#
-# Copyright 2011 Cisco Systems, Inc.  All rights reserved.
+
+# Copyright 2013 Cisco Systems, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -19,18 +19,17 @@
 # @author: Rudrajit Tapadar, Cisco Systems Inc.
 # @author: Sergey Sudakovich, Cisco Systems Inc.
 
-
-import quantum.db.api as db
 import re
+from sqlalchemy.orm import exc
+from sqlalchemy.sql import and_
 
 from quantum.common import exceptions as q_exc
+import quantum.db.api as db
 from quantum.db import models_v2
 from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.db import n1kv_models_v2
-from sqlalchemy.orm import exc
-from sqlalchemy.sql import and_
 
 LOG = logging.getLogger(__name__)
 
@@ -338,6 +337,7 @@ def release_vlan(db_session, physical_network, vlan_id, network_vlan_ranges):
                 msg = _("Releasing vlan %(vlan)s on physical "
                         "network %(network)s to pool")
             else:
+                db_session.delete(alloc)
                 msg = _("Releasing vlan %(vlan)s on physical "
                         "network %(network)s outside pool")
             LOG.debug(msg, {'vlan': vlan_id, 'network': physical_network})
@@ -462,6 +462,7 @@ def release_vxlan(db_session, vxlan_id, vxlan_id_ranges):
             if inside:
                 msg = _("releasing vxlan %s to pool")
             else:
+                db_session.delete(alloc)
                 msg = _("releasing vxlan %s outside pool")
             LOG.debug(msg, vxlan_id)
         except exc.NoResultFound:

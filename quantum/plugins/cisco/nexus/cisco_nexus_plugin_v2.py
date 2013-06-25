@@ -48,7 +48,10 @@ class NexusPlugin(L2DevicePluginBase):
         """Extract configuration parameters from the configuration file."""
         self._client = importutils.import_object(conf.CISCO.nexus_driver)
         LOG.debug(_("Loaded driver %s"), conf.CISCO.nexus_driver)
-        self._nexus_switches = conf.get_nexus_dictionary()
+        cisco_switches = conf.get_device_dictionary()
+        self._nexus_switches = dict(((key[1], key[2]), val)
+                                    for key, val in cisco_switches.iteritems()
+                                    if key[0] == 'NEXUS_SWITCH')
         self.credentials = {}
 
     def get_credential(self, nexus_ip):

@@ -18,11 +18,9 @@
 
 import logging as LOG
 
-from oslo.config import cfg
-
-from quantum.plugins.cisco.common import config
 from quantum.plugins.cisco.common import cisco_constants as const
 from quantum.plugins.cisco.common import cisco_exceptions as cexc
+from quantum.plugins.cisco.common import config
 from quantum.plugins.cisco.db import network_db_v2 as cdb
 
 LOG.basicConfig(level=LOG.WARN)
@@ -34,7 +32,7 @@ _dev_dict = config.get_device_dictionary()
 
 
 class Store(object):
-    """Credential Store"""
+    """Credential Store."""
 
     @staticmethod
     def initialize():
@@ -54,29 +52,29 @@ class Store(object):
 
     @staticmethod
     def put_credential(cred_name, username, password):
-        """Set the username and password"""
-        credential = cdb.add_credential(cred_name, username, password)
+        """Set the username and password."""
+        cdb.add_credential(cred_name, username, password)
 
     @staticmethod
     def get_username(cred_name):
-        """Get the username"""
+        """Get the username."""
         credential = cdb.get_credential_name(cred_name)
         return credential[const.CREDENTIAL_USERNAME]
 
     @staticmethod
     def get_password(cred_name):
-        """Get the password"""
+        """Get the password."""
         credential = cdb.get_credential_name(cred_name)
         return credential[const.CREDENTIAL_PASSWORD]
 
     @staticmethod
     def get_credential(cred_name):
-        """Get the username and password"""
-        credential = cdb.get_credential_name(cred_name)
+        """Get the username and password."""
+        cdb.get_credential_name(cred_name)
         return {const.USERNAME: const.CREDENTIAL_USERNAME,
                 const.PASSWORD: const.CREDENTIAL_PASSWORD}
 
     @staticmethod
     def delete_credential(cred_name):
-        """Delete a credential"""
+        """Delete a credential."""
         cdb.remove_credential(cred_name)
