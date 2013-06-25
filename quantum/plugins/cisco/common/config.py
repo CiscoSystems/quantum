@@ -31,8 +31,7 @@ cisco_plugins_opts = [
                        'OVSQuantumPluginV2',
                help=_("Virtual Switch to use")),
     cfg.StrOpt('nexus_plugin',
-               default='quantum.plugins.cisco.nexus.cisco_nexus_plugin_v2.'
-                       'NexusPlugin',
+               default=None,
                help=_("Nexus Switch to use")),
 ]
 
