@@ -746,42 +746,10 @@ class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def update_network(self, context, id, network):
         self._check_provider_update(context, network['network'])
 
-        # Bob - Ta bort foljande
-        a = 4
-        if a == 0:
-            p_spec = {
-                'port': {
-                    'admin_state_up': True,
-                    'name': 'bob_trunkport',
-                    'network_id': id,
-                    'mac_address': attributes.ATTR_NOT_SPECIFIED,
-                    'fixed_ips': attributes.ATTR_NOT_SPECIFIED,
-                    'device_id': "761a99ef-1111-2689-122e-b12a3c4d27ab",
-                    'device_owner': "nova"}}
-            p_spec['port']['security_groups'] = []
-            self.create_port(context, p_spec)
-        elif a == 1:
-            network['network'][trunkport.TRUNKED_NETWORKS] = {
-                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20}
-        elif a == 2:
-            network['network'][trunkport.TRUNKED_NETWORKS] = {
-                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20,
-                'feb72476-3b8c-457a-a3d4-98b5c4d67583': 21}
-        elif a == 3:
-            network['network'][trunkport.TRUNKED_NETWORKS] = {
-                '2d5129df-ef9e-4665-bab9-2917603b14b3': 20,
-                'feb72476-3b8c-457a-a3d4-98b5c4d67583': 21,
-                '88c19032-6eda-4026-b900-822d3cdbf601': 22}
-        elif a == 4:
-            network['network'][trunkport.TRUNKED_NETWORKS] = {}
-        else:
-            network['network'][trunkport.TRUNKED_NETWORKS] = None
-        # Bob - slut pa ta bort
-
         session = context.session
         with session.begin(subtransactions=True):
             net = super(CSR1kv_OVSQuantumPluginV2, self).update_network(
-                            context, id, network)
+                        context, id, network)
 
             self._process_l3_update(context, network['network'], id)
             self._extend_network_dict_provider(context, net)

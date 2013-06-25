@@ -759,7 +759,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                         break
             if id_allocated_port is None:
                 id_allocated_port = self._get_other_port_id_in_pair(
-                    context, port_twin_id)
+                    context, port_twin_id, hosting_entity_id)
         if id_allocated_port is None:
             # Database must have been messed up if this happens ...
             return
@@ -806,7 +806,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             return
         return res[0]
 
-    def _get_other_port_id_in_pair(self, context, port_id):
+    def _get_other_port_id_in_pair(self, context, port_id, hosting_entity_id):
         query = context.session.query(models_v2.Port)
         query = query.filter(models_v2.Port.id == port_id)
         try:
@@ -818,7 +818,8 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             else:
                 other_port_name = cl3_const.T1_PORT_NAME
             query = context.session.query(models_v2.Port)
-            query = query.filter(models_v2.Port.name ==
+            query = query.filter(models_v2.Port.device_id == hosting_entity_id,
+                                 models_v2.Port.name ==
                                  other_port_name + index)
             other_port = query.one()
             return other_port['id']

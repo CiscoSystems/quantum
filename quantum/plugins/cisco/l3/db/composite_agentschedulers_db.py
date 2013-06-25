@@ -61,8 +61,8 @@ class CompositeAgentSchedulerDbMixin(agentsched_db.AgentSchedulerDbMixin):
 
         router_ids = [item[0] for item in query]
         if router_ids:
-            return self.get_sync_data(context, router_ids=router_ids,
-                                      active=True)
+            return self.get_sync_data_ext(context, router_ids=router_ids,
+                                          active=True)
         else:
             return []
 
