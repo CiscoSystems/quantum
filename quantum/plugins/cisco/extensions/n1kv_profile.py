@@ -16,6 +16,8 @@
 #
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Rudrajit Tapadar, Cisco Systems, Inc.
+# @author: Aruna Kushwaha, Cisco Systems, Inc.
+# @author: Sergey Sudakovich, Cisco Systems, Inc.
 
 from quantum.api import extensions
 from quantum.api.v2 import attributes
