@@ -276,7 +276,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             super(L3_router_appliance_db_mixin, self).update_router(context,
                                                                     id,
                                                                     router))
-        routers = self.get_sync_data_ext(context.elevated(), [id],
+        routers = self.get_sync_data_ext(context.elevated(), [o_r_db['id']],
                                          ext_gw_changed=ext_gateway_changed,
                                          gw_trunk_network_id=trunk_network_id)
         l3_rpc_joint_agent_api.L3JointAgentNotify.routers_updated(context,
@@ -357,6 +357,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                                              [info['router_id']])
             l3_rpc_joint_agent_api.L3JointAgentNotify.routers_updated(
                 context, routers, 'create_floatingip')
+        return info
 
     def update_floatingip(self, context, id, floatingip):
         orig_fl_ip = super(L3_router_appliance_db_mixin, self).get_floatingip(
@@ -374,6 +375,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
         routers = self.get_sync_data_ext(context.elevated(), router_ids)
         l3_rpc_joint_agent_api.L3JointAgentNotify.routers_updated(
             context, routers, 'update_floatingip')
+        return info
 
     def delete_floatingip(self, context, id):
         floatingip_db = self._get_floatingip(context, id)
