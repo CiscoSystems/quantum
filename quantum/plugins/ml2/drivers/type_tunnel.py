@@ -23,6 +23,7 @@ LOG = log.getLogger(__name__)
 TUNNEL = 'tunnel'
 
 TYPE_GRE = 'gre'
+TYPE_VXLAN = 'vxlan'
 
 
 class TunnelTypeDriver(object):
@@ -64,10 +65,7 @@ class TunnelRpcCallbackMixin(object):
         be notified about the new tunnel IP.
         """
         tunnel_ip = kwargs.get('tunnel_ip')
-        # TODO(matrohon) tunnel_type should be a list of every tunnel_type that
-        # the agent supports. Should be implemented in bp/ml2-vxlan
-        # tunnel_type = kwargs.get('tunnel_type')
-        tunnel_type = TYPE_GRE
+        tunnel_type = kwargs.get('tunnel_type')
         driver = self.type_manager.drivers.get(tunnel_type)
         if driver:
             tunnel = driver.obj.add_endpoint(tunnel_ip)
