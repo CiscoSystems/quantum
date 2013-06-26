@@ -16,19 +16,16 @@
 #
 # @author: Rohit Agarwalla, Cisco Systems, Inc.
 
+import logging as LOG
 from sqlalchemy.orm import exc
 
 from quantum.common import exceptions as q_exc
 from quantum.db import api as db
-from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.common import cisco_exceptions as c_exc
 from quantum.plugins.cisco.common import config
 from quantum.plugins.cisco.db import network_models_v2
 from quantum.plugins.cisco.db import nexus_models_v2  # noqa
 from quantum.plugins.openvswitch import ovs_models_v2
-
-
-LOG = logging.getLogger(__name__)
 
 
 def create_vlanids():
@@ -193,6 +190,159 @@ def update_vlan_binding(netid, newvlanid=None, newvlanname=None):
         raise q_exc.NetworkNotFound(net_id=netid)
 
 
+def get_all_portprofiles():
+    """Lists all the port profiles."""
+    LOG.debug("get_all_portprofiles() called")
+    session = db.get_session()
+    try:
+        pps = session.query(network_models_v2.PortProfile).all()
+        return pps
+    except exc.NoResultFound:
+        return []
+
+
+def get_portprofile(tenantid, ppid):
+    """Lists a port profile."""
+    LOG.debug("get_portprofile() called")
+    session = db.get_session()
+    try:
+        pp = (session.query(network_models_v2.PortProfile).
+              filter_by(uuid=ppid).one())
+        return pp
+    except exc.NoResultFound:
+        raise c_exc.PortProfileNotFound(tenant_id=tenantid,
+                                        portprofile_id=ppid)
+
+
+def add_portprofile(tenantid, ppname, vlanid, qos):
+    """Adds a port profile."""
+    LOG.debug("add_portprofile() called")
+    session = db.get_session()
+    try:
+        pp = (session.query(network_models_v2.PortProfile).
+              filter_by(name=ppname).one())
+        raise c_exc.PortProfileAlreadyExists(tenant_id=tenantid,
+                                             pp_name=ppname)
+    except exc.NoResultFound:
+        pp = network_models_v2.PortProfile(ppname, vlanid, qos)
+        session.add(pp)
+        session.flush()
+        return pp
+
+
+def remove_portprofile(tenantid, ppid):
+    """Removes a port profile."""
+    LOG.debug("remove_portprofile() called")
+    session = db.get_session()
+    try:
+        pp = (session.query(network_models_v2.PortProfile).
+              filter_by(uuid=ppid).one())
+        session.delete(pp)
+        session.flush()
+        return pp
+    except exc.NoResultFound:
+        pass
+
+
+def update_portprofile(tenantid, ppid, newppname=None, newvlanid=None,
+                       newqos=None):
+    """Updates port profile."""
+    LOG.debug("update_portprofile() called")
+    session = db.get_session()
+    try:
+        pp = (session.query(network_models_v2.PortProfile).
+              filter_by(uuid=ppid).one())
+        if newppname:
+            pp["name"] = newppname
+        if newvlanid:
+            pp["vlan_id"] = newvlanid
+        if newqos:
+            pp["qos"] = newqos
+        session.merge(pp)
+        session.flush()
+        return pp
+    except exc.NoResultFound:
+        raise c_exc.PortProfileNotFound(tenant_id=tenantid,
+                                        portprofile_id=ppid)
+
+
+def get_all_pp_bindings():
+    """Lists all the port profiles."""
+    LOG.debug("get_all_pp_bindings() called")
+    session = db.get_session()
+    try:
+        bindings = session.query(network_models_v2.PortProfileBinding).all()
+        return bindings
+    except exc.NoResultFound:
+        return []
+
+
+def get_pp_binding(tenantid, ppid):
+    """Lists a port profile binding."""
+    LOG.debug("get_pp_binding() called")
+    session = db.get_session()
+    try:
+        binding = (session.query(network_models_v2.PortProfileBinding).
+                   filter_by(portprofile_id=ppid).one())
+        return binding
+    except exc.NoResultFound:
+        return []
+
+
+def add_pp_binding(tenantid, portid, ppid, default):
+    """Adds a port profile binding."""
+    LOG.debug("add_pp_binding() called")
+    session = db.get_session()
+    try:
+        binding = (session.query(network_models_v2.PortProfileBinding).
+                   filter_by(portprofile_id=ppid).one())
+        raise c_exc.PortProfileBindingAlreadyExists(pp_id=ppid,
+                                                    port_id=portid)
+    except exc.NoResultFound:
+        binding = network_models_v2.PortProfileBinding(tenantid, portid,
+                                                       ppid, default)
+        session.add(binding)
+        session.flush()
+        return binding
+
+
+def remove_pp_binding(tenantid, portid, ppid):
+    """Removes a port profile binding."""
+    LOG.debug("remove_pp_binding() called")
+    session = db.get_session()
+    try:
+        binding = (session.query(network_models_v2.PortProfileBinding).
+                   filter_by(portprofile_id=ppid).filter_by(port_id=portid).
+                   one())
+        session.delete(binding)
+        session.flush()
+        return binding
+    except exc.NoResultFound:
+        pass
+
+
+def update_pp_binding(tenantid, ppid, newtenantid=None,
+                      newportid=None, newdefault=None):
+    """Updates port profile binding."""
+    LOG.debug("update_pp_binding() called")
+    session = db.get_session()
+    try:
+        binding = (session.query(network_models_v2.PortProfileBinding).
+                   filter_by(portprofile_id=ppid).one())
+        if newtenantid:
+            binding["tenant_id"] = newtenantid
+        if newportid:
+            binding["port_id"] = newportid
+        if newdefault:
+            binding["default"] = newdefault
+        session.merge(binding)
+        session.flush()
+        return binding
+    except exc.NoResultFound:
+        raise c_exc.PortProfileNotFound(tenant_id=tenantid,
+                                        portprofile_id=ppid)
+
+
 def get_all_qoss(tenant_id):
     """Lists all the qos to tenant associations."""
     LOG.debug(_("get_all_qoss() called"))
@@ -263,62 +413,54 @@ def update_qos(tenant_id, qos_id, new_qos_name=None):
                                 tenant_id=tenant_id)
 
 
-def get_all_credentials(tenant_id):
+def get_all_credentials():
     """Lists all the creds for a tenant."""
     session = db.get_session()
-    return (session.query(network_models_v2.Credential).
-            filter_by(tenant_id=tenant_id).all())
+    return (session.query(network_models_v2.Credential).all())
 
 
-def get_credential(tenant_id, credential_id):
-    """Lists the creds for given a cred_id and tenant_id."""
+def get_credential(credential_id):
+    """Lists the creds for given a cred_id."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                filter_by(tenant_id=tenant_id).
                 filter_by(credential_id=credential_id).one())
         return cred
     except exc.NoResultFound:
-        raise c_exc.CredentialNotFound(credential_id=credential_id,
-                                       tenant_id=tenant_id)
+        raise c_exc.CredentialNotFound(credential_id=credential_id)
 
 
-def get_credential_name(tenant_id, credential_name):
-    """Lists the creds for given a cred_name and tenant_id."""
+def get_credential_name(credential_name):
+    """Lists the creds for given a cred_name."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                filter_by(tenant_id=tenant_id).
                 filter_by(credential_name=credential_name).one())
         return cred
     except exc.NoResultFound:
-        raise c_exc.CredentialNameNotFound(credential_name=credential_name,
-                                           tenant_id=tenant_id)
+        raise c_exc.CredentialNameNotFound(credential_name=credential_name)
 
 
-def add_credential(tenant_id, credential_name, user_name, password):
-    """Adds a qos to tenant association."""
+def add_credential(credential_name, user_name, password, type):
+    """Create a credential."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                filter_by(tenant_id=tenant_id).
                 filter_by(credential_name=credential_name).one())
-        raise c_exc.CredentialAlreadyExists(credential_name=credential_name,
-                                            tenant_id=tenant_id)
+        raise c_exc.CredentialAlreadyExists(credential_name=credential_name)
     except exc.NoResultFound:
-        cred = network_models_v2.Credential(tenant_id, credential_name,
-                                            user_name, password)
+        cred = network_models_v2.Credential(credential_name,
+                                            user_name, password, type)
         session.add(cred)
         session.flush()
         return cred
 
 
-def remove_credential(tenant_id, credential_id):
-    """Removes a credential from a  tenant."""
+def remove_credential(credential_id):
+    """Removes a credential."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                filter_by(tenant_id=tenant_id).
                 filter_by(credential_id=credential_id).one())
         session.delete(cred)
         session.flush()
@@ -327,13 +469,12 @@ def remove_credential(tenant_id, credential_id):
         pass
 
 
-def update_credential(tenant_id, credential_id,
+def update_credential(credential_id,
                       new_user_name=None, new_password=None):
     """Updates a credential for a tenant."""
     session = db.get_session()
     try:
         cred = (session.query(network_models_v2.Credential).
-                filter_by(tenant_id=tenant_id).
                 filter_by(credential_id=credential_id).one())
         if new_user_name:
             cred["user_name"] = new_user_name
@@ -343,8 +484,13 @@ def update_credential(tenant_id, credential_id,
         session.flush()
         return cred
     except exc.NoResultFound:
-        raise c_exc.CredentialNotFound(credential_id=credential_id,
-                                       tenant_id=tenant_id)
+        raise c_exc.CredentialNotFound(credential_id=credential_id)
+
+
+def get_all_n1kv_credentials():
+    session = db.get_session()
+    return (session.query(network_models_v2.Credential).
+            filter_by(type='n1kv').all())
 
 
 def get_ovs_vlans():
@@ -352,3 +498,63 @@ def get_ovs_vlans():
     bindings = (session.query(ovs_models_v2.VlanAllocation.vlan_id).
                 filter_by(allocated=True))
     return [binding.vlan_id for binding in bindings]
+
+
+class Credential_db_mixin(object):
+
+    """
+    Mixin class for Cisco Credentials as a resource.
+    """
+
+    def _make_credential_dict(self, credential, fields=None):
+        res = {'credential_id': credential['credential_id'],
+               'credential_name': credential['credential_name'],
+               'user_name': credential['user_name'],
+               'password': credential['password'],
+               'type': credential['type']}
+        return self._fields(res, fields)
+
+    def create_credential(self, context, credential):
+        """
+        Create a credential
+        """
+        c = credential['credential']
+        cred = add_credential(c['credential_name'],
+                              c['user_name'],
+                              c['password'],
+                              c['type'])
+        return self._make_credential_dict(cred)
+
+    def get_credentials(self, context, filters=None, fields=None):
+        """
+        Retrieve a list of credentials
+        """
+        return self._get_collection(context,
+                                    network_models_v2.Credential,
+                                    self._make_credential_dict,
+                                    filters=filters,
+                                    fields=fields)
+
+    def get_credential(self, context, id, fields=None):
+        """
+        Retireve the requested credential based on its id
+        """
+        credential = get_credential(id)
+        return self._make_credential_dict(credential, fields)
+
+    def update_credential(self, context, id, credential):
+        """
+        Update a credential based on its id
+        """
+        c = credential['credential']
+        cred = update_credential(id,
+                                 c['credential_name'],
+                                 c['user_name'],
+                                 c['password'])
+        return self._make_credential_dict(cred)
+
+    def delete_credential(self, context, id):
+        """
+        Delete a credential based on its id
+        """
+        return remove_credential(id)

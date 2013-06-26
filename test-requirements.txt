@@ -22,7 +22,7 @@ testtools>=0.9.27
 webtest==1.3.3
 # Packages for the Cisco Plugin
 ###############################
-configobj
+unittest2
 ###############################
 
 # Packages for the Ryu Plugin

@@ -49,7 +49,7 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
     """
     MANAGE_STATE = True
     __native_bulk_support = True
-    supported_extension_aliases = []
+    supported_extension_aliases = ["provider", "profile", "router"]
     _plugins = {}
     _methods_to_delegate = ['create_network_bulk',
                             'get_network', 'get_networks',
@@ -57,7 +57,8 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                             'get_port', 'get_ports',
                             'create_subnet', 'create_subnet_bulk',
                             'delete_subnet', 'update_subnet',
-                            'get_subnet', 'get_subnets', ]
+                            'get_subnet', 'get_subnets',
+                            'create_or_update_agent', 'report_state']
 
     def __init__(self):
         """Initialize the segmentation manager.
@@ -69,9 +70,10 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
 
         for key in conf.CISCO_PLUGINS.keys():
             plugin_obj = conf.CISCO_PLUGINS[key]
-            self._plugins[key] = importutils.import_object(plugin_obj)
-            LOG.debug(_("Loaded device plugin %s\n"),
-                      conf.CISCO_PLUGINS[key])
+            if plugin_obj is not None:
+                self._plugins[key] = importutils.import_object(plugin_obj)
+                LOG.debug(_("Loaded device plugin %s\n"),
+                          conf.CISCO_PLUGINS[key])
 
         if ((const.VSWITCH_PLUGIN in self._plugins) and
             hasattr(self._plugins[const.VSWITCH_PLUGIN],
@@ -79,7 +81,6 @@ class VirtualPhysicalSwitchModelV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
             self.supported_extension_aliases.extend(
                 self._plugins[const.VSWITCH_PLUGIN].
                 supported_extension_aliases)
-
         # At this point, all the database models should have been loaded. It's
         # possible that configure_db() may have been called by one of the
         # plugins loaded in above. Otherwise, this call is to make sure that

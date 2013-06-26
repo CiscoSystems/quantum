@@ -23,5 +23,6 @@ six
 stevedore>=0.9
 
 # Cisco plugin dependencies
+configobj
 python-novaclient
 # End Cisco dependencies

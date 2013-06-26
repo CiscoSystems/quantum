@@ -1,7 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2011 Cisco Systems, Inc.
-# All rights reserved.
+# Copyright 2012 Cisco Systems, Inc.  All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -16,18 +15,40 @@
 #    under the License.
 #
 # @author: Ying Liu, Cisco Systems, Inc.
+# @author: Abhishek Raut, Cisco Systems, Inc
 #
 
 from webob import exc
 
 from quantum.api import api_common as common
 from quantum.api import extensions
+from quantum.api.v2 import attributes as attr
 from quantum.manager import QuantumManager
 from quantum.plugins.cisco.common import cisco_exceptions as exception
 from quantum.plugins.cisco.common import cisco_faults as faults
 from quantum.plugins.cisco.extensions import (_credential_view as
                                               credential_view)
 from quantum import wsgi
+
+
+# Attribute Map
+RESOURCE_ATTRIBUTE_MAP = {
+    'credentials': {
+        'credential_id': {'allow_post': False, 'allow_put': False,
+                          'validate': {'type:regex': attr.UUID_PATTERN},
+                          'is_visible': True},
+        'credential_name': {'allow_post': True, 'allow_put': True,
+                            'is_visible': True, 'default': ''},
+        'type': {'allow_post': True, 'allow_put': True,
+                 'is_visible': True, 'default': ''},
+        'user_name': {'allow_post': True, 'allow_put': True,
+                      'is_visible': True, 'default': ''},
+        'password': {'allow_post': True, 'allow_put': True,
+                     'is_visible': True, 'default': ''},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'is_visible': False, 'default': ''},
+    },
+}
 
 
 class Credential(extensions.ExtensionDescriptor):

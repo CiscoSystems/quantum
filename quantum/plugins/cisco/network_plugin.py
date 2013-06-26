@@ -68,7 +68,9 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         cexc.PortVnicNotFound: wexc.HTTPNotFound}
 
     def __init__(self):
-        """Load the model class."""
+        """
+        Loads the model class.
+        """
         self._model = importutils.import_object(config.CISCO.model_class)
         if hasattr(self._model, "MANAGE_STATE") and self._model.MANAGE_STATE:
             self._master = False
@@ -316,22 +318,21 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         qos = cdb.update_qos(tenant_id, qos_id, new_name)
         return qos
 
-    def get_all_credentials(self, tenant_id):
+    def get_all_credentials(self):
         """Get all credentials."""
         LOG.debug(_("get_all_credentials() called"))
-        credential_list = cdb.get_all_credentials(tenant_id)
+        credential_list = cdb.get_all_credentials()
         return credential_list
 
-    def get_credential_details(self, tenant_id, credential_id):
+    def get_credential_details(self, credential_id):
         """Get a particular credential."""
         LOG.debug(_("get_credential_details() called"))
         try:
-            credential = cdb.get_credential(tenant_id, credential_id)
+            credential = cdb.get_credential(credential_id)
         except Exception:
-            raise cexc.CredentialNotFound(tenant_id=tenant_id,
-                                          credential_id=credential_id)
+            raise cexc.CredentialNotFound(credential_id=credential_id)
         return credential
-
+    '''
     def create_credential(self, tenant_id, credential_name, user_name,
                           password):
         """Create a new credential."""
@@ -350,16 +351,15 @@ class PluginV2(db_base_plugin_v2.QuantumDbPluginV2):
                                           credential_id=credential_id)
         credential = cdb.remove_credential(tenant_id, credential_id)
         return credential
-
-    def rename_credential(self, tenant_id, credential_id, new_name):
+    '''
+    def rename_credential(self, credential_id, new_name):
         """Rename the particular credential resource."""
         LOG.debug(_("rename_credential() called"))
         try:
-            credential = cdb.get_credential(tenant_id, credential_id)
+            credential = cdb.get_credential(credential_id)
         except Exception:
-            raise cexc.CredentialNotFound(tenant_id=tenant_id,
-                                          credential_id=credential_id)
-        credential = cdb.update_credential(tenant_id, credential_id, new_name)
+            raise cexc.CredentialNotFound(credential_id=credential_id)
+        credential = cdb.update_credential(credential_id, new_name)
         return credential
 
     def schedule_host(self, tenant_id, instance_id, instance_desc):
