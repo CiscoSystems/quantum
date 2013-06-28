@@ -34,16 +34,15 @@ class Quota(model_base.BASEV2, models_v2.HasId):
 
 
 class DbQuotaDriver(object):
-    """
-    Driver to perform necessary checks to enforce quotas and obtain
-    quota information.  The default driver utilizes the local
-    database.
+    """Driver to perform necessary checks to enforce quotas and obtain quota
+    information.
+
+    The default driver utilizes the local database.
     """
 
     @staticmethod
     def get_tenant_quotas(context, resources, tenant_id):
-        """
-        Given a list of resources, retrieve the quotas for the given
+        """Given a list of resources, retrieve the quotas for the given
         tenant.
 
         :param context: The request context, for access checks.
@@ -58,7 +57,7 @@ class DbQuotaDriver(object):
 
         # update with tenant specific limits
         q_qry = context.session.query(Quota).filter_by(tenant_id=tenant_id)
-        tenant_quota.update((q['resource'], q['limit']) for q in q_qry.all())
+        tenant_quota.update((q['resource'], q['limit']) for q in q_qry)
 
         return tenant_quota
 
@@ -69,29 +68,25 @@ class DbQuotaDriver(object):
         Atfer deletion, this tenant will use default quota values in conf.
         """
         with context.session.begin():
-            tenant_quotas = context.session.query(Quota).filter_by(
-                tenant_id=tenant_id).all()
-            for quota in tenant_quotas:
-                context.session.delete(quota)
+            tenant_quotas = context.session.query(Quota)
+            tenant_quotas = tenant_quotas.filter_by(tenant_id=tenant_id)
+            tenant_quotas.delete()
 
     @staticmethod
     def get_all_quotas(context, resources):
-        """
-        Given a list of resources, retrieve the quotas for the all
-        tenants.
+        """Given a list of resources, retrieve the quotas for the all tenants.
 
         :param context: The request context, for access checks.
         :param resources: A dictionary of the registered resource keys.
         :return quotas: list of dict of tenant_id:, resourcekey1:
         resourcekey2: ...
         """
-
         tenant_default = dict((key, resource.default)
                               for key, resource in resources.items())
 
         all_tenant_quotas = {}
 
-        for quota in context.session.query(Quota).all():
+        for quota in context.session.query(Quota):
             tenant_id = quota['tenant_id']
 
             # avoid setdefault() because only want to copy when actually req'd
@@ -120,7 +115,8 @@ class DbQuotaDriver(object):
                 context.session.add(tenant_quota)
 
     def _get_quotas(self, context, tenant_id, resources, keys):
-        """
+        """Retrieves the quotas for specific resources.
+
         A helper method which retrieves the quotas for the specific
         resources identified by keys, and which apply to the current
         context.
@@ -131,7 +127,6 @@ class DbQuotaDriver(object):
         :param keys: A list of the desired quotas to retrieve.
 
         """
-
         desired = set(keys)
         sub_resources = dict((k, v) for k, v in resources.items()
                              if k in desired)
@@ -143,7 +138,7 @@ class DbQuotaDriver(object):
 
         # Grab and return the quotas (without usages)
         quotas = DbQuotaDriver.get_tenant_quotas(
-            context, sub_resources, context.tenant_id)
+            context, sub_resources, tenant_id)
 
         return dict((k, v) for k, v in quotas.items())
 

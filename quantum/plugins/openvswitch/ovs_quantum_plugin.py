@@ -32,12 +32,15 @@ from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
+from quantum.common import utils
 from quantum.db import agents_db
 from quantum.db import agentschedulers_db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import extraroute_db
+from quantum.db import l3_gwmode_db
 from quantum.db import l3_rpc_base
+from quantum.db import portbindings_db
 from quantum.db import quota_db  # noqa
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.extensions import portbindings
@@ -46,10 +49,10 @@ from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
+from quantum.plugins.common import utils as plugin_utils
 from quantum.plugins.openvswitch.common import config  # noqa
 from quantum.plugins.openvswitch.common import constants
 from quantum.plugins.openvswitch import ovs_db_v2
-from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
@@ -85,11 +88,11 @@ class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return port
 
     def get_device_details(self, rpc_context, **kwargs):
-        """Agent requests device details"""
+        """Agent requests device details."""
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = ovs_db_v2.get_port(device)
         if port:
             binding = ovs_db_v2.get_network_binding(None, port['network_id'])
@@ -110,12 +113,12 @@ class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return entry
 
     def update_device_down(self, rpc_context, **kwargs):
-        """Device no longer exists on agent"""
-        # (TODO) garyk - live migration and port status
+        """Device no longer exists on agent."""
+        # TODO(garyk) - live migration and port status
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = ovs_db_v2.get_port(device)
         if port:
             entry = {'device': device,
@@ -130,11 +133,11 @@ class OVSRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return entry
 
     def update_device_up(self, rpc_context, **kwargs):
-        """Device is up on agent"""
+        """Device is up on agent."""
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s up on %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = ovs_db_v2.get_port(device)
         if port:
             if port['status'] != q_const.PORT_STATUS_ACTIVE:
@@ -212,8 +215,10 @@ class AgentNotifierApi(proxy.RpcProxy,
 
 class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                          extraroute_db.ExtraRoute_db_mixin,
+                         l3_gwmode_db.L3_NAT_db_mixin,
                          sg_db_rpc.SecurityGroupServerRpcMixin,
-                         agentschedulers_db.AgentSchedulerDbMixin):
+                         agentschedulers_db.AgentSchedulerDbMixin,
+                         portbindings_db.PortBindingMixin):
 
     """Implement the Quantum abstractions using Open vSwitch.
 
@@ -239,7 +244,7 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     __native_pagination_support = True
     __native_sorting_support = True
 
-    _supported_extension_aliases = ["provider", "router",
+    _supported_extension_aliases = ["provider", "router", "ext-gw-mode",
                                     "binding", "quotas", "security-group",
                                     "agent", "extraroute", "agent_scheduler"]
 
@@ -251,12 +256,12 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             self._aliases = aliases
         return self._aliases
 
-    network_view = "extension:provider_network:view"
-    network_set = "extension:provider_network:set"
-    binding_view = "extension:port_binding:view"
-    binding_set = "extension:port_binding:set"
-
     def __init__(self, configfile=None):
+        self.extra_binding_dict = {
+            portbindings.VIF_TYPE: portbindings.VIF_TYPE_OVS,
+            portbindings.CAPABILITIES: {
+                portbindings.CAP_PORT_FILTER:
+                'security-group' in self.supported_extension_aliases}}
         ovs_db_v2.initialize()
         self._parse_network_vlan_ranges()
         ovs_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
@@ -299,31 +304,13 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.consume_in_thread()
 
     def _parse_network_vlan_ranges(self):
-        self.network_vlan_ranges = {}
-        for entry in cfg.CONF.OVS.network_vlan_ranges:
-            entry = entry.strip()
-            if ':' in entry:
-                try:
-                    physical_network, vlan_min, vlan_max = entry.split(':')
-                    self._add_network_vlan_range(physical_network.strip(),
-                                                 int(vlan_min),
-                                                 int(vlan_max))
-                except ValueError as ex:
-                    LOG.error(_("Invalid network VLAN range: "
-                                "'%(range)s' - %(e)s. Agent terminated!"),
-                              {'range': entry, 'e': ex})
-                    sys.exit(1)
-            else:
-                self._add_network(entry)
+        try:
+            self.network_vlan_ranges = plugin_utils.parse_network_vlan_ranges(
+                cfg.CONF.OVS.network_vlan_ranges)
+        except Exception as ex:
+            LOG.error(_("%s. Agent terminated!"), ex)
+            sys.exit(1)
         LOG.info(_("Network VLAN ranges: %s"), self.network_vlan_ranges)
-
-    def _add_network_vlan_range(self, physical_network, vlan_min, vlan_max):
-        self._add_network(physical_network)
-        self.network_vlan_ranges[physical_network].append((vlan_min, vlan_max))
-
-    def _add_network(self, physical_network):
-        if physical_network not in self.network_vlan_ranges:
-            self.network_vlan_ranges[physical_network] = []
 
     def _parse_tunnel_id_ranges(self):
         for entry in cfg.CONF.OVS.tunnel_id_ranges:
@@ -338,32 +325,22 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 sys.exit(1)
         LOG.info(_("Tunnel ID ranges: %s"), self.tunnel_id_ranges)
 
-    # TODO(rkukura) Use core mechanism for attribute authorization
-    # when available.
-
-    def _check_view_auth(self, context, resource, action):
-        return policy.check(context, action, resource)
-
-    def _enforce_set_auth(self, context, resource, action):
-        policy.enforce(context, action, resource)
-
     def _extend_network_dict_provider(self, context, network):
-        if self._check_view_auth(context, network, self.network_view):
-            binding = ovs_db_v2.get_network_binding(context.session,
-                                                    network['id'])
-            network[provider.NETWORK_TYPE] = binding.network_type
-            if binding.network_type == constants.TYPE_GRE:
-                network[provider.PHYSICAL_NETWORK] = None
-                network[provider.SEGMENTATION_ID] = binding.segmentation_id
-            elif binding.network_type == constants.TYPE_FLAT:
-                network[provider.PHYSICAL_NETWORK] = binding.physical_network
-                network[provider.SEGMENTATION_ID] = None
-            elif binding.network_type == constants.TYPE_VLAN:
-                network[provider.PHYSICAL_NETWORK] = binding.physical_network
-                network[provider.SEGMENTATION_ID] = binding.segmentation_id
-            elif binding.network_type == constants.TYPE_LOCAL:
-                network[provider.PHYSICAL_NETWORK] = None
-                network[provider.SEGMENTATION_ID] = None
+        binding = ovs_db_v2.get_network_binding(context.session,
+                                                network['id'])
+        network[provider.NETWORK_TYPE] = binding.network_type
+        if binding.network_type == constants.TYPE_GRE:
+            network[provider.PHYSICAL_NETWORK] = None
+            network[provider.SEGMENTATION_ID] = binding.segmentation_id
+        elif binding.network_type == constants.TYPE_FLAT:
+            network[provider.PHYSICAL_NETWORK] = binding.physical_network
+            network[provider.SEGMENTATION_ID] = None
+        elif binding.network_type == constants.TYPE_VLAN:
+            network[provider.PHYSICAL_NETWORK] = binding.physical_network
+            network[provider.SEGMENTATION_ID] = binding.segmentation_id
+        elif binding.network_type == constants.TYPE_LOCAL:
+            network[provider.PHYSICAL_NETWORK] = None
+            network[provider.SEGMENTATION_ID] = None
 
     def _process_provider_create(self, context, attrs):
         network_type = attrs.get(provider.NETWORK_TYPE)
@@ -378,9 +355,6 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 segmentation_id_set):
             return (None, None, None)
 
-        # Authorize before exposing plugin details to client
-        self._enforce_set_auth(context, attrs, self.network_set)
-
         if not network_type_set:
             msg = _("provider:network_type required")
             raise q_exc.InvalidInput(error_message=msg)
@@ -394,9 +368,11 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not segmentation_id_set:
                 msg = _("provider:segmentation_id required")
                 raise q_exc.InvalidInput(error_message=msg)
-            if segmentation_id < 1 or segmentation_id > 4094:
-                msg = _("provider:segmentation_id out of range "
-                        "(1 through 4094)")
+            if not utils.is_valid_vlan_tag(segmentation_id):
+                msg = (_("provider:segmentation_id out of range "
+                         "(%(min_id)s through %(max_id)s)") %
+                       {'min_id': q_const.MIN_VLAN_TAG,
+                        'max_id': q_const.MAX_VLAN_TAG})
                 raise q_exc.InvalidInput(error_message=msg)
         elif network_type == constants.TYPE_GRE:
             if not self.enable_tunneling:
@@ -454,9 +430,6 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if not (network_type_set or physical_network_set or
                 segmentation_id_set):
             return
-
-        # Authorize before exposing plugin details to client
-        self._enforce_set_auth(context, attrs, self.network_set)
 
         msg = _("Plugin does not support updating provider attributes")
         raise q_exc.InvalidInput(error_message=msg)
@@ -556,52 +529,23 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         return [self._fields(net, fields) for net in nets]
 
-    def _extend_port_dict_binding(self, context, port):
-        if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_OVS
-            port[portbindings.CAPABILITIES] = {
-                portbindings.CAP_PORT_FILTER:
-                'security-group' in self.supported_extension_aliases}
-        return port
-
     def create_port(self, context, port):
         # Set port status as 'DOWN'. This will be updated by agent
         port['port']['status'] = q_const.PORT_STATUS_DOWN
+        port_data = port['port']
         session = context.session
         with session.begin(subtransactions=True):
             self._ensure_default_security_group_on_port(context, port)
             sgids = self._get_security_groups_on_port(context, port)
             port = super(OVSQuantumPluginV2, self).create_port(context, port)
-            self._process_port_create_security_group(
-                context, port['id'], sgids)
-            self._extend_port_dict_security_group(context, port)
+            self._process_portbindings_create_and_update(context,
+                                                         port_data, port)
+            self._process_port_create_security_group(context, port, sgids)
         self.notify_security_groups_member_updated(context, port)
-        return self._extend_port_dict_binding(context, port)
-
-    def get_port(self, context, id, fields=None):
-        with context.session.begin(subtransactions=True):
-            port = super(OVSQuantumPluginV2, self).get_port(context,
-                                                            id, fields)
-            self._extend_port_dict_security_group(context, port)
-            self._extend_port_dict_binding(context, port)
-        return self._fields(port, fields)
-
-    def get_ports(self, context, filters=None, fields=None,
-                  sorts=None, limit=None, marker=None,
-                  page_reverse=False):
-        with context.session.begin(subtransactions=True):
-            ports = super(OVSQuantumPluginV2, self).get_ports(
-                context, filters, fields, sorts, limit, marker,
-                page_reverse)
-            #TODO(nati) filter by security group
-            for port in ports:
-                self._extend_port_dict_security_group(context, port)
-                self._extend_port_dict_binding(context, port)
-        return [self._fields(port, fields) for port in ports]
+        return port
 
     def update_port(self, context, id, port):
         session = context.session
-
         need_port_update_notify = False
         with session.begin(subtransactions=True):
             original_port = super(OVSQuantumPluginV2, self).get_port(
@@ -610,10 +554,11 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 context, id, port)
             need_port_update_notify = self.update_security_group_on_port(
                 context, id, port, original_port, updated_port)
-
+            self._process_portbindings_create_and_update(context,
+                                                         port['port'],
+                                                         updated_port)
         need_port_update_notify |= self.is_security_group_member_updated(
             context, original_port, updated_port)
-
         if original_port['admin_state_up'] != updated_port['admin_state_up']:
             need_port_update_notify = True
 
@@ -624,8 +569,7 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                       binding.network_type,
                                       binding.segmentation_id,
                                       binding.physical_network)
-
-        return self._extend_port_dict_binding(context, updated_port)
+        return updated_port
 
     def delete_port(self, context, id, l3_port_check=True):
 

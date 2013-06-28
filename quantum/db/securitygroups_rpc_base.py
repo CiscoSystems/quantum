@@ -63,7 +63,7 @@ class SecurityGroupServerRpcMixin(sg_db.SecurityGroupDbMixin):
 
     def update_security_group_on_port(self, context, id, port,
                                       original_port, updated_port):
-        """ update security groups on port
+        """Update security groups on port.
 
         This method returns a flag which indicates request notification
         is required and does not perform notification itself.
@@ -77,15 +77,17 @@ class SecurityGroupServerRpcMixin(sg_db.SecurityGroupDbMixin):
             self._delete_port_security_group_bindings(context, id)
             self._process_port_create_security_group(
                 context,
-                id,
+                updated_port,
                 port['port'][ext_sg.SECURITYGROUPS])
             need_notify = True
-        self._extend_port_dict_security_group(context, updated_port)
+        else:
+            updated_port[ext_sg.SECURITYGROUPS] = (
+                original_port[ext_sg.SECURITYGROUPS])
         return need_notify
 
     def is_security_group_member_updated(self, context,
                                          original_port, updated_port):
-        """ check security group member updated or not
+        """Check security group member updated or not.
 
         This method returns a flag which indicates request notification
         is required and does not perform notification itself.
@@ -102,7 +104,7 @@ class SecurityGroupServerRpcMixin(sg_db.SecurityGroupDbMixin):
         return need_notify
 
     def notify_security_groups_member_updated(self, context, port):
-        """ notify update event of security group members
+        """Notify update event of security group members.
 
         The agent setups the iptables rule to allow
         ingress packet from the dhcp server (as a part of provider rules),
@@ -120,13 +122,12 @@ class SecurityGroupServerRpcMixin(sg_db.SecurityGroupDbMixin):
 
 
 class SecurityGroupServerRpcCallbackMixin(object):
-    """A mix-in that enable SecurityGroup agent
-
-    support in plugin implementations.
+    """A mix-in that enable SecurityGroup agent support in plugin
+    implementations.
     """
 
     def security_group_rules_for_devices(self, context, **kwargs):
-        """ return security group rules for each port
+        """Return security group rules for each port.
 
         also convert remote_group_id rule
         to source_ip_prefix and dest_ip_prefix rule
@@ -177,8 +178,7 @@ class SecurityGroupServerRpcCallbackMixin(object):
         query = query.join(models_v2.IPAllocation,
                            ip_port == sg_binding_port)
         query = query.filter(sg_binding_sgid.in_(remote_group_ids))
-        ip_in_db = query.all()
-        for security_group_id, ip_address in ip_in_db:
+        for security_group_id, ip_address in query:
             ips_by_group[security_group_id].append(ip_address)
         return ips_by_group
 
@@ -208,7 +208,7 @@ class SecurityGroupServerRpcCallbackMixin(object):
         for network_id in network_ids:
             ips[network_id] = []
 
-        for port, ip in query.all():
+        for port, ip in query:
             ips[port['network_id']].append(ip)
         return ips
 

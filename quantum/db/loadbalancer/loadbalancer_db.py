@@ -22,6 +22,7 @@ from sqlalchemy.orm import exc
 
 from quantum.api.v2 import attributes
 from quantum.common import exceptions as q_exc
+from quantum.db import db_base_plugin_v2 as base_db
 from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.extensions import loadbalancer
@@ -36,6 +37,7 @@ LOG = logging.getLogger(__name__)
 
 
 class SessionPersistence(model_base.BASEV2):
+
     vip_id = sa.Column(sa.String(36),
                        sa.ForeignKey("vips.id"),
                        primary_key=True)
@@ -48,7 +50,8 @@ class SessionPersistence(model_base.BASEV2):
 
 
 class PoolStatistics(model_base.BASEV2):
-    """Represents pool statistics """
+    """Represents pool statistics."""
+
     pool_id = sa.Column(sa.String(36), sa.ForeignKey("pools.id"),
                         primary_key=True)
     bytes_in = sa.Column(sa.Integer, nullable=False)
@@ -59,6 +62,7 @@ class PoolStatistics(model_base.BASEV2):
 
 class Vip(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum loadbalancer vip."""
+
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(255))
     port_id = sa.Column(sa.String(36), sa.ForeignKey('ports.id'))
@@ -78,6 +82,7 @@ class Vip(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class Member(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum loadbalancer member."""
+
     pool_id = sa.Column(sa.String(36), sa.ForeignKey("pools.id"),
                         nullable=False)
     address = sa.Column(sa.String(64), nullable=False)
@@ -89,6 +94,7 @@ class Member(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class Pool(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum loadbalancer pool."""
+
     vip_id = sa.Column(sa.String(36), sa.ForeignKey("vips.id"))
     name = sa.Column(sa.String(255))
     description = sa.Column(sa.String(255))
@@ -115,6 +121,7 @@ class Pool(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class HealthMonitor(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     """Represents a v2 quantum loadbalancer healthmonitor."""
+
     type = sa.Column(sa.Enum("PING", "TCP", "HTTP", "HTTPS",
                              name="healthmontiors_type"),
                      nullable=False)
@@ -127,93 +134,35 @@ class HealthMonitor(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     status = sa.Column(sa.String(16), nullable=False)
     admin_state_up = sa.Column(sa.Boolean(), nullable=False)
 
+    pools = orm.relationship(
+        "PoolMonitorAssociation",
+        backref="healthmonitor",
+        cascade="all"
+    )
+
 
 class PoolMonitorAssociation(model_base.BASEV2):
-    """
-    Represents the many-to-many association between pool and
-    healthMonitor classes
-    """
+    """Many-to-many association between pool and healthMonitor classes."""
+
     pool_id = sa.Column(sa.String(36),
                         sa.ForeignKey("pools.id"),
                         primary_key=True)
     monitor_id = sa.Column(sa.String(36),
                            sa.ForeignKey("healthmonitors.id"),
                            primary_key=True)
-    monitor = orm.relationship("HealthMonitor",
-                               backref="pools_poolmonitorassociations")
 
 
-class LoadBalancerPluginDb(LoadBalancerPluginBase):
-    """
-    A class that wraps the implementation of the Quantum
-    loadbalancer plugin database access interface using SQLAlchemy models.
+class LoadBalancerPluginDb(LoadBalancerPluginBase,
+                           base_db.CommonDbMixin):
+    """Wraps loadbalancer with SQLAlchemy models.
+
+    A class that wraps the implementation of the Quantum loadbalancer
+    plugin database access interface using SQLAlchemy models.
     """
 
     @property
     def _core_plugin(self):
         return manager.QuantumManager.get_plugin()
-
-    # TODO(lcui):
-    # A set of internal facility methods are borrowed from QuantumDbPluginV2
-    # class and hence this is duplicate. We need to pull out those methods
-    # into a seperate class which can be used by both QuantumDbPluginV2 and
-    # this class (and others).
-    def _get_tenant_id_for_create(self, context, resource):
-        if context.is_admin and 'tenant_id' in resource:
-            tenant_id = resource['tenant_id']
-        elif ('tenant_id' in resource and
-              resource['tenant_id'] != context.tenant_id):
-            reason = _('Cannot create resource for another tenant')
-            raise q_exc.AdminRequired(reason=reason)
-        else:
-            tenant_id = context.tenant_id
-        return tenant_id
-
-    def _fields(self, resource, fields):
-        if fields:
-            return dict((key, item) for key, item in resource.iteritems()
-                        if key in fields)
-        return resource
-
-    def _apply_filters_to_query(self, query, model, filters):
-        if filters:
-            for key, value in filters.iteritems():
-                column = getattr(model, key, None)
-                if column:
-                    query = query.filter(column.in_(value))
-        return query
-
-    def _get_collection_query(self, context, model, filters=None):
-        collection = self._model_query(context, model)
-        collection = self._apply_filters_to_query(collection, model, filters)
-        return collection
-
-    def _get_collection(self, context, model, dict_func, filters=None,
-                        fields=None, sorts=None, limit=None, marker_obj=None,
-                        page_reverse=False):
-        query = self._get_collection_query(context, model, filters)
-        return [dict_func(c, fields) for c in query.all()]
-
-    def _get_collection_count(self, context, model, filters=None):
-        return self._get_collection_query(context, model, filters).count()
-
-    def _model_query(self, context, model):
-        query = context.session.query(model)
-        query_filter = None
-        if not context.is_admin and hasattr(model, 'tenant_id'):
-            if hasattr(model, 'shared'):
-                query_filter = ((model.tenant_id == context.tenant_id) |
-                                (model.shared))
-            else:
-                query_filter = (model.tenant_id == context.tenant_id)
-
-        if query_filter is not None:
-            query = query.filter(query_filter)
-        return query
-
-    def _get_by_id(self, context, model, id):
-        query = self._model_query(context, model)
-        return query.filter(model.id == id).one()
 
     def update_status(self, context, model, id, status):
         with context.session.begin(subtransactions=True):
@@ -274,7 +223,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         return self._fields(res, fields)
 
     def _check_session_persistence_info(self, info):
-        """ Performs sanity check on session persistence info.
+        """Performs sanity check on session persistence info.
+
         :param info: Session persistence info
         """
         if info['type'] == 'APP_COOKIE':
@@ -459,7 +409,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         with context.session.begin(subtransactions=True):
             vip = self._get_resource(context, Vip, id)
             qry = context.session.query(Pool)
-            for pool in qry.filter_by(vip_id=id).all():
+            for pool in qry.filter_by(vip_id=id):
                 pool.update({"vip_id": None})
 
             context.session.delete(vip)
@@ -499,15 +449,24 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
 
         return self._fields(res, fields)
 
-    def _create_pool_stats(self, context, pool_id):
+    def _update_pool_stats(self, context, pool_id, data=None):
+        """Update a pool with new stats structure."""
+        with context.session.begin(subtransactions=True):
+            pool_db = self._get_resource(context, Pool, pool_id)
+            self.assert_modification_allowed(pool_db)
+            pool_db.stats = self._create_pool_stats(context, pool_id, data)
+
+    def _create_pool_stats(self, context, pool_id, data=None):
         # This is internal method to add pool statistics. It won't
         # be exposed to API
+        if not data:
+            data = {}
         stats_db = PoolStatistics(
             pool_id=pool_id,
-            bytes_in=0,
-            bytes_out=0,
-            active_connections=0,
-            total_connections=0
+            bytes_in=data.get("bytes_in", 0),
+            bytes_out=data.get("bytes_out", 0),
+            active_connections=data.get("active_connections", 0),
+            total_connections=data.get("total_connections", 0)
         )
         return stats_db
 
@@ -547,6 +506,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
 
         with context.session.begin(subtransactions=True):
             pool_db = self._get_resource(context, Pool, id)
+            self.assert_modification_allowed(pool_db)
             if p:
                 pool_db.update(p)
 
@@ -571,7 +531,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         collection = self._model_query(context, Pool)
         collection = self._apply_filters_to_query(collection, Pool, filters)
         return [self._make_pool_dict(c, fields)
-                for c in collection.all()]
+                for c in collection]
 
     def stats(self, context, pool_id):
         with context.session.begin(subtransactions=True):
@@ -591,12 +551,6 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
         monitor_id = health_monitor['health_monitor']['id']
         with context.session.begin(subtransactions=True):
-            monitor_qry = context.session.query(HealthMonitor)
-            try:
-                monitor = monitor_qry.filter_by(id=monitor_id).one()
-                monitor.update({'pool_id': pool_id})
-            except exc.NoResultFound:
-                raise loadbalancer.HealthMonitorNotFound(monitor_id=monitor_id)
             try:
                 qry = context.session.query(Pool)
                 pool = qry.filter_by(id=pool_id).one()
@@ -605,17 +559,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
 
             assoc = PoolMonitorAssociation(pool_id=pool_id,
                                            monitor_id=monitor_id)
-            assoc.monitor = monitor
             pool.monitors.append(assoc)
-
-        monitors = []
-        try:
-            qry = context.session.query(Pool)
-            pool = qry.filter_by(id=pool_id).one()
-            for monitor in pool['monitors']:
-                monitors.append(monitor['monitor_id'])
-        except exc.NoResultFound:
-            pass
+            monitors = [monitor['monitor_id'] for monitor in pool['monitors']]
 
         res = {"health_monitor": monitors}
         return res
@@ -680,6 +625,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         v = member['member']
         with context.session.begin(subtransactions=True):
             member_db = self._get_resource(context, Member, id)
+            self.assert_modification_allowed(member_db)
             if v:
                 member_db.update(v)
 
@@ -740,20 +686,13 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase):
         v = health_monitor['health_monitor']
         with context.session.begin(subtransactions=True):
             monitor_db = self._get_resource(context, HealthMonitor, id)
+            self.assert_modification_allowed(monitor_db)
             if v:
                 monitor_db.update(v)
         return self._make_health_monitor_dict(monitor_db)
 
     def delete_health_monitor(self, context, id):
         with context.session.begin(subtransactions=True):
-            assoc_qry = context.session.query(PoolMonitorAssociation)
-            pool_qry = context.session.query(Pool)
-            for assoc in assoc_qry.filter_by(monitor_id=id).all():
-                try:
-                    pool = pool_qry.filter_by(id=assoc['pool_id']).one()
-                except exc.NoResultFound:
-                    raise loadbalancer.PoolNotFound(pool_id=pool['id'])
-                pool.monitors.remove(assoc)
             monitor_db = self._get_resource(context, HealthMonitor, id)
             context.session.delete(monitor_db)
 

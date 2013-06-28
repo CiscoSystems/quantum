@@ -22,15 +22,15 @@ import webtest
 
 from quantum.api import extensions
 from quantum.api.extensions import PluginAwareExtensionManager
+from quantum.api.v2 import attributes
 from quantum.common import config
 from quantum.common.test_lib import test_config
 from quantum import context
 from quantum.db import api as db_api
 from quantum.db import db_base_plugin_v2
 from quantum import manager
-from quantum.plugins.nicira.nicira_nvp_plugin.extensions import (nvp_networkgw
-                                                                 as networkgw)
-from quantum.plugins.nicira.nicira_nvp_plugin import nicira_networkgw_db
+from quantum.plugins.nicira.extensions import nvp_networkgw as networkgw
+from quantum.plugins.nicira import nicira_networkgw_db
 from quantum.tests import base
 from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_db_plugin
@@ -44,6 +44,12 @@ _get_path = test_api_v2._get_path
 class TestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            networkgw.RESOURCE_ATTRIBUTE_MAP)
         return networkgw.Nvp_networkgw.get_resources()
 
     def get_actions(self):
@@ -103,6 +109,27 @@ class NetworkGatewayExtensionTestCase(base.BaseTestCase):
         self.assertTrue(self._resource in res.json)
         nw_gw = res.json[self._resource]
         self.assertEqual(nw_gw['id'], nw_gw_id)
+
+    def _test_network_gateway_create_with_error(
+        self, data, error_code=exc.HTTPBadRequest.code):
+        res = self.api.post_json(_get_path(networkgw.COLLECTION_NAME), data,
+                                 expect_errors=True)
+        self.assertEqual(res.status_int, error_code)
+
+    def test_network_gateway_create_invalid_device_spec(self):
+        data = {self._resource: {'name': 'nw-gw',
+                                 'tenant_id': _uuid(),
+                                 'devices': [{'id': _uuid(),
+                                              'invalid': 'xxx'}]}}
+        self._test_network_gateway_create_with_error(data)
+
+    def test_network_gateway_create_extra_attr_in_device_spec(self):
+        data = {self._resource: {'name': 'nw-gw',
+                                 'tenant_id': _uuid(),
+                                 'devices': [{'id': _uuid(),
+                                              'interface_name': 'xxx',
+                                              'extra_attr': 'onetoomany'}]}}
+        self._test_network_gateway_create_with_error(data)
 
     def test_network_gateway_update(self):
         nw_gw_name = 'updated'
@@ -210,7 +237,7 @@ class NetworkGatewayExtensionTestCase(base.BaseTestCase):
 
 
 class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
-    """ Unit tests for Network Gateway DB support """
+    """Unit tests for Network Gateway DB support."""
 
     def setUp(self):
         test_config['plugin_name_v2'] = '%s.%s' % (
@@ -317,8 +344,8 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
         session = db_api.get_session()
         gw_query = session.query(nicira_networkgw_db.NetworkGateway)
         dev_query = session.query(nicira_networkgw_db.NetworkGatewayDevice)
-        self.assertEqual(exp_gw_count, len(gw_query.all()))
-        self.assertEqual(0, len(dev_query.all()))
+        self.assertEqual(exp_gw_count, gw_query.count())
+        self.assertEqual(0, dev_query.count())
 
     def test_delete_network_gateway(self):
         self._test_delete_network_gateway()
@@ -352,6 +379,45 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                  gw1[self.resource]['name'])
                 self.assertEqual(res[key][1]['name'],
                                  gw2[self.resource]['name'])
+
+    def _test_list_network_gateway_with_multiple_connections(
+        self, expected_gateways=1):
+        with self._network_gateway() as gw:
+            with self.network() as net_1:
+                self._gateway_action('connect',
+                                     gw[self.resource]['id'],
+                                     net_1['network']['id'],
+                                     'vlan', 555)
+                self._gateway_action('connect',
+                                     gw[self.resource]['id'],
+                                     net_1['network']['id'],
+                                     'vlan', 777)
+                req = self.new_list_request(networkgw.COLLECTION_NAME)
+                res = self.deserialize('json', req.get_response(self.ext_api))
+                key = self.resource + 's'
+                self.assertEqual(len(res[key]), expected_gateways)
+                for item in res[key]:
+                    self.assertIn('ports', item)
+                    if item['id'] == gw[self.resource]['id']:
+                        gw_ports = item['ports']
+                self.assertEqual(len(gw_ports), 2)
+                segmentation_ids = [555, 777]
+                for gw_port in gw_ports:
+                    self.assertEqual('vlan', gw_port['segmentation_type'])
+                    self.assertIn(gw_port['segmentation_id'], segmentation_ids)
+                    segmentation_ids.remove(gw_port['segmentation_id'])
+                # Required cleanup
+                self._gateway_action('disconnect',
+                                     gw[self.resource]['id'],
+                                     net_1['network']['id'],
+                                     'vlan', 555)
+                self._gateway_action('disconnect',
+                                     gw[self.resource]['id'],
+                                     net_1['network']['id'],
+                                     'vlan', 777)
+
+    def test_list_network_gateway_with_multiple_connections(self):
+        self._test_list_network_gateway_with_multiple_connections()
 
     def test_connect_and_disconnect_network(self):
         self._test_connect_and_disconnect_network('flat')
@@ -435,6 +501,35 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                                      'vlan', 555,
                                      expected_status=exc.HTTPBadRequest.code)
 
+    def test_connect_network_does_not_waste_ips(self):
+        # Ensure address is immediately recycled
+        cfg.CONF.set_override('dhcp_lease_duration', -1)
+        with self._network_gateway() as gw:
+            with self.network() as net:
+                with self.subnet(network=net) as sub:
+                    with self.port(subnet=sub) as port_1:
+                        expected_ips = port_1['port']['fixed_ips']
+                    # port_1 has now been deleted
+                    body = self._gateway_action('connect',
+                                                gw[self.resource]['id'],
+                                                net['network']['id'],
+                                                'flat')
+                    gw_port_id = body['connection_info']['port_id']
+                    gw_port_body = self._show('ports', gw_port_id)
+                    self.assertEqual(gw[self.resource]['id'],
+                                     gw_port_body['port']['device_id'])
+                    self.assertEqual([], gw_port_body['port']['fixed_ips'])
+                    # Verify a new port gets same address as port_1
+                    # This will confirm the gateway port did not waste an ip
+                    with self.port(subnet=sub) as port_2:
+                        self.assertEqual(expected_ips,
+                                         port_2['port']['fixed_ips'])
+                    # Clean up - otherwise delete will fail
+                    self._gateway_action('disconnect',
+                                         gw[self.resource]['id'],
+                                         net['network']['id'],
+                                         'flat')
+
     def test_disconnect_network_ambiguous_returns_409(self):
         with self._network_gateway() as gw:
             with self.network() as net_1:
@@ -512,7 +607,7 @@ class NetworkGatewayDbTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
 
 class TestNetworkGatewayPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                nicira_networkgw_db.NetworkGatewayMixin):
-    """ Simple plugin class for testing db support for network gateway ext """
+    """Simple plugin class for testing db support for network gateway ext."""
 
     supported_extension_aliases = ["network-gateway"]
 

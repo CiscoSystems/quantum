@@ -65,7 +65,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.topology_name = cfg.CONF.PLUMgridNOS.topologyname
         self.snippets = plumgrid_nos_snippets.DataNOSPLUMgrid()
 
-        # TODO: (Edgar) These are placeholders for next PLUMgrid release
+        # TODO(Edgar) These are placeholders for next PLUMgrid release
         cfg.CONF.PLUMgridNOS.username
         cfg.CONF.PLUMgridNOS.password
         self.rest_conn = rest_connection.RestConnection(nos_plumgrid,
@@ -88,9 +88,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                         'PLUMgrid Plugin has started'))
 
     def create_network(self, context, network):
-        """
-        Create network core Quantum API
-        """
+        """Create network core Quantum API."""
 
         LOG.debug(_('QuantumPluginPLUMgrid Status: create_network() called'))
 
@@ -104,15 +102,20 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                                                                       network)
 
             try:
-                LOG.debug(_('QuantumPluginPLUMgrid Status: %s, %s, %s'),
-                          tenant_id, network["network"], net["id"])
+                LOG.debug(_('QuantumPluginPLUMgrid Status: %(tenant_id)s, '
+                            '%(network)s, %(network_id)s'),
+                          dict(
+                              tenant_id=tenant_id,
+                              network=network["network"],
+                              network_id=net["id"],
+                          ))
                 nos_url = self.snippets.BASE_NOS_URL + net["id"]
                 headers = {}
                 body_data = self.snippets.create_domain_body_data(tenant_id)
                 self.rest_conn.nos_rest_conn(nos_url,
                                              'PUT', body_data, headers)
 
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
@@ -121,9 +124,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         return net
 
     def update_network(self, context, net_id, network):
-        """
-        Update network core Quantum API
-        """
+        """Update network core Quantum API."""
 
         LOG.debug(_("QuantumPluginPLUMgridV2.update_network() called"))
         self._network_admin_state(network)
@@ -146,7 +147,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                 body_data = self.snippets.create_domain_body_data(tenant_id)
                 self.rest_conn.nos_rest_conn(nos_url,
                                              'PUT', body_data, headers)
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
@@ -155,9 +156,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         return new_network
 
     def delete_network(self, context, net_id):
-        """
-        Delete network core Quantum API
-        """
+        """Delete network core Quantum API."""
         LOG.debug(_("QuantumPluginPLUMgrid Status: delete_network() called"))
         super(QuantumPluginPLUMgridV2, self).get_network(context, net_id)
 
@@ -172,15 +171,13 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                 body_data = {}
                 self.rest_conn.nos_rest_conn(nos_url,
                                              'DELETE', body_data, headers)
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
 
     def create_port(self, context, port):
-        """
-        Create port core Quantum API
-        """
+        """Create port core Quantum API."""
         LOG.debug(_("QuantumPluginPLUMgrid Status: create_port() called"))
 
         # Port operations on PLUMgrid NOS is an automatic operation from the
@@ -192,10 +189,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                                                                 port)
 
     def update_port(self, context, port_id, port):
-        """
-        Update port core Quantum API
-
-        """
+        """Update port core Quantum API."""
         LOG.debug(_("QuantumPluginPLUMgrid Status: update_port() called"))
 
         # Port operations on PLUMgrid NOS is an automatic operation from the
@@ -206,9 +200,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
             context, port_id, port)
 
     def delete_port(self, context, port_id):
-        """
-        Delete port core Quantum API
-        """
+        """Delete port core Quantum API."""
 
         LOG.debug(_("QuantumPluginPLUMgrid Status: delete_port() called"))
 
@@ -219,9 +211,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         super(QuantumPluginPLUMgridV2, self).delete_port(context, port_id)
 
     def create_subnet(self, context, subnet):
-        """
-        Create subnet core Quantum API
-        """
+        """Create subnet core Quantum API."""
 
         LOG.debug(_("QuantumPluginPLUMgrid Status: create_subnet() called"))
 
@@ -240,7 +230,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                     tenant_id, self.topology_name)
                 self.rest_conn.nos_rest_conn(nos_url,
                                              'PUT', body_data, headers)
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed: ")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
@@ -248,9 +238,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         return subnet
 
     def delete_subnet(self, context, subnet_id):
-        """
-        Delete subnet core Quantum API
-        """
+        """Delete subnet core Quantum API."""
 
         LOG.debug(_("QuantumPluginPLUMgrid Status: delete_subnet() called"))
         #Collecting subnet info
@@ -265,7 +253,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                 body_data = {}
                 net_id = subnet_details["network_id"]
                 self._cleaning_nos_subnet_structure(body_data, headers, net_id)
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed: ")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
@@ -273,9 +261,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
         return del_subnet
 
     def update_subnet(self, context, subnet_id, subnet):
-        """
-        Update subnet core Quantum API
-        """
+        """Update subnet core Quantum API."""
 
         LOG.debug(_("update_subnet() called"))
         #Collecting subnet info
@@ -299,7 +285,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                 self.rest_conn.nos_rest_conn(nos_url,
                                              'PUT', body_data, headers)
 
-            except:
+            except Exception:
                 err_message = _("PLUMgrid NOS communication failed: ")
                 LOG.Exception(err_message)
                 raise plum_excep.PLUMgridException(err_message)
@@ -309,7 +295,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
     """
     Extension API implementation
     """
-    # TODO: (Edgar) Complete extensions for PLUMgrid
+    # TODO(Edgar) Complete extensions for PLUMgrid
 
     """
     Internal PLUMgrid fuctions
@@ -332,7 +318,7 @@ class QuantumPluginPLUMgridV2(db_base_plugin_v2.QuantumDbPluginV2):
                     LOG.warning(_("Network with admin_state_up=False are not "
                                   "supported yet by this plugin. Ignoring "
                                   "setting for network %s"), network_name)
-        except:
+        except Exception:
             err_message = _("Network Admin State Validation Falied: ")
             LOG.Exception(err_message)
             raise plum_excep.PLUMgridException(err_message)

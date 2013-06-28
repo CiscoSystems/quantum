@@ -72,7 +72,7 @@ class MultipleAgentFoundByTypeHost(exceptions.Conflict):
 
 
 class Agent(object):
-    """Agent management extension"""
+    """Agent management extension."""
 
     @classmethod
     def get_name(cls):
@@ -96,7 +96,7 @@ class Agent(object):
 
     @classmethod
     def get_resources(cls):
-        """ Returns Ext Resources """
+        """Returns Ext Resources."""
         my_plurals = [(key, key[:-1]) for key in RESOURCE_ATTRIBUTE_MAP.keys()]
         attr.PLURALS.update(dict(my_plurals))
         plugin = manager.QuantumManager.get_plugin()
@@ -112,17 +112,20 @@ class Agent(object):
         return [ex]
 
     def get_extended_resources(self, version):
-        return {}
+        if version == "2.0":
+            return RESOURCE_ATTRIBUTE_MAP
+        else:
+            return {}
 
 
 class AgentPluginBase(object):
-    """ REST API to operate the Agent.
+    """REST API to operate the Agent.
 
     All of method must be in an admin context.
     """
 
     def create_agent(self, context, agent):
-        """ Create agent.
+        """Create agent.
 
         This operation is not allow in REST API.
         @raise exceptions.BadRequest:
@@ -132,6 +135,7 @@ class AgentPluginBase(object):
     @abstractmethod
     def delete_agent(self, context, id):
         """Delete agent.
+
         Agents register themselves on reporting state.
         But if a agent does not report its status
         for a long time (for example, it is dead for ever. ),
@@ -143,11 +147,9 @@ class AgentPluginBase(object):
     @abstractmethod
     def update_agent(self, context, agent):
         """Disable or Enable the agent.
-        Discription also can be updated.
 
-        Some agents cannot be disabled,
-        such as plugins, services.
-        An error code should be reported in this case.
+        Discription also can be updated. Some agents cannot be disabled, such
+        as plugins, services. An error code should be reported in this case.
         @raise exceptions.BadRequest:
         """
         pass

@@ -15,7 +15,9 @@
 #    under the License.
 # @author: Dan Wendlandt, Nicira, Inc.
 
+import mock
 import mox
+import testtools
 
 from quantum.agent.linux import ovs_lib, utils
 from quantum.openstack.common import uuidutils
@@ -23,8 +25,8 @@ from quantum.tests import base
 
 
 class OVS_Lib_Test(base.BaseTestCase):
-    """
-    A test suite to excercise the OVS libraries shared by Quantum agents.
+    """A test suite to excercise the OVS libraries shared by Quantum agents.
+
     Note: these tests do not actually execute ovs-* utilities, and thus
     can run on any system.  That does, however, limit their scope.
     """
@@ -41,7 +43,7 @@ class OVS_Lib_Test(base.BaseTestCase):
         self.addCleanup(self.mox.UnsetStubs)
 
     def test_vifport(self):
-        """create and stringify vif port, confirm no exceptions"""
+        """Create and stringify vif port, confirm no exceptions."""
         self.mox.ReplayAll()
 
         pname = "vif1.0"
@@ -344,3 +346,14 @@ class OVS_Lib_Test(base.BaseTestCase):
         self.mox.ReplayAll()
         self.assertEqual(ovs_lib.get_bridges(root_helper), bridges)
         self.mox.VerifyAll()
+
+    def test_get_local_port_mac_succeeds(self):
+        with mock.patch('quantum.agent.linux.ip_lib.IpLinkCommand',
+                        return_value=mock.Mock(address='foo')):
+            self.assertEqual('foo', self.br.get_local_port_mac())
+
+    def test_get_local_port_mac_raises_exception_for_missing_mac(self):
+        with mock.patch('quantum.agent.linux.ip_lib.IpLinkCommand',
+                        return_value=mock.Mock(address=None)):
+            with testtools.ExpectedException(Exception):
+                self.br.get_local_port_mac()

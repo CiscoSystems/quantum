@@ -22,6 +22,7 @@ from webob import exc
 import webtest
 
 from quantum.api import extensions
+from quantum.api.v2 import attributes
 from quantum.common import config
 from quantum.extensions import loadbalancer
 from quantum import manager
@@ -39,6 +40,12 @@ _get_path = test_api_v2._get_path
 class LoadBalancerTestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            loadbalancer.RESOURCE_ATTRIBUTE_MAP)
         return loadbalancer.Loadbalancer.get_resources()
 
     def get_actions(self):
@@ -172,7 +179,7 @@ class LoadBalancerExtensionTestCase(testlib_api.WebTestCase):
         self.assertEqual(res['vip'], return_value)
 
     def _test_entity_delete(self, entity):
-        """ does the entity deletion based on naming convention  """
+        """Does the entity deletion based on naming convention."""
         entity_id = _uuid()
         res = self.api.delete(_get_path('lb/' + entity + 's', id=entity_id,
                                         fmt=self.fmt))

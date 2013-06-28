@@ -21,6 +21,7 @@ import time
 from oslo.config import cfg
 from webob import exc
 
+from quantum.api.v2 import attributes
 from quantum.common import constants
 from quantum.common.test_lib import test_config
 from quantum.common import topics
@@ -43,11 +44,18 @@ L3_HOSTA = 'hosta'
 DHCP_HOSTA = 'hosta'
 L3_HOSTB = 'hostb'
 DHCP_HOSTC = 'hostc'
+DHCP_HOST1 = 'host1'
 
 
 class AgentTestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attributes.RESOURCE_ATTRIBUTE_MAP.update(
+            agent.RESOURCE_ATTRIBUTE_MAP)
         return agent.Agent.get_resources()
 
     def get_actions(self):
@@ -117,6 +125,22 @@ class AgentDBTestMixIn(object):
                               time=timeutils.strtime())
         return [l3_hosta, l3_hostb, dhcp_hosta, dhcp_hostc]
 
+    def _register_one_dhcp_agent(self):
+        """Register one DHCP agent."""
+        dhcp_host = {
+            'binary': 'quantum-dhcp-agent',
+            'host': DHCP_HOST1,
+            'topic': 'DHCP_AGENT',
+            'configurations': {'dhcp_driver': 'dhcp_driver',
+                               'use_namespaces': True,
+                               },
+            'agent_type': constants.AGENT_TYPE_DHCP}
+        callback = agents_db.AgentExtRpcCallback()
+        callback.report_state(self.adminContext,
+                              agent_state={'agent_state': dhcp_host},
+                              time=timeutils.strtime())
+        return [dhcp_host]
+
 
 class AgentDBTestCase(AgentDBTestMixIn,
                       test_db_plugin.QuantumDbPluginV2TestCase):
@@ -128,9 +152,19 @@ class AgentDBTestCase(AgentDBTestMixIn,
             'quantum.tests.unit.test_agent_ext_plugin.TestAgentPlugin')
         # for these tests we need to enable overlapping ips
         cfg.CONF.set_default('allow_overlapping_ips', True)
+        # Save the original RESOURCE_ATTRIBUTE_MAP
+        self.saved_attr_map = {}
+        for resource, attrs in attributes.RESOURCE_ATTRIBUTE_MAP.iteritems():
+            self.saved_attr_map[resource] = attrs.copy()
         ext_mgr = AgentTestExtensionManager()
         test_config['extension_manager'] = ext_mgr
+        self.addCleanup(self.restore_resource_attribute_map)
+        self.addCleanup(cfg.CONF.reset)
         super(AgentDBTestCase, self).setUp()
+
+    def restore_resource_attribute_map(self):
+        # Restore the originak RESOURCE_ATTRIBUTE_MAP
+        attributes.RESOURCE_ATTRIBUTE_MAP = self.saved_attr_map
 
     def test_create_agent(self):
         data = {'agent': {}}

@@ -25,7 +25,7 @@ from quantum.plugins.nec import ofc_driver_base
 
 
 class PFCDriverBase(ofc_driver_base.OFCDriverBase):
-    """Base Class for PDC Drivers
+    """Base Class for PDC Drivers.
 
     PFCDriverBase provides methods to handle PFC resources through REST API.
     This uses ofc resource path instead of ofc resource ID.
@@ -45,11 +45,11 @@ class PFCDriverBase(ofc_driver_base.OFCDriverBase):
         return False
 
     def _generate_pfc_str(self, raw_str):
-        """Generate PFC acceptable String"""
+        """Generate PFC acceptable String."""
         return re.sub(r'[^0-9a-zA-Z]', '_', raw_str)
 
     def _generate_pfc_id(self, id_str):
-        """Generate ID on PFC
+        """Generate ID on PFC.
 
         Currently, PFC ID must be less than 32.
         Shorten UUID string length from 36 to 31 by follows:
@@ -63,11 +63,11 @@ class PFCDriverBase(ofc_driver_base.OFCDriverBase):
             uuid_str = str(uuid.UUID(id_str)).replace('-', '')
             uuid_no_version = uuid_str[:12] + uuid_str[13:]
             return uuid_no_version[:31]
-        except:
+        except Exception:
             return self._generate_pfc_str(id_str)[:31]
 
     def _generate_pfc_description(self, desc):
-        """Generate Description on PFC
+        """Generate Description on PFC.
 
         Currently, PFC Description must be less than 128.
         """

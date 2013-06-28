@@ -19,10 +19,10 @@ import mock
 import os
 
 from quantum.openstack.common import jsonutils as json
-import quantum.plugins.nicira.nicira_nvp_plugin as nvp_plugin
-from quantum.plugins.nicira.nicira_nvp_plugin import nvp_cluster
-from quantum.plugins.nicira.nicira_nvp_plugin import NvpApiClient
-from quantum.plugins.nicira.nicira_nvp_plugin import nvplib
+import quantum.plugins.nicira as nvp_plugin
+from quantum.plugins.nicira import nvp_cluster
+from quantum.plugins.nicira import NvpApiClient
+from quantum.plugins.nicira import nvplib
 from quantum.tests import base
 from quantum.tests.unit.nicira import fake_nvpapiclient
 from quantum.tests.unit import test_api_v2
@@ -46,13 +46,13 @@ class NvplibTestCase(base.BaseTestCase):
             return self.fc.fake_request(*args, **kwargs)
 
         instance.return_value.request.side_effect = _fake_request
-        self.fake_cluster = nvp_cluster.NVPCluster('fake-cluster')
-        self.fake_cluster.add_controller('1.1.1.1', '999', 'foo', 'bar',
-                                         9, 9, 9, 9, _uuid())
+        self.fake_cluster = nvp_cluster.NVPCluster(
+            name='fake-cluster', nvp_controllers=['1.1.1.1:999'],
+            default_tz_uuid=_uuid(), nvp_user='foo', nvp_password='bar')
         self.fake_cluster.api_client = NvpApiClient.NVPApiHelper(
             ('1.1.1.1', '999', True),
-            self.fake_cluster.user, self.fake_cluster.password,
-            self.fake_cluster.request_timeout, self.fake_cluster.http_timeout,
+            self.fake_cluster.nvp_user, self.fake_cluster.nvp_password,
+            self.fake_cluster.req_timeout, self.fake_cluster.http_timeout,
             self.fake_cluster.retries, self.fake_cluster.redirects)
 
         super(NvplibTestCase, self).setUp()

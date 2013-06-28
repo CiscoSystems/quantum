@@ -34,7 +34,7 @@ cfg.CONF.register_opt(
 
 
 class Agent(model_base.BASEV2, models_v2.HasId):
-    """Represents agents running in quantum deployments"""
+    """Represents agents running in quantum deployments."""
 
     # L3 agent, DHCP agent, OVS agent, LinuxBridge
     agent_type = sa.Column(sa.String(255), nullable=False)
@@ -158,11 +158,12 @@ class AgentDbMixin(ext_agent.AgentPluginBase):
 
 class AgentExtRpcCallback(object):
     """Processes the rpc report in plugin implementations."""
+
     RPC_API_VERSION = '1.0'
     START_TIME = timeutils.utcnow()
 
     def report_state(self, context, **kwargs):
-        """Report state from agent to server. """
+        """Report state from agent to server."""
         time = kwargs['time']
         time = timeutils.parse_strtime(time)
         if self.START_TIME > time:

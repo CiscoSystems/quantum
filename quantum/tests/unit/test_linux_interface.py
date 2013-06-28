@@ -152,6 +152,11 @@ class TestOVSInterfaceDriver(TestBase):
 
         self.ip.assert_has_calls(expected)
 
+    def test_mtu_int(self):
+        self.assertIsNone(self.conf.network_device_mtu)
+        self.conf.set_override('network_device_mtu', 9000)
+        self.assertEqual(self.conf.network_device_mtu, 9000)
+
     def test_plug_mtu(self):
         self.conf.set_override('network_device_mtu', 9000)
         self._test_plug([mock.call().device().link.set_mtu(9000)])
@@ -195,12 +200,11 @@ class TestOVSInterfaceDriverWithVeth(TestOVSInterfaceDriver):
         self.device_exists.side_effect = device_exists
 
         root_dev = mock.Mock()
-        _ns_dev = mock.Mock()
         ns_dev = mock.Mock()
-        self.ip().add_veth = mock.Mock(return_value=(root_dev, _ns_dev))
-        self.ip().device = mock.Mock(return_value=(ns_dev))
-        expected = [mock.call('sudo'), mock.call().add_veth('tap0', devname),
-                    mock.call().device(devname)]
+        self.ip().add_veth = mock.Mock(return_value=(root_dev, ns_dev))
+        expected = [mock.call('sudo'),
+                    mock.call().add_veth('tap0', devname,
+                                         namespace2=namespace)]
 
         vsctl_cmd = ['ovs-vsctl', '--', '--may-exist', 'add-port',
                      bridge, 'tap0', '--', 'set', 'Interface', 'tap0',
@@ -224,11 +228,6 @@ class TestOVSInterfaceDriverWithVeth(TestOVSInterfaceDriver):
         if mtu:
             ns_dev.assert_has_calls([mock.call.link.set_mtu(mtu)])
             root_dev.assert_has_calls([mock.call.link.set_mtu(mtu)])
-        if namespace:
-            expected.extend(
-                [mock.call().ensure_namespace(namespace),
-                 mock.call().ensure_namespace().add_device_to_namespace(
-                     mock.ANY)])
 
         self.ip.assert_has_calls(expected)
         root_dev.assert_has_calls([mock.call.link.set_up()])
@@ -280,13 +279,9 @@ class TestBridgeInterfaceDriver(TestBase):
                 mac_address,
                 namespace=namespace)
 
-        ip_calls = [mock.call('sudo'), mock.call().add_veth('tap0', 'ns-0')]
+        ip_calls = [mock.call('sudo'),
+                    mock.call().add_veth('tap0', 'ns-0', namespace2=namespace)]
         ns_veth.assert_has_calls([mock.call.link.set_address(mac_address)])
-        if namespace:
-            ip_calls.extend([
-                mock.call().ensure_namespace('01234567-1234-1234-99'),
-                mock.call().ensure_namespace().add_device_to_namespace(
-                    ns_veth)])
         if mtu:
             ns_veth.assert_has_calls([mock.call.link.set_mtu(mtu)])
             root_veth.assert_has_calls([mock.call.link.set_mtu(mtu)])
@@ -399,3 +394,79 @@ class TestMetaInterfaceDriver(TestBase):
             namespace=namespace)
         self.ip_dev.assert_has_calls(expected)
         self.assertEquals('fake1', plugin_tag1)
+
+
+class TestIVSInterfaceDriver(TestBase):
+
+    def setUp(self):
+        super(TestIVSInterfaceDriver, self).setUp()
+
+    def test_get_device_name(self):
+        br = interface.IVSInterfaceDriver(self.conf)
+        device_name = br.get_device_name(FakePort())
+        self.assertEqual('ns-abcdef01-12', device_name)
+
+    def test_plug_with_prefix(self):
+        self._test_plug(devname='qr-0', prefix='qr-')
+
+    def _test_plug(self, devname=None, namespace=None,
+                   prefix=None, mtu=None):
+
+        if not devname:
+            devname = 'ns-0'
+
+        def device_exists(dev, root_helper=None, namespace=None):
+            return dev == 'indigo'
+
+        ivs = interface.IVSInterfaceDriver(self.conf)
+        self.device_exists.side_effect = device_exists
+
+        root_dev = mock.Mock()
+        _ns_dev = mock.Mock()
+        ns_dev = mock.Mock()
+        self.ip().add_veth = mock.Mock(return_value=(root_dev, _ns_dev))
+        self.ip().device = mock.Mock(return_value=(ns_dev))
+        expected = [mock.call('sudo'), mock.call().add_veth('tap0', devname),
+                    mock.call().device(devname)]
+
+        ivsctl_cmd = ['ivs-ctl', 'add-port', 'tap0']
+
+        with mock.patch.object(utils, 'execute') as execute:
+            ivs.plug('01234567-1234-1234-99',
+                     'port-1234',
+                     devname,
+                     'aa:bb:cc:dd:ee:ff',
+                     namespace=namespace,
+                     prefix=prefix)
+            execute.assert_called_once_with(ivsctl_cmd, 'sudo')
+
+        ns_dev.assert_has_calls(
+            [mock.call.link.set_address('aa:bb:cc:dd:ee:ff')])
+        if mtu:
+            ns_dev.assert_has_calls([mock.call.link.set_mtu(mtu)])
+            root_dev.assert_has_calls([mock.call.link.set_mtu(mtu)])
+        if namespace:
+            expected.extend(
+                [mock.call().ensure_namespace(namespace),
+                 mock.call().ensure_namespace().add_device_to_namespace(
+                     mock.ANY)])
+
+        self.ip.assert_has_calls(expected)
+        root_dev.assert_has_calls([mock.call.link.set_up()])
+        ns_dev.assert_has_calls([mock.call.link.set_up()])
+
+    def test_plug_mtu(self):
+        self.conf.set_override('network_device_mtu', 9000)
+        self._test_plug(mtu=9000)
+
+    def test_plug_namespace(self):
+        self._test_plug(namespace='mynamespace')
+
+    def test_unplug(self):
+        ivs = interface.IVSInterfaceDriver(self.conf)
+        ivsctl_cmd = ['ivs-ctl', 'del-port', 'tap0']
+        with mock.patch.object(utils, 'execute') as execute:
+            ivs.unplug('ns-0')
+            execute.assert_called_once_with(ivsctl_cmd, 'sudo')
+            self.ip_dev.assert_has_calls([mock.call('ns-0', 'sudo', None),
+                                          mock.call().link.delete()])

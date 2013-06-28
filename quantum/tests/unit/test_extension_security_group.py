@@ -40,6 +40,12 @@ def etcdir(*p):
 class SecurityGroupTestExtensionManager(object):
 
     def get_resources(self):
+        # Add the resources to the global attribute map
+        # This is done here as the setup process won't
+        # initialize the main API router which extends
+        # the global attribute map
+        attr.RESOURCE_ATTRIBUTE_MAP.update(
+            ext_sg.RESOURCE_ATTRIBUTE_MAP)
         return ext_sg.Securitygroup.get_resources()
 
     def get_actions(self):
@@ -148,7 +154,7 @@ class SecurityGroupsTestCase(test_db_plugin.QuantumDbPluginV2TestCase):
                              security_group_rule['security_group_rule']['id'])
 
     def _delete_default_security_group_egress_rules(self, security_group_id):
-        """Deletes default egress rules given a security group ID"""
+        """Deletes default egress rules given a security group ID."""
         res = self._list(
             'security-group-rules',
             query_params='security_group_id=%s' % security_group_id)
@@ -173,7 +179,7 @@ class SecurityGroupsTestCaseXML(SecurityGroupsTestCase):
 
 class SecurityGroupTestPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                               securitygroups_db.SecurityGroupDbMixin):
-    """ Test plugin that implements necessary calls on create/delete port for
+    """Test plugin that implements necessary calls on create/delete port for
     associating ports with security groups.
     """
 
@@ -192,9 +198,8 @@ class SecurityGroupTestPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             sgids = self._get_security_groups_on_port(context, port)
             port = super(SecurityGroupTestPlugin, self).create_port(context,
                                                                     port)
-            self._process_port_create_security_group(context, port['id'],
+            self._process_port_create_security_group(context, port,
                                                      sgids)
-            self._extend_port_dict_security_group(context, port)
         return port
 
     def update_port(self, context, id, port):
@@ -205,11 +210,12 @@ class SecurityGroupTestPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                     self._get_security_groups_on_port(context, port))
                 # delete the port binding and read it with the new rules
                 self._delete_port_security_group_bindings(context, id)
+                port['port']['id'] = id
                 self._process_port_create_security_group(
-                    context, id, port['port'].get(ext_sg.SECURITYGROUPS))
+                    context, port['port'],
+                    port['port'].get(ext_sg.SECURITYGROUPS))
             port = super(SecurityGroupTestPlugin, self).update_port(
                 context, id, port)
-            self._extend_port_dict_security_group(context, port)
         return port
 
     def create_network(self, context, network):
@@ -224,8 +230,6 @@ class SecurityGroupTestPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         quantum_lports = super(SecurityGroupTestPlugin, self).get_ports(
             context, filters, sorts=sorts, limit=limit, marker=marker,
             page_reverse=page_reverse)
-        for quantum_lport in quantum_lports:
-            self._extend_port_dict_security_group(context, quantum_lport)
         return quantum_lports
 
 
@@ -278,6 +282,55 @@ class TestSecurityGroups(SecurityGroupDBTestCase):
                     'port_range_max': None,
                     'port_range_min': None}
         self._assert_sg_rule_has_kvs(v6_rule, expected)
+
+    def test_update_security_group(self):
+        with self.security_group() as sg:
+            data = {'security_group': {'name': 'new_name',
+                                       'description': 'new_desc'}}
+            req = self.new_update_request('security-groups',
+                                          data,
+                                          sg['security_group']['id'])
+            res = self.deserialize(self.fmt, req.get_response(self.ext_api))
+            self.assertEqual(res['security_group']['name'],
+                             data['security_group']['name'])
+            self.assertEqual(res['security_group']['description'],
+                             data['security_group']['description'])
+
+    def test_update_security_group_name_to_default_fail(self):
+        with self.security_group() as sg:
+            data = {'security_group': {'name': 'default',
+                                       'description': 'new_desc'}}
+            req = self.new_update_request('security-groups',
+                                          data,
+                                          sg['security_group']['id'])
+            req.environ['quantum.context'] = context.Context('', 'somebody')
+            res = req.get_response(self.ext_api)
+            self.assertEqual(res.status_int, 409)
+
+    def test_update_default_security_group_name_fail(self):
+        with self.network():
+            res = self.new_list_request('security-groups')
+            sg = self.deserialize(self.fmt, res.get_response(self.ext_api))
+            data = {'security_group': {'name': 'new_name',
+                                       'description': 'new_desc'}}
+            req = self.new_update_request('security-groups',
+                                          data,
+                                          sg['security_groups'][0]['id'])
+            req.environ['quantum.context'] = context.Context('', 'somebody')
+            res = req.get_response(self.ext_api)
+            self.assertEqual(res.status_int, 404)
+
+    def test_update_default_security_group_with_description(self):
+        with self.network():
+            res = self.new_list_request('security-groups')
+            sg = self.deserialize(self.fmt, res.get_response(self.ext_api))
+            data = {'security_group': {'description': 'new_desc'}}
+            req = self.new_update_request('security-groups',
+                                          data,
+                                          sg['security_groups'][0]['id'])
+            res = self.deserialize(self.fmt, req.get_response(self.ext_api))
+            self.assertEqual(res['security_group']['description'],
+                             data['security_group']['description'])
 
     def test_default_security_group(self):
         with self.network():
@@ -351,11 +404,11 @@ class TestSecurityGroups(SecurityGroupDBTestCase):
             rule = self._build_security_group_rule(
                 security_group_id, 'ingress', 'tcp', '22', '22', None, None,
                 ethertype=ethertype)
-            res = self._create_security_group_rule('json', rule)
-            self.deserialize('json', res)
+            res = self._create_security_group_rule(self.fmt, rule)
+            self.deserialize(self.fmt, res)
             self.assertEqual(res.status_int, 400)
 
-    def test_create_security_group_rule_protocol_invalid_as_number(self):
+    def test_create_security_group_rule_protocol_as_number(self):
         name = 'webservers'
         description = 'my webservers'
         with self.security_group(name, description) as sg:
@@ -364,9 +417,9 @@ class TestSecurityGroups(SecurityGroupDBTestCase):
             rule = self._build_security_group_rule(
                 security_group_id, 'ingress', protocol, '22', '22',
                 None, None)
-            res = self._create_security_group_rule('json', rule)
-            self.deserialize('json', res)
-            self.assertEqual(res.status_int, 400)
+            res = self._create_security_group_rule(self.fmt, rule)
+            self.deserialize(self.fmt, res)
+            self.assertEqual(res.status_int, 201)
 
     def test_create_security_group_rule_case_insensitive(self):
         name = 'webservers'
@@ -432,12 +485,26 @@ class TestSecurityGroups(SecurityGroupDBTestCase):
             remote_group_id = sg['security_group']['id']
             self._delete('security-groups', remote_group_id, 204)
 
-    def test_delete_default_security_group_fail(self):
+    def test_delete_default_security_group_admin(self):
         with self.network():
             res = self.new_list_request('security-groups')
             sg = self.deserialize(self.fmt, res.get_response(self.ext_api))
             self._delete('security-groups', sg['security_groups'][0]['id'],
-                         409)
+                         204)
+
+    def test_delete_default_security_group_nonadmin(self):
+        with self.network():
+            res = self.new_list_request('security-groups')
+            sg = self.deserialize(self.fmt, res.get_response(self.ext_api))
+            quantum_context = context.Context('', 'test-tenant')
+            self._delete('security-groups', sg['security_groups'][0]['id'],
+                         409, quantum_context=quantum_context)
+
+    def test_security_group_list_creates_default_security_group(self):
+        quantum_context = context.Context('', 'test-tenant')
+        sg = self._list('security-groups',
+                        quantum_context=quantum_context).get('security_groups')
+        self.assertEqual(len(sg), 1)
 
     def test_default_security_group_rules(self):
         with self.network():
@@ -713,11 +780,10 @@ class TestSecurityGroups(SecurityGroupDBTestCase):
     def test_list_ports_security_group(self):
         with self.network() as n:
             with self.subnet(n):
-                res = self._create_port(self.fmt, n['network']['id'])
-                self.deserialize(self.fmt, res)
-                res = self.new_list_request('ports')
-                ports = self.deserialize(self.fmt,
-                                         res.get_response(self.api))
+                self._create_port(self.fmt, n['network']['id'])
+                req = self.new_list_request('ports')
+                res = req.get_response(self.api)
+                ports = self.deserialize(self.fmt, res)
                 port = ports['ports'][0]
                 self.assertEqual(len(port[ext_sg.SECURITYGROUPS]), 1)
                 self._delete('ports', port['id'])

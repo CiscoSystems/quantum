@@ -74,8 +74,7 @@ class ExtensionsTestApp(wsgi.Router):
         super(ExtensionsTestApp, self).__init__(mapper)
 
     def create_request(self, path, body, content_type, method='GET'):
-
-        """ Test create request"""
+        """Test create request."""
 
         LOG.debug("test_create_request - START")
         req = webob.Request.blank(path)
@@ -87,8 +86,7 @@ class ExtensionsTestApp(wsgi.Router):
         return req
 
     def _create_network(self, name=None):
-
-        """ Test create network"""
+        """Test create network."""
 
         LOG.debug("Creating network - START")
         if name:
@@ -107,8 +105,7 @@ class ExtensionsTestApp(wsgi.Router):
         return network_data['network']['id']
 
     def _create_port(self, network_id, port_state):
-
-        """ Test create port"""
+        """Test create port."""
 
         LOG.debug("Creating port for network %s - START", network_id)
         port_path = "/tenants/tt/networks/%s/ports" % network_id
@@ -124,17 +121,18 @@ class ExtensionsTestApp(wsgi.Router):
         return port_data['port']['id']
 
     def _delete_port(self, network_id, port_id):
-        """ Delete port """
+        """Delete port."""
         LOG.debug("Deleting port for network %s - START", network_id)
+        data = {'network_id': network_id, 'port_id': port_id}
         port_path = ("/tenants/tt/networks/%(network_id)s/ports/%(port_id)s" %
-                     locals())
+                     data)
         port_req = self.create_request(port_path, None,
                                        self.contenttype, 'DELETE')
         port_req.get_response(self.api)
         LOG.debug("Deleting port for network - END")
 
     def _delete_network(self, network_id):
-        """ Delete network """
+        """Delete network."""
         LOG.debug("Deleting network %s - START", network_id)
         network_path = "/tenants/tt/networks/%s" % network_id
         network_req = self.create_request(network_path, None,
@@ -143,7 +141,7 @@ class ExtensionsTestApp(wsgi.Router):
         LOG.debug("Deleting network - END")
 
     def tear_down_port_network(self, net_id, port_id):
-        """ Tear down port and network """
+        """Tear down port and network."""
 
         self._delete_port(net_id, port_id)
         self._delete_network(net_id)
@@ -152,8 +150,7 @@ class ExtensionsTestApp(wsgi.Router):
 class QosExtensionTest(base.BaseTestCase):
 
     def setUp(self):
-
-        """ Set up function """
+        """Set up function."""
 
         super(QosExtensionTest, self).setUp()
         parent_resource = dict(member_name="tenant",
@@ -179,8 +176,7 @@ class QosExtensionTest(base.BaseTestCase):
         self._l2network_plugin = l2network_plugin.L2Network()
 
     def test_create_qos(self):
-
-        """ Test create qos """
+        """Test create qos."""
 
         LOG.debug("test_create_qos - START")
         req_body = jsonutils.dumps(self.test_qos_data)
@@ -198,8 +194,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_create_qos - END")
 
     def test_create_qosBADRequest(self):
-
-        """ Test create qos bad request """
+        """Test create qos bad request."""
 
         LOG.debug("test_create_qosBADRequest - START")
         index_response = self.test_app.post(self.qos_path,
@@ -210,8 +205,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_create_qosBADRequest - END")
 
     def test_list_qoss(self):
-
-        """ Test list qoss """
+        """Test list qoss."""
 
         LOG.debug("test_list_qoss - START")
         req_body1 = jsonutils.dumps(self.test_qos_data)
@@ -250,8 +244,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_list_qoss - END")
 
     def test_show_qos(self):
-
-        """ Test show qos """
+        """Test show qos."""
 
         LOG.debug("test_show_qos - START")
         req_body = jsonutils.dumps(self.test_qos_data)
@@ -274,8 +267,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_show_qos - END")
 
     def test_show_qosDNE(self, qos_id='100'):
-
-        """ Test show qos does not exist"""
+        """Test show qos does not exist."""
 
         LOG.debug("test_show_qosDNE - START")
         show_path_temp = self.qos_second_path + qos_id
@@ -285,8 +277,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_show_qosDNE - END")
 
     def test_update_qos(self):
-
-        """ Test update qos """
+        """Test update qos."""
 
         LOG.debug("test_update_qos - START")
         req_body = jsonutils.dumps(self.test_qos_data)
@@ -317,8 +308,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_qos - END")
 
     def test_update_qosDNE(self, qos_id='100'):
-
-        """ Test update qos does not exist """
+        """Test update qos does not exist."""
 
         LOG.debug("test_update_qosDNE - START")
         rename_req_body = jsonutils.dumps({
@@ -339,8 +329,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_qosDNE - END")
 
     def test_update_qosBADRequest(self):
-
-        """ Test update qos bad request """
+        """Test update qos bad request."""
 
         LOG.debug("test_update_qosBADRequest - START")
         req_body = jsonutils.dumps(self.test_qos_data)
@@ -360,8 +349,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_qosBADRequest - END")
 
     def test_delete_qos(self):
-
-        """ Test delte qos """
+        """Test delte qos."""
 
         LOG.debug("test_delete_qos - START")
         req_body = jsonutils.dumps({
@@ -385,8 +373,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_delete_qos - END")
 
     def test_delete_qosDNE(self, qos_id='100'):
-
-        """ Test delte qos does not exist"""
+        """Test delte qos does not exist."""
 
         LOG.debug("test_delete_qosDNE - START")
         delete_path_temp = self.qos_second_path + qos_id
@@ -396,8 +383,7 @@ class QosExtensionTest(base.BaseTestCase):
         LOG.debug("test_delete_qosDNE - END")
 
     def tearDownQos(self, delete_profile_path):
-
-        """ Tear Down Qos """
+        """Tear Down Qos."""
 
         self.test_app.delete(delete_profile_path)
 
@@ -408,8 +394,7 @@ class QosExtensionTest(base.BaseTestCase):
 class CredentialExtensionTest(base.BaseTestCase):
 
     def setUp(self):
-
-        """ Set up function """
+        """Set up function."""
 
         super(CredentialExtensionTest, self).setUp()
         parent_resource = dict(member_name="tenant",
@@ -433,8 +418,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         self._l2network_plugin = l2network_plugin.L2Network()
 
     def test_list_credentials(self):
-
-        """ Test list credentials """
+        """Test list credentials."""
 
         #Create Credential before listing
         LOG.debug("test_list_credentials - START")
@@ -478,8 +462,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_list_credentials - END")
 
     def test_create_credential(self):
-
-        """ Test create credential """
+        """Test create credential."""
 
         LOG.debug("test_create_credential - START")
         req_body = jsonutils.dumps(self.test_credential_data)
@@ -497,8 +480,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_create_credential - END")
 
     def test_create_credentialBADRequest(self):
-
-        """ Test create credential bad request """
+        """Test create credential bad request."""
 
         LOG.debug("test_create_credentialBADRequest - START")
         index_response = self.test_app.post(
@@ -508,8 +490,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_create_credentialBADRequest - END")
 
     def test_show_credential(self):
-
-        """ Test show credential """
+        """Test show credential."""
 
         LOG.debug("test_show_credential - START")
         req_body = jsonutils.dumps(self.test_credential_data)
@@ -533,8 +514,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_show_credential - END")
 
     def test_show_credentialDNE(self, credential_id='100'):
-
-        """ Test show credential does not exist """
+        """Test show credential does not exist."""
 
         LOG.debug("test_show_credentialDNE - START")
         show_path_temp = self.cred_second_path + credential_id
@@ -544,8 +524,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_show_credentialDNE - END")
 
     def test_update_credential(self):
-
-        """ Test update credential """
+        """Test update credential."""
 
         LOG.debug("test_update_credential - START")
         req_body = jsonutils.dumps(self.test_credential_data)
@@ -580,8 +559,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_credential - END")
 
     def test_update_credBADReq(self):
-
-        """ Test update credential bad request """
+        """Test update credential bad request."""
 
         LOG.debug("test_update_credBADReq - START")
         req_body = jsonutils.dumps(self.test_credential_data)
@@ -599,8 +577,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_credBADReq - END")
 
     def test_update_credentialDNE(self, credential_id='100'):
-
-        """ Test update credential does not exist"""
+        """Test update credential does not exist."""
 
         LOG.debug("test_update_credentialDNE - START")
         rename_req_body = jsonutils.dumps({
@@ -619,8 +596,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_update_credentialDNE - END")
 
     def test_delete_credential(self):
-
-        """ Test delete credential """
+        """Test delete credential."""
 
         LOG.debug("test_delete_credential - START")
         req_body = jsonutils.dumps(self.test_credential_data)
@@ -637,8 +613,7 @@ class CredentialExtensionTest(base.BaseTestCase):
         LOG.debug("test_delete_credential - END")
 
     def test_delete_credentialDNE(self, credential_id='100'):
-
-        """ Test delete credential does not exist """
+        """Test delete credential does not exist."""
 
         LOG.debug("test_delete_credentialDNE - START")
         delete_path_temp = self.cred_second_path + credential_id

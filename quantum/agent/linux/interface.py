@@ -39,7 +39,7 @@ OPTS = [
     cfg.BoolOpt('ovs_use_veth',
                 default=False,
                 help=_('Uses veth for an interface or not')),
-    cfg.StrOpt('network_device_mtu',
+    cfg.IntOpt('network_device_mtu',
                help=_('MTU setting for device.')),
     cfg.StrOpt('meta_flavor_driver_mappings',
                help=_('Mapping between flavor and LinuxInterfaceDriver')),
@@ -72,7 +72,8 @@ class LinuxInterfaceDriver(object):
 
     def init_l3(self, device_name, ip_cidrs, namespace=None):
         """Set the L3 settings for the interface using data from the port.
-           ip_cidrs: list of 'X.X.X.X/YY' strings
+
+        ip_cidrs: list of 'X.X.X.X/YY' strings
         """
         device = ip_lib.IPDevice(device_name,
                                  self.root_helper,
@@ -167,13 +168,17 @@ class OVSInterfaceDriver(LinuxInterfaceDriver):
             tap_name = self._get_tap_name(device_name, prefix)
 
             if self.conf.ovs_use_veth:
-                root_dev, ns_dev = ip.add_veth(tap_name, device_name)
+                # Create ns_dev in a namespace if one is configured.
+                root_dev, ns_dev = ip.add_veth(tap_name,
+                                               device_name,
+                                               namespace2=namespace)
+            else:
+                ns_dev = ip.device(device_name)
 
             internal = not self.conf.ovs_use_veth
             self._ovs_add_port(bridge, tap_name, port_id, mac_address,
                                internal=internal)
 
-            ns_dev = ip.device(device_name)
             ns_dev.link.set_address(mac_address)
 
             if self.conf.network_device_mtu:
@@ -181,7 +186,8 @@ class OVSInterfaceDriver(LinuxInterfaceDriver):
                 if self.conf.ovs_use_veth:
                     root_dev.link.set_mtu(self.conf.network_device_mtu)
 
-            if namespace:
+            # Add an interface created by ovs to the namespace.
+            if not self.conf.ovs_use_veth and namespace:
                 namespace_obj = ip.ensure_namespace(namespace)
                 namespace_obj.add_device_to_namespace(ns_dev)
 
@@ -213,6 +219,69 @@ class OVSInterfaceDriver(LinuxInterfaceDriver):
                       device_name)
 
 
+class IVSInterfaceDriver(LinuxInterfaceDriver):
+    """Driver for creating an internal interface on an IVS bridge."""
+
+    DEV_NAME_PREFIX = 'tap'
+
+    def __init__(self, conf):
+        super(IVSInterfaceDriver, self).__init__(conf)
+        self.DEV_NAME_PREFIX = 'ns-'
+
+    def _get_tap_name(self, dev_name, prefix=None):
+        dev_name = dev_name.replace(prefix or self.DEV_NAME_PREFIX, 'tap')
+        return dev_name
+
+    def _ivs_add_port(self, device_name, port_id, mac_address):
+        cmd = ['ivs-ctl', 'add-port', device_name]
+        utils.execute(cmd, self.root_helper)
+
+    def plug(self, network_id, port_id, device_name, mac_address,
+             bridge=None, namespace=None, prefix=None):
+        """Plug in the interface."""
+        if not ip_lib.device_exists(device_name,
+                                    self.root_helper,
+                                    namespace=namespace):
+
+            ip = ip_lib.IPWrapper(self.root_helper)
+            tap_name = self._get_tap_name(device_name, prefix)
+
+            root_dev, ns_dev = ip.add_veth(tap_name, device_name)
+
+            self._ivs_add_port(tap_name, port_id, mac_address)
+
+            ns_dev = ip.device(device_name)
+            ns_dev.link.set_address(mac_address)
+
+            if self.conf.network_device_mtu:
+                ns_dev.link.set_mtu(self.conf.network_device_mtu)
+                root_dev.link.set_mtu(self.conf.network_device_mtu)
+
+            if namespace:
+                namespace_obj = ip.ensure_namespace(namespace)
+                namespace_obj.add_device_to_namespace(ns_dev)
+
+            ns_dev.link.set_up()
+            root_dev.link.set_up()
+        else:
+            LOG.warn(_("Device %s already exists"), device_name)
+
+    def unplug(self, device_name, bridge=None, namespace=None, prefix=None):
+        """Unplug the interface."""
+        tap_name = self._get_tap_name(device_name, prefix)
+        try:
+            cmd = ['ivs-ctl', 'del-port', tap_name]
+            utils.execute(cmd, self.root_helper)
+            device = ip_lib.IPDevice(device_name,
+                                     self.root_helper,
+                                     namespace)
+            device.link.delete()
+            LOG.debug(_("Unplugged interface '%s'"), device_name)
+        except RuntimeError:
+            LOG.error(_("Failed unplugging interface '%s'"),
+                      device_name)
+
+
 class BridgeInterfaceDriver(LinuxInterfaceDriver):
     """Driver for creating bridge interfaces."""
 
@@ -231,16 +300,14 @@ class BridgeInterfaceDriver(LinuxInterfaceDriver):
                 tap_name = device_name.replace(prefix, 'tap')
             else:
                 tap_name = device_name.replace(self.DEV_NAME_PREFIX, 'tap')
-            root_veth, ns_veth = ip.add_veth(tap_name, device_name)
+            # Create ns_veth in a namespace if one is configured.
+            root_veth, ns_veth = ip.add_veth(tap_name, device_name,
+                                             namespace2=namespace)
             ns_veth.link.set_address(mac_address)
 
             if self.conf.network_device_mtu:
                 root_veth.link.set_mtu(self.conf.network_device_mtu)
                 ns_veth.link.set_mtu(self.conf.network_device_mtu)
-
-            if namespace:
-                namespace_obj = ip.ensure_namespace(namespace)
-                namespace_obj.add_device_to_namespace(ns_veth)
 
             root_veth.link.set_up()
             ns_veth.link.set_up()
