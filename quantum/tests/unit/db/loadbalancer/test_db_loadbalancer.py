@@ -28,7 +28,7 @@ from quantum.db.loadbalancer import loadbalancer_db as ldb
 import quantum.extensions
 from quantum.extensions import loadbalancer
 from quantum.plugins.common import constants
-from quantum.plugins.services.agent_loadbalancer import (
+from quantum.services.loadbalancer import (
     plugin as loadbalancer_plugin
 )
 from quantum.tests.unit import test_db_plugin
@@ -38,8 +38,8 @@ LOG = logging.getLogger(__name__)
 
 DB_CORE_PLUGIN_KLASS = 'quantum.db.db_base_plugin_v2.QuantumDbPluginV2'
 DB_LB_PLUGIN_KLASS = (
-    "quantum.plugins.services.agent_loadbalancer."
-    "lbaas_plugin.LoadBalancerPlugin"
+    "quantum.services.loadbalancer."
+    "plugin.LoadBalancerPlugin"
 )
 ROOTDIR = os.path.dirname(__file__) + '../../../..'
 ETCDIR = os.path.join(ROOTDIR, 'etc')
@@ -935,6 +935,21 @@ class TestLoadBalancer(LoadBalancerPluginDbTestCase):
             pool_obj = ctx.session.query(ldb.Pool).filter_by(id=pool_id).one()
             for key in keys:
                 self.assertEqual(pool_obj.stats.__dict__[key], 0)
+
+    def test_update_pool_stats_with_negative_values(self):
+        stats_data = {"bytes_in": -1,
+                      "bytes_out": -2,
+                      "active_connections": -3,
+                      "total_connections": -4}
+        for k, v in stats_data.items():
+            self._test_update_pool_stats_with_negative_value(k, v)
+
+    def _test_update_pool_stats_with_negative_value(self, k, v):
+        with self.pool() as pool:
+            pool_id = pool['pool']['id']
+            ctx = context.get_admin_context()
+            self.assertRaises(ValueError, self.plugin._update_pool_stats,
+                              ctx, pool_id, {k: v})
 
     def test_update_pool_stats(self):
         stats_data = {"bytes_in": 1,

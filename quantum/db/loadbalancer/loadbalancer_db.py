@@ -16,9 +16,9 @@
 #
 
 import sqlalchemy as sa
-from sqlalchemy import exc as sa_exc
 from sqlalchemy import orm
 from sqlalchemy.orm import exc
+from sqlalchemy.orm import validates
 
 from quantum.api.v2 import attributes
 from quantum.common import exceptions as q_exc
@@ -28,6 +28,7 @@ from quantum.db import models_v2
 from quantum.extensions import loadbalancer
 from quantum.extensions.loadbalancer import LoadBalancerPluginBase
 from quantum import manager
+from quantum.openstack.common.db import exception
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import uuidutils
 from quantum.plugins.common import constants
@@ -58,6 +59,16 @@ class PoolStatistics(model_base.BASEV2):
     bytes_out = sa.Column(sa.Integer, nullable=False)
     active_connections = sa.Column(sa.Integer, nullable=False)
     total_connections = sa.Column(sa.Integer, nullable=False)
+
+    @validates('bytes_in', 'bytes_out',
+               'active_connections', 'total_connections')
+    def validate_non_negative_int(self, key, value):
+        if value < 0:
+            data = {'key': key, 'value': value}
+            raise ValueError(_('The %(key)s field can not have '
+                               'negative value. '
+                               'Current value is %(value)d.') % data)
+        return value
 
 
 class Vip(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
@@ -339,7 +350,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             try:
                 context.session.add(vip_db)
                 context.session.flush()
-            except sa_exc.IntegrityError:
+            except exception.DBDuplicateEntry:
                 raise loadbalancer.VipExists(pool_id=v['pool_id'])
 
             # create a port to reserve address for IPAM
@@ -400,7 +411,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                             old_pool['vip_id'] = None
 
                         new_pool['vip_id'] = vip_db['id']
-                except sa_exc.IntegrityError:
+                except exception.DBDuplicateEntry:
                     raise loadbalancer.VipExists(pool_id=v['pool_id'])
 
         return self._make_vip_dict(vip_db)
@@ -415,7 +426,6 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             context.session.delete(vip)
             if vip.port:  # this is a Quantum port
                 self._core_plugin.delete_port(context, vip.port.id)
-            context.session.flush()
 
     def get_vip(self, context, id, fields=None):
         vip = self._get_resource(context, Vip, id)
@@ -535,12 +545,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
 
     def stats(self, context, pool_id):
         with context.session.begin(subtransactions=True):
-            pool_qry = context.session.query(Pool)
-            try:
-                pool = pool_qry.filter_by(id=pool_id).one()
-                stats = pool['stats']
-            except exc.NoResultFound:
-                raise loadbalancer.PoolStatsNotFound(pool_id=pool_id)
+            pool = self._get_resource(context, Pool, pool_id)
+            stats = pool['stats']
 
         res = {'bytes_in': stats['bytes_in'],
                'bytes_out': stats['bytes_out'],
@@ -551,11 +557,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
     def create_pool_health_monitor(self, context, health_monitor, pool_id):
         monitor_id = health_monitor['health_monitor']['id']
         with context.session.begin(subtransactions=True):
-            try:
-                qry = context.session.query(Pool)
-                pool = qry.filter_by(id=pool_id).one()
-            except exc.NoResultFound:
-                raise loadbalancer.PoolNotFound(pool_id=pool_id)
+            pool = self._get_resource(context, Pool, pool_id)
 
             assoc = PoolMonitorAssociation(pool_id=pool_id,
                                            monitor_id=monitor_id)
@@ -567,11 +569,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
 
     def delete_pool_health_monitor(self, context, id, pool_id):
         with context.session.begin(subtransactions=True):
-            try:
-                pool_qry = context.session.query(Pool)
-                pool = pool_qry.filter_by(id=pool_id).one()
-            except exc.NoResultFound:
-                raise loadbalancer.PoolNotFound(pool_id=pool_id)
+            pool = self._get_resource(context, Pool, pool_id)
             try:
                 monitor_qry = context.session.query(PoolMonitorAssociation)
                 monitor = monitor_qry.filter_by(monitor_id=id,
@@ -603,11 +601,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
         tenant_id = self._get_tenant_id_for_create(context, v)
 
         with context.session.begin(subtransactions=True):
-            try:
-                qry = context.session.query(Pool)
-                qry.filter_by(id=v['pool_id']).one()
-            except exc.NoResultFound:
-                raise loadbalancer.PoolNotFound(pool_id=v['pool_id'])
+            # ensuring that pool exists
+            self._get_resource(context, Pool, v['pool_id'])
 
             member_db = Member(id=uuidutils.generate_uuid(),
                                tenant_id=tenant_id,

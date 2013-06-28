@@ -38,9 +38,6 @@ OPTS = [
     cfg.StrOpt('dhcp_confs',
                default='$state_path/dhcp',
                help=_('Location to store DHCP server config files')),
-    cfg.IntOpt('dhcp_lease_time',
-               default=120,
-               help=_('Lifetime of a DHCP lease in seconds')),
     cfg.StrOpt('dhcp_domain',
                default='openstacklocal',
                help=_('Domain to use for building the hostnames')),
@@ -157,7 +154,7 @@ class DhcpLocalProcess(DhcpBase):
         conf_dir = os.path.join(confs_dir, self.network.id)
         if ensure_conf_dir:
             if not os.path.isdir(conf_dir):
-                os.makedirs(conf_dir, 0755)
+                os.makedirs(conf_dir, 0o755)
 
         return os.path.join(conf_dir, kind)
 
@@ -303,7 +300,7 @@ class Dnsmasq(DhcpLocalProcess):
                        (set_tag, self._TAG_PREFIX % i,
                         netaddr.IPNetwork(subnet.cidr).network,
                         mode,
-                        self.conf.dhcp_lease_time))
+                        self.conf.dhcp_lease_duration))
 
         cmd.append('--conf-file=%s' % self.conf.dnsmasq_config_file)
         if self.conf.dnsmasq_dns_server:
@@ -370,8 +367,13 @@ class Dnsmasq(DhcpLocalProcess):
                     self._format_option(i, 'dns-server',
                                         ','.join(subnet.dns_nameservers)))
 
-            host_routes = ["%s,%s" % (hr.destination, hr.nexthop)
-                           for hr in subnet.host_routes]
+            gateway = subnet.gateway_ip
+            host_routes = []
+            for hr in subnet.host_routes:
+                if hr.destination == "0.0.0.0/0":
+                    gateway = hr.nexthop
+                else:
+                    host_routes.append("%s,%s" % (hr.destination, hr.nexthop))
 
             # Add host routes for isolated network segments
             enable_metadata = (
@@ -391,9 +393,8 @@ class Dnsmasq(DhcpLocalProcess):
                                         ','.join(host_routes)))
 
             if subnet.ip_version == 4:
-                if subnet.gateway_ip:
-                    options.append(self._format_option(i, 'router',
-                                                       subnet.gateway_ip))
+                if gateway:
+                    options.append(self._format_option(i, 'router', gateway))
                 else:
                     options.append(self._format_option(i, 'router'))
 

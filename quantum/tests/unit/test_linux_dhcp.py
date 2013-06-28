@@ -23,6 +23,7 @@ from oslo.config import cfg
 
 from quantum.agent.common import config
 from quantum.agent.linux import dhcp
+from quantum.common import config as base_config
 from quantum.openstack.common import jsonutils
 from quantum.tests import base
 
@@ -59,6 +60,11 @@ class FakeV4HostRoute:
     nexthop = '20.0.0.1'
 
 
+class FakeV4HostRouteGateway:
+    destination = '0.0.0.0/0'
+    nexthop = '10.0.0.1'
+
+
 class FakeV6HostRoute:
     destination = 'gdca:3ba5:a17a:4ba3::/64'
     nexthop = 'gdca:3ba5:a17a:4ba3::1'
@@ -71,6 +77,16 @@ class FakeV4Subnet:
     gateway_ip = '192.168.0.1'
     enable_dhcp = True
     host_routes = [FakeV4HostRoute]
+    dns_nameservers = ['8.8.8.8']
+
+
+class FakeV4SubnetGatewayRoute:
+    id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+    ip_version = 4
+    cidr = '192.168.0.0/24'
+    gateway_ip = '192.168.0.1'
+    enable_dhcp = True
+    host_routes = [FakeV4HostRouteGateway]
     dns_nameservers = ['8.8.8.8']
 
 
@@ -119,6 +135,12 @@ class FakeV6Network:
 class FakeDualNetwork:
     id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
     subnets = [FakeV4Subnet(), FakeV6Subnet()]
+    ports = [FakePort1(), FakePort2(), FakePort3()]
+
+
+class FakeDualNetworkGatewayRoute:
+    id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+    subnets = [FakeV4SubnetGatewayRoute(), FakeV6Subnet()]
     ports = [FakePort1(), FakePort2(), FakePort3()]
 
 
@@ -195,6 +217,7 @@ class TestBase(base.BaseTestCase):
         args = ['--config-file',
                 os.path.join(root, 'etc', 'quantum.conf.test')]
         self.conf = config.setup_conf()
+        self.conf.register_opts(base_config.core_opts)
         self.conf.register_opts(dhcp.OPTS)
         self.conf.register_opt(
             cfg.StrOpt('dhcp_lease_relay_socket',
@@ -488,6 +511,25 @@ tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
         with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
             conf_fn.return_value = '/foo/opts'
             dm = dhcp.Dnsmasq(self.conf, FakeDualNetwork(),
+                              version=float(2.59))
+            dm._output_opts_file()
+
+        self.safe.assert_called_once_with('/foo/opts', expected)
+
+    def test_output_opts_file_gateway_route(self):
+        fake_v6 = 'gdca:3ba5:a17a:4ba3::1'
+        fake_v6_cidr = 'gdca:3ba5:a17a:4ba3::/64'
+        expected = """
+tag:tag0,option:dns-server,8.8.8.8
+tag:tag0,option:router,10.0.0.1
+tag:tag1,option:dns-server,%s
+tag:tag1,option:classless-static-route,%s,%s""".lstrip() % (fake_v6,
+                                                            fake_v6_cidr,
+                                                            fake_v6)
+
+        with mock.patch.object(dhcp.Dnsmasq, 'get_conf_file_name') as conf_fn:
+            conf_fn.return_value = '/foo/opts'
+            dm = dhcp.Dnsmasq(self.conf, FakeDualNetworkGatewayRoute(),
                               version=float(2.59))
             dm._output_opts_file()
 
