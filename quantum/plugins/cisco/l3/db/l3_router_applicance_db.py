@@ -271,7 +271,9 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             old_ext_gw = o_r_db.gw_port.network_id
             trunk_network_id = self._get_trunk_network_id(context,
                                                           o_r_db.gw_port)
-        ext_gateway_changed = False if old_ext_gw == new_ext_gw else True
+        ext_gateway_changed = (False if (old_ext_gw == new_ext_gw or
+                                         r.get(l3_db.EXTERNAL_GW_INFO) is None)
+                               else True)
         router_updated = (
             super(L3_router_appliance_db_mixin, self).update_router(context,
                                                                     id,
