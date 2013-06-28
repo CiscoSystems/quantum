@@ -477,11 +477,21 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         tr_veth_name = self._get_trunk_side_veth_pair_name(bridge_name)
         tr_veth_ofport = trunk_bridge.get_port_ofport(tr_veth_name)
 
+        # Ensure no obsolete configurations remain
+        if int(port.ofport) != -1:
+            trunk_bridge.delete_flows(in_port=port.ofport)
         if int(tr_veth_ofport) != -1:
             trunk_bridge.delete_flows(in_port=tr_veth_ofport)
+        self._process_trunked_networks_remove(port.vif_id,
+                                              set(trunked_networks))
+#        if self.enable_tunneling:
+#            # Remove any tunnel rule that has dl_dst = port.vif_mac
+#            # and action mod_vlan_vid for a vlan tag that is not part
+#            # of host_local_vlan_tags.
+#            self.tun_br.delete_flows(dl_dst=port.vif_mac)
 
-        link_local_vlan_tags = []
         host_local_vlan_tags = []
+        link_local_vlan_tags = []
         for net_id, info in trunked_networks.iteritems():
             if net_id not in self.local_vlan_map:
                 self.provision_local_vlan(net_id, info['network_type'],
@@ -512,31 +522,54 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                          dl_dst=port.vif_mac,
                                          actions="mod_vlan_vid:%s,normal" %
                                          lvm.vlan)
+
+        # we configure trunk port that do not trunk any network
+        # as access port on the dead VLAN
+        if len(link_local_vlan_tags) == 0:
+            link_local_access_vlan_tag = DEAD_VLAN_TAG
+            ll_vlan_mode = "access"
+        else:
+            link_local_access_vlan_tag = []
+            ll_vlan_mode = "trunk"
+        if len(host_local_vlan_tags) == 0:
+            host_local_access_vlan_tag = DEAD_VLAN_TAG
+            hl_vlan_mode = "access"
+        else:
+            host_local_access_vlan_tag = []
+            hl_vlan_mode = "trunk"
         # device should receive packets with link local vlan tags
         trunk_bridge.set_db_attribute("Port", vm_port.port_name, "vlan_mode",
-                                      "trunk")
+                                      ll_vlan_mode)
+        trunk_bridge.set_db_attribute("Port", vm_port.port_name, "tag",
+                                      str(link_local_access_vlan_tag))
         trunk_bridge.set_db_attribute("Port", vm_port.port_name, "trunks",
                                       str(link_local_vlan_tags))
         # as should br-int
         trunk_bridge.set_db_attribute("Port", tr_veth_name, "vlan_mode",
-                                      "trunk")
+                                      ll_vlan_mode)
+        trunk_bridge.set_db_attribute("Port", tr_veth_name, "tag",
+                                      str(link_local_access_vlan_tag))
         trunk_bridge.set_db_attribute("Port", tr_veth_name, "trunks",
                                       str(link_local_vlan_tags))
         # and trunk bridge should receive packets with host local vlan tags
-        self.int_br.set_db_attribute("Port", port.port_name, "tag", "[]")
+        self.int_br.set_db_attribute("Port", port.port_name, "tag",
+                                     str(host_local_access_vlan_tag))
         self.int_br.set_db_attribute("Port", port.port_name, "vlan_mode",
-                                     "trunk")
+                                     hl_vlan_mode)
         self.int_br.set_db_attribute("Port", port.port_name, "trunks",
                                      str(host_local_vlan_tags))
 
-    def _process_trunked_networks_remove(self, vif_id):
+    def _process_trunked_networks_remove(self, vif_id, nw_ids = None):
         """Unbind port taking into account all trunked networks.
 
         Removes local vlan mapping objects for a trunked network
-        if this is its last VIF.
+        if this is its last VIF. If nw_id is a set of network uuids
+        then those networks are excluded.
         :param vif_id: the id of the vif
         """
         for net_uuid in self._get_net_uuids(vif_id):
+            if nw_ids is not None and net_uuid in nw_ids:
+                continue
             if not self.local_vlan_map.get(net_uuid):
                 LOG.info(_('port_unbound() net_uuid %s not in local_vlan_map'),
                          net_uuid)
