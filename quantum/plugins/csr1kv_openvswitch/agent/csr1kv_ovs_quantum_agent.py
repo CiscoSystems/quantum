@@ -458,7 +458,7 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 net_ids.append(network_id)
         return net_ids
 
-    def _process_trunked_networks_add(self, port, trunked_networks):
+    def _process_trunked_networks_add(self, port, net_uuid, trunked_networks):
         """Add network trunks to port if port belongs to trunk network
         and update bindings for the trunked networks.
         :param port: an ovslib.VifPort object.
@@ -482,8 +482,9 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             trunk_bridge.delete_flows(in_port=port.ofport)
         if int(tr_veth_ofport) != -1:
             trunk_bridge.delete_flows(in_port=tr_veth_ofport)
-        self._process_trunked_networks_remove(port.vif_id,
-                                              set(trunked_networks))
+        nw_ids = set(trunked_networks)
+        nw_ids.add(net_uuid)
+        self._process_trunked_networks_remove(port.vif_id, nw_ids)
 #        if self.enable_tunneling:
 #            # Remove any tunnel rule that has dl_dst = port.vif_mac
 #            # and action mod_vlan_vid for a vlan tag that is not part
@@ -625,7 +626,7 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             self.int_br.delete_flows(in_port=port.ofport)
 
         # Bob - Patch to handle trunk ports.
-        self._process_trunked_networks_add(port, trunked_networks)
+        self._process_trunked_networks_add(port, net_uuid, trunked_networks)
         # Bob - End of patch
 
     def port_unbound(self, vif_id, net_uuid=None):
