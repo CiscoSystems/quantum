@@ -485,11 +485,6 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
         nw_ids = set(trunked_networks)
         nw_ids.add(net_uuid)
         self._process_trunked_networks_remove(port.vif_id, nw_ids)
-#        if self.enable_tunneling:
-#            # Remove any tunnel rule that has dl_dst = port.vif_mac
-#            # and action mod_vlan_vid for a vlan tag that is not part
-#            # of host_local_vlan_tags.
-#            self.tun_br.delete_flows(dl_dst=port.vif_mac)
 
         host_local_vlan_tags = []
         link_local_vlan_tags = []
@@ -579,10 +574,15 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             if lvm.network_type == 'gre':
                 if self.enable_tunneling:
                     # remove inbound unicast flow
-                    self.tun_br.delete_flows(tun_id=lvm.segmentation_id,
-                                             dl_dst=lvm.vif_ports[vif_id].vif_mac)
+                    self.tun_br.delete_flows(
+                        tun_id=lvm.segmentation_id,
+                        dl_dst=lvm.vif_ports[vif_id].vif_mac)
 
             if vif_id in lvm.vif_ports:
+                # remove trunk rule rewriting link local to host local vlan
+                if lvm.vif_ports[vif_id].ofport != -1:
+                    self.int_br.delete_flows(
+                        in_port=lvm.vif_ports[vif_id].ofport)
                 del lvm.vif_ports[vif_id]
             else:
                 LOG.info(_('port_unbound: vif_id %s not in local_vlan_map'),
@@ -840,7 +840,10 @@ class CSR1kvOVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 # Nothing to do regarding local networking
             else:
                 LOG.debug(_("Device %s not defined on plugin"), device)
-                self.port_unbound(device)
+            # Bob - Patch to handle trunk ports.
+                #self.port_unbound(device)
+            self.port_unbound(device)
+            # Bob - End of patch
         return resync
 
     def process_network_ports(self, port_info):
