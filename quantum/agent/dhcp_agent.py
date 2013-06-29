@@ -547,6 +547,8 @@ class DeviceManager(object):
         """
         device = self._get_device(network)
         gateway = device.route.get_gateway()
+        if gateway:
+            gateway = gateway['gateway']
 
         for subnet in network.subnets:
             skip_subnet = (
@@ -743,6 +745,7 @@ class DhcpAgentWithStateReport(DhcpAgent):
             'start_flag': True,
             'agent_type': constants.AGENT_TYPE_DHCP}
         report_interval = cfg.CONF.AGENT.report_interval
+        self.use_call = True
         if report_interval:
             self.heartbeat = loopingcall.FixedIntervalLoopingCall(
                 self._report_state)
@@ -753,8 +756,8 @@ class DhcpAgentWithStateReport(DhcpAgent):
             self.agent_state.get('configurations').update(
                 self.cache.get_state())
             ctx = context.get_admin_context_without_session()
-            self.state_rpc.report_state(ctx,
-                                        self.agent_state)
+            self.state_rpc.report_state(ctx, self.agent_state, self.use_call)
+            self.use_call = False
         except AttributeError:
             # This means the server does not support report_state
             LOG.warn(_("Quantum server does not support state report."

@@ -68,6 +68,7 @@ from quantum.extensions import l3
 from quantum.extensions import portbindings
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
+from quantum.plugins.bigswitch.db import porttracker_db
 from quantum.plugins.bigswitch import routerrule_db
 from quantum.plugins.bigswitch.version import version_string_with_vcs
 
@@ -126,6 +127,15 @@ nova_opts = [
                       "Nova compute nodes")),
 ]
 
+# Each VIF Type can have a list of nova host IDs that are fixed to that type
+for i in portbindings.VIF_TYPES:
+    opt = cfg.ListOpt('node_override_vif_' + i, default=[],
+                      help=_("Nova compute nodes to manually set VIF "
+                             "type to %s") % i)
+    nova_opts.append(opt)
+
+# Add the vif types for reference later
+nova_opts.append(cfg.ListOpt('vif_types', default=portbindings.VIF_TYPES))
 
 cfg.CONF.register_opts(nova_opts, "NOVA")
 
@@ -323,7 +333,7 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
     supported_extension_aliases = ["router", "binding", "router_rules"]
 
-    def __init__(self):
+    def __init__(self, server_timeout=None):
         LOG.info(_('QuantumRestProxy: Starting plugin. Version=%s'),
                  version_string_with_vcs())
 
@@ -337,9 +347,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         server_auth = cfg.CONF.RESTPROXY.server_auth
         server_ssl = cfg.CONF.RESTPROXY.server_ssl
         sync_data = cfg.CONF.RESTPROXY.sync_data
-        timeout = cfg.CONF.RESTPROXY.server_timeout
         quantum_id = cfg.CONF.RESTPROXY.quantum_id
         self.add_meta_server_route = cfg.CONF.RESTPROXY.add_meta_server_route
+        timeout = cfg.CONF.RESTPROXY.server_timeout
+        if server_timeout is not None:
+            timeout = server_timeout
 
         # validate config
         assert servers is not None, 'Servers not defined. Aborting plugin'
@@ -569,6 +581,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # Update DB
         port["port"]["admin_state_up"] = False
+        if (portbindings.HOST_ID in port['port']
+            and 'device_id' in port['port']):
+            porttracker_db.put_port_hostid(context, port['port']['device_id'],
+                                           port['port'][portbindings.HOST_ID])
         new_port = super(QuantumRestProxyV2, self).create_port(context, port)
         net = super(QuantumRestProxyV2,
                     self).get_network(context, new_port["network_id"])
@@ -661,7 +677,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # Update DB
         new_port = super(QuantumRestProxyV2, self).update_port(context,
                                                                port_id, port)
-
+        if (portbindings.HOST_ID in port['port']
+            and 'device_id' in port['port']):
+            porttracker_db.put_port_hostid(context, port['port']['device_id'],
+                                           port['port'][portbindings.HOST_ID])
         # update on networl ctrl
         try:
             resource = PORTS_PATH % (orig_port["tenant_id"],
@@ -1335,10 +1354,21 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                           "[%s]. Defaulting to ovs. "),
                         cfg_vif_type)
             cfg_vif_type = portbindings.VIF_TYPE_OVS
-
+        hostid = porttracker_db.get_port_hostid(context,
+                                                port.get("device_id"))
+        if hostid:
+            override = self._check_hostvif_override(hostid)
+            if override:
+                cfg_vif_type = override
         port[portbindings.VIF_TYPE] = cfg_vif_type
 
         port[portbindings.CAPABILITIES] = {
             portbindings.CAP_PORT_FILTER:
             'security-group' in self.supported_extension_aliases}
         return port
+
+    def _check_hostvif_override(self, hostid):
+        for v in cfg.CONF.NOVA.vif_types:
+            if hostid in getattr(cfg.CONF.NOVA, "node_override_vif_" + v, []):
+                return v
+        return False

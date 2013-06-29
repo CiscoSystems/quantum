@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2012 Nicira Networks, Inc.
+# Copyright 2013 Big Switch Networks, Inc.
 # All Rights Reserved
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,6 +15,4 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
-
-# This will get updated at build time.  Version 0 indicates developer build.
-PLUGIN_VERSION = "0"
+# @author: Kevin Benton, Big Switch Networks, Inc.
