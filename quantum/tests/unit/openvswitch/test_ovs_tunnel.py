@@ -21,9 +21,9 @@ from oslo.config import cfg
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import ovs_lib
+from quantum.common import constants as q_const
 from quantum.openstack.common import log
 from quantum.plugins.openvswitch.agent import ovs_quantum_agent
-from quantum.plugins.openvswitch.common import constants
 from quantum.tests import base
 
 
@@ -160,7 +160,7 @@ class TunnelTest(base.BaseTestCase):
                                               '10.0.0.1', self.NET_MAPPING,
                                               'sudo', 2, 'gre')
         a.available_local_vlans = set([LV_ID])
-        a.provision_local_vlan(NET_UUID, constants.TYPE_GRE, None, LS_ID)
+        a.provision_local_vlan(NET_UUID, q_const.NET_TYPE_GRE, None, LS_ID)
         self.mox.VerifyAll()
 
     def testProvisionLocalVlanFlat(self):
@@ -183,7 +183,7 @@ class TunnelTest(base.BaseTestCase):
         a.phys_brs['net1'] = self.mock_map_tun_bridge
         a.phys_ofports['net1'] = self.MAP_TUN_OFPORT
         a.int_ofports['net1'] = self.INT_OFPORT
-        a.provision_local_vlan(NET_UUID, constants.TYPE_FLAT, 'net1', LS_ID)
+        a.provision_local_vlan(NET_UUID, q_const.NET_TYPE_FLAT, 'net1', LS_ID)
         self.mox.VerifyAll()
 
     def testProvisionLocalVlanFlatFail(self):
@@ -192,7 +192,7 @@ class TunnelTest(base.BaseTestCase):
                                               self.TUN_BRIDGE,
                                               '10.0.0.1', self.NET_MAPPING,
                                               'sudo', 2, 'gre')
-        a.provision_local_vlan(NET_UUID, constants.TYPE_FLAT, 'net2', LS_ID)
+        a.provision_local_vlan(NET_UUID, q_const.NET_TYPE_FLAT, 'net2', LS_ID)
         self.mox.VerifyAll()
 
     def testProvisionLocalVlanVlan(self):
@@ -214,7 +214,7 @@ class TunnelTest(base.BaseTestCase):
         a.phys_brs['net1'] = self.mock_map_tun_bridge
         a.phys_ofports['net1'] = self.MAP_TUN_OFPORT
         a.int_ofports['net1'] = self.INT_OFPORT
-        a.provision_local_vlan(NET_UUID, constants.TYPE_VLAN, 'net1', LS_ID)
+        a.provision_local_vlan(NET_UUID, q_const.NET_TYPE_VLAN, 'net1', LS_ID)
         self.mox.VerifyAll()
 
     def testProvisionLocalVlanVlanFail(self):
@@ -223,7 +223,7 @@ class TunnelTest(base.BaseTestCase):
                                               self.TUN_BRIDGE,
                                               '10.0.0.1', self.NET_MAPPING,
                                               'sudo', 2, 'gre')
-        a.provision_local_vlan(NET_UUID, constants.TYPE_VLAN, 'net2', LS_ID)
+        a.provision_local_vlan(NET_UUID, q_const.NET_TYPE_VLAN, 'net2', LS_ID)
         self.mox.VerifyAll()
 
     def testReclaimLocalVlan(self):

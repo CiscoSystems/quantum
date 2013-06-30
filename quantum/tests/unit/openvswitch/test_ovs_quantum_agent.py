@@ -23,6 +23,7 @@ import testtools
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import ovs_lib
+from quantum.common import constants as q_const
 from quantum.openstack.common.rpc import common as rpc_common
 from quantum.plugins.openvswitch.agent import ovs_quantum_agent
 from quantum.plugins.openvswitch.common import constants
@@ -41,7 +42,7 @@ class CreateAgentConfigMap(base.BaseTestCase):
     def test_create_agent_config_map_fails_for_invalid_tunnel_config(self):
         self.addCleanup(cfg.CONF.reset)
         # An ip address is required for tunneling but there is no default
-        cfg.CONF.set_override('tunnel_type', constants.TYPE_GRE,
+        cfg.CONF.set_override('tunnel_type', q_const.NET_TYPE_GRE,
                               group='AGENT')
         with testtools.ExpectedException(ValueError):
             ovs_quantum_agent.create_agent_config_map(cfg.CONF)
@@ -53,7 +54,7 @@ class CreateAgentConfigMap(base.BaseTestCase):
         cfg.CONF.set_override('enable_tunneling', True, group='OVS')
         cfg.CONF.set_override('local_ip', '10.10.10.10', group='OVS')
         cfgmap = ovs_quantum_agent.create_agent_config_map(cfg.CONF)
-        self.assertEqual(cfgmap['tunnel_type'], constants.TYPE_GRE)
+        self.assertEqual(cfgmap['tunnel_type'], q_const.NET_TYPE_GRE)
 
     def test_create_agent_config_map_fails_no_local_ip(self):
         self.addCleanup(cfg.CONF.reset)

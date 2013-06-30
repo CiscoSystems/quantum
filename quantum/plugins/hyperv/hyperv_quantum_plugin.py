@@ -19,6 +19,7 @@
 from oslo.config import cfg
 
 from quantum.api.v2 import attributes
+from quantum.common import constants as q_const
 from quantum.common import exceptions as q_exc
 from quantum.common import topics
 from quantum.db import db_base_plugin_v2
@@ -165,10 +166,10 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _set_tenant_network_type(self):
         tenant_network_type = cfg.CONF.HYPERV.tenant_network_type
-        if tenant_network_type not in [constants.TYPE_LOCAL,
-                                       constants.TYPE_FLAT,
-                                       constants.TYPE_VLAN,
-                                       constants.TYPE_NONE]:
+        if tenant_network_type not in [q_const.NET_TYPE_LOCAL,
+                                       q_const.NET_TYPE_FLAT,
+                                       q_const.NET_TYPE_VLAN,
+                                       q_const.NET_TYPE_NONE]:
             msg = _(
                 "Invalid tenant_network_type: %s. "
                 "Agent terminated!") % tenant_network_type
@@ -201,16 +202,16 @@ class HyperVQuantumPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _create_network_providers_map(self):
         self._network_providers_map = {
-            constants.TYPE_LOCAL: LocalNetworkProvider(),
-            constants.TYPE_FLAT: FlatNetworkProvider(),
-            constants.TYPE_VLAN: VlanNetworkProvider()
+            q_const.NET_TYPE_LOCAL: LocalNetworkProvider(),
+            q_const.NET_TYPE_FLAT: FlatNetworkProvider(),
+            q_const.NET_TYPE_VLAN: VlanNetworkProvider()
         }
 
     def _process_provider_create(self, context, session, attrs):
         network_type = attrs.get(provider.NETWORK_TYPE)
         network_type_set = attributes.is_attr_set(network_type)
         if not network_type_set:
-            if self._tenant_network_type == constants.TYPE_NONE:
+            if self._tenant_network_type == q_const.NET_TYPE_NONE:
                 raise q_exc.TenantNetworksDisabled()
             network_type = self._tenant_network_type
             attrs[provider.NETWORK_TYPE] = network_type

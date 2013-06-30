@@ -13,19 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from quantum.common import constants as q_const
+
+
 # Special vlan_id value in ovs_vlan_allocations table indicating flat network
 FLAT_VLAN_ID = -1
 
 # Topic for tunnel notifications between the plugin and agent
 TUNNEL = 'tunnel'
 
-# Values for network_type
-TYPE_FLAT = 'flat'
-TYPE_VLAN = 'vlan'
-TYPE_GRE = 'gre'
-TYPE_LOCAL = 'local'
-TYPE_VXLAN = 'vxlan'
-TYPE_NONE = 'none'
 VXLAN_UDP_PORT = 4789
 
 # Name prefixes for veth device pair linking the integration bridge
@@ -37,4 +33,4 @@ VETH_PHYSICAL_PREFIX = 'phy-'
 MINIMUM_OVS_VXLAN_VERSION = "1.10"
 
 # The different types of tunnels
-TUNNEL_NETWORK_TYPES = [TYPE_GRE, TYPE_VXLAN]
+TUNNEL_NETWORK_TYPES = [q_const.NET_TYPE_GRE, q_const.NET_TYPE_VXLAN]

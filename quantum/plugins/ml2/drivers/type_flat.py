@@ -16,14 +16,13 @@
 from oslo.config import cfg
 import sqlalchemy as sa
 
+from quantum.common import constants as q_const
 from quantum.common import exceptions as exc
 from quantum.db import model_base
 from quantum.openstack.common import log
 from quantum.plugins.ml2 import driver_api as api
 
 LOG = log.getLogger(__name__)
-
-TYPE_FLAT = 'flat'
 
 flat_opts = [
     cfg.ListOpt('flat_networks',
@@ -75,7 +74,7 @@ class FlatTypeDriver(api.TypeDriver):
                      self.flat_networks)
 
     def get_type(self):
-        return TYPE_FLAT
+        return q_const.NET_TYPE_FLAT
 
     def initialize(self):
         LOG.info(_("ML2 FlatTypeDriver initialization complete"))

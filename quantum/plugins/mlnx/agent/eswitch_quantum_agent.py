@@ -34,7 +34,6 @@ from quantum.openstack.common import loopingcall
 from quantum.openstack.common.rpc import dispatcher
 from quantum.plugins.mlnx.agent import utils
 from quantum.plugins.mlnx.common import config  # noqa
-from quantum.plugins.mlnx.common import constants
 from quantum.plugins.mlnx.common import exceptions
 
 LOG = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ class EswitchManager(object):
         net_map = self.network_map[network_id]
         net_map['ports'].append({'port_id': port_id, 'port_mac': port_mac})
 
-        if network_type == constants.TYPE_VLAN:
+        if network_type == q_constants.NET_TYPE_VLAN:
             LOG.info(_('Binding VLAN ID %(seg_id)s'
                        'to eSwitch for vNIC mac_address %(mac)s'),
                      {'seg_id': seg_id,
@@ -109,7 +108,7 @@ class EswitchManager(object):
                                         seg_id,
                                         port_mac)
             self.utils.port_up(physical_network, port_mac)
-        elif network_type == constants.TYPE_IB:
+        elif network_type == q_constants.NET_TYPE_IB:
             LOG.debug(_('Network Type IB currently not supported'))
         else:
             LOG.error(_('Unsupported network type %s'), network_type)
@@ -128,9 +127,9 @@ class EswitchManager(object):
                           network_id, network_type,
                           physical_network, segmentation_id):
         LOG.info(_("Provisioning network %s"), network_id)
-        if network_type == constants.TYPE_VLAN:
+        if network_type == q_constants.NET_TYPE_VLAN:
             LOG.debug(_("creating VLAN Network"))
-        elif network_type == constants.TYPE_IB:
+        elif network_type == q_constants.NET_TYPE_IB:
             LOG.debug(_("currently IB network provisioning is not supported"))
         else:
             LOG.error(_("Unknown network type %(network_type) "

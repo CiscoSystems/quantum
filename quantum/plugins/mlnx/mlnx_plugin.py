@@ -117,10 +117,10 @@ class MellanoxEswitchPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def _extend_network_dict_provider(self, context, network):
         binding = db.get_network_binding(context.session, network['id'])
         network[provider.NETWORK_TYPE] = binding.network_type
-        if binding.network_type == constants.TYPE_FLAT:
+        if binding.network_type == q_const.NET_TYPE_FLAT:
             network[provider.PHYSICAL_NETWORK] = binding.physical_network
             network[provider.SEGMENTATION_ID] = None
-        elif binding.network_type == constants.TYPE_LOCAL:
+        elif binding.network_type == q_const.NET_TYPE_LOCAL:
             network[provider.PHYSICAL_NETWORK] = None
             network[provider.SEGMENTATION_ID] = None
         else:
@@ -129,10 +129,10 @@ class MellanoxEswitchPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _set_tenant_network_type(self):
         self.tenant_network_type = cfg.CONF.MLNX.tenant_network_type
-        if self.tenant_network_type not in [constants.TYPE_VLAN,
-                                            constants.TYPE_IB,
-                                            constants.TYPE_LOCAL,
-                                            constants.TYPE_NONE]:
+        if self.tenant_network_type not in [q_const.NET_TYPE_VLAN,
+                                            q_const.NET_TYPE_IB,
+                                            q_const.NET_TYPE_LOCAL,
+                                            q_const.NET_TYPE_NONE]:
             LOG.error(_("Invalid tenant_network_type: %s. "
                         "Service terminated!"),
                       self.tenant_network_type)
@@ -154,14 +154,14 @@ class MellanoxEswitchPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         if not network_type_set:
             msg = _("provider:network_type required")
             raise q_exc.InvalidInput(error_message=msg)
-        elif network_type == constants.TYPE_FLAT:
+        elif network_type == q_const.NET_TYPE_FLAT:
             self._process_flat_net(segmentation_id_set)
             segmentation_id = constants.FLAT_VLAN_ID
 
-        elif network_type in [constants.TYPE_VLAN, constants.TYPE_IB]:
+        elif network_type in [q_const.NET_TYPE_VLAN, q_const.NET_TYPE_IB]:
             self._process_vlan_net(segmentation_id, segmentation_id_set)
 
-        elif network_type == constants.TYPE_LOCAL:
+        elif network_type == q_const.NET_TYPE_LOCAL:
             self._process_local_net(physical_network_set,
                                     segmentation_id_set)
             segmentation_id = constants.LOCAL_VLAN_ID
@@ -204,9 +204,9 @@ class MellanoxEswitchPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def _process_net_type(self, network_type,
                           physical_network,
                           physical_network_set):
-        if network_type in [constants.TYPE_VLAN,
-                            constants.TYPE_IB,
-                            constants.TYPE_FLAT]:
+        if network_type in [q_const.NET_TYPE_VLAN,
+                            q_const.NET_TYPE_IB,
+                            q_const.NET_TYPE_FLAT]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
                     msg = _("unknown provider:physical_network "
@@ -244,17 +244,18 @@ class MellanoxEswitchPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             if not network_type:
                 # tenant network
                 network_type = self.tenant_network_type
-                if network_type == constants.TYPE_NONE:
+                if network_type == q_const.NET_TYPE_NONE:
                     raise q_exc.TenantNetworksDisabled()
-                elif network_type in [constants.TYPE_VLAN, constants.TYPE_IB]:
+                elif network_type in [q_const.NET_TYPE_VLAN,
+                                      q_const.NET_TYPE_IB]:
                     physical_network, vlan_id = db.reserve_network(session)
-                else:  # TYPE_LOCAL
+                else:  # NET_TYPE_LOCAL
                     vlan_id = constants.LOCAL_VLAN_ID
             else:
                 # provider network
-                if network_type in [constants.TYPE_VLAN,
-                                    constants.TYPE_IB,
-                                    constants.TYPE_FLAT]:
+                if network_type in [q_const.NET_TYPE_VLAN,
+                                    q_const.NET_TYPE_IB,
+                                    q_const.NET_TYPE_FLAT]:
                     db.reserve_specific_network(session,
                                                 physical_network,
                                                 vlan_id)

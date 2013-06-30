@@ -262,9 +262,9 @@ class LinuxBridgeManager:
             LOG.error(_("No mapping for physical network %s"),
                       physical_network)
             return
-        if network_type == lconst.TYPE_FLAT:
+        if network_type == constants.NET_TYPE_FLAT:
             return self.ensure_flat_bridge(network_id, physical_interface)
-        elif network_type == lconst.TYPE_VLAN:
+        elif network_type == constants.NET_TYPE_VLAN:
             return self.ensure_vlan_bridge(network_id, physical_interface,
                                            segmentation_id)
         else:
@@ -285,7 +285,7 @@ class LinuxBridgeManager:
             return False
 
         bridge_name = self.get_bridge_name(network_id)
-        if network_type == lconst.TYPE_LOCAL:
+        if network_type == constants.NET_TYPE_LOCAL:
             self.ensure_local_bridge(network_id)
         elif not self.ensure_physical_in_bridge(network_id,
                                                 network_type,

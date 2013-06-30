@@ -29,8 +29,6 @@ from quantum.plugins.ml2 import driver_api as api
 
 LOG = log.getLogger(__name__)
 
-TYPE_VLAN = 'vlan'
-
 vlan_opts = [
     cfg.ListOpt('network_vlan_ranges',
                 default=[],
@@ -154,7 +152,7 @@ class VlanTypeDriver(api.TypeDriver):
                         session.delete(alloc)
 
     def get_type(self):
-        return TYPE_VLAN
+        return q_const.NET_TYPE_VLAN
 
     def initialize(self):
         self._sync_vlan_allocations()
@@ -230,7 +228,7 @@ class VlanTypeDriver(api.TypeDriver):
                           {'vlan_id': alloc.vlan_id,
                            'physical_network': alloc.physical_network})
                 alloc.allocated = True
-                return {api.NETWORK_TYPE: TYPE_VLAN,
+                return {api.NETWORK_TYPE: q_const.NET_TYPE_VLAN,
                         api.PHYSICAL_NETWORK: alloc.physical_network,
                         api.SEGMENTATION_ID: alloc.vlan_id}
 

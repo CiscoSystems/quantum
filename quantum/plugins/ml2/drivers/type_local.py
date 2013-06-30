@@ -13,13 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from quantum.common import constants as q_const
 from quantum.common import exceptions as exc
 from quantum.openstack.common import log
 from quantum.plugins.ml2 import driver_api as api
 
 LOG = log.getLogger(__name__)
-
-TYPE_LOCAL = 'local'
 
 
 class LocalTypeDriver(api.TypeDriver):
@@ -36,7 +35,7 @@ class LocalTypeDriver(api.TypeDriver):
         LOG.info(_("ML2 LocalTypeDriver initialization complete"))
 
     def get_type(self):
-        return TYPE_LOCAL
+        return q_const.NET_TYPE_LOCAL
 
     def initialize(self):
         pass
@@ -55,7 +54,7 @@ class LocalTypeDriver(api.TypeDriver):
 
     def allocate_tenant_segment(self, session):
         # No resources to allocate
-        return {api.NETWORK_TYPE: TYPE_LOCAL}
+        return {api.NETWORK_TYPE: q_const.NET_TYPE_LOCAL}
 
     def release_segment(self, session, segment):
         # No resources to release

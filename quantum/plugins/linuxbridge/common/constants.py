@@ -16,15 +16,11 @@
 #
 # @author: Sumit Naiksatam, Cisco Systems, Inc.
 
+from quantum.common import constants as q_const
+
 
 FLAT_VLAN_ID = -1
 LOCAL_VLAN_ID = -2
-
-# Values for network_type
-TYPE_FLAT = 'flat'
-TYPE_VLAN = 'vlan'
-TYPE_LOCAL = 'local'
-TYPE_NONE = 'none'
 
 
 # TODO(rkukura): Eventually remove this function, which provides
@@ -33,8 +29,8 @@ TYPE_NONE = 'none'
 def interpret_vlan_id(vlan_id):
     """Return (network_type, segmentation_id) tuple for encoded vlan_id."""
     if vlan_id == LOCAL_VLAN_ID:
-        return (TYPE_LOCAL, None)
+        return (q_const.NET_TYPE_LOCAL, None)
     elif vlan_id == FLAT_VLAN_ID:
-        return (TYPE_FLAT, None)
+        return (q_const.NET_TYPE_FLAT, None)
     else:
-        return (TYPE_VLAN, vlan_id)
+        return (q_const.NET_TYPE_VLAN, vlan_id)

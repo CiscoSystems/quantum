@@ -28,6 +28,7 @@ from oslo.config import cfg
 
 from quantum.agent import rpc as agent_rpc
 from quantum.common import config as logging_config
+from quantum.common import constants as q_const
 from quantum.common import topics
 from quantum import context
 from quantum.openstack.common import log as logging
@@ -137,7 +138,7 @@ class HyperVQuantumAgent(object):
         return dispatcher.RpcDispatcher([self])
 
     def _get_vswitch_name(self, network_type, physical_network):
-        if network_type != constants.TYPE_LOCAL:
+        if network_type != q_const.NET_TYPE_LOCAL:
             vswitch_name = self._get_vswitch_for_physical_network(
                 physical_network)
         else:
@@ -152,10 +153,10 @@ class HyperVQuantumAgent(object):
 
         vswitch_name = self._get_vswitch_name(network_type, physical_network)
 
-        if network_type in [constants.TYPE_VLAN, constants.TYPE_FLAT]:
+        if network_type in [q_const.NET_TYPE_VLAN, q_const.NET_TYPE_FLAT]:
             #Nothing to do
             pass
-        elif network_type == constants.TYPE_LOCAL:
+        elif network_type == q_const.NET_TYPE_LOCAL:
             #TODO(alexpilotti): Check that the switch type is private
             #or create it if not existing
             pass
@@ -193,17 +194,17 @@ class HyperVQuantumAgent(object):
 
         self._utils.connect_vnic_to_vswitch(map['vswitch_name'], port_id)
 
-        if network_type == constants.TYPE_VLAN:
+        if network_type == q_const.NET_TYPE_VLAN:
             LOG.info(_('Binding VLAN ID %(segmentation_id)s '
                        'to switch port %(port_id)s'),
                      dict(segmentation_id=segmentation_id, port_id=port_id))
             self._utils.set_vswitch_port_vlan_id(
                 segmentation_id,
                 port_id)
-        elif network_type == constants.TYPE_FLAT:
+        elif network_type == q_const.NET_TYPE_FLAT:
             #Nothing to do
             pass
-        elif network_type == constants.TYPE_LOCAL:
+        elif network_type == q_const.NET_TYPE_LOCAL:
             #Nothing to do
             pass
         else:

@@ -267,11 +267,11 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._parse_network_vlan_ranges()
         ovs_db_v2.sync_vlan_allocations(self.network_vlan_ranges)
         self.tenant_network_type = cfg.CONF.OVS.tenant_network_type
-        if self.tenant_network_type not in [constants.TYPE_LOCAL,
-                                            constants.TYPE_VLAN,
-                                            constants.TYPE_GRE,
-                                            constants.TYPE_VXLAN,
-                                            constants.TYPE_NONE]:
+        if self.tenant_network_type not in [q_const.NET_TYPE_LOCAL,
+                                            q_const.NET_TYPE_VLAN,
+                                            q_const.NET_TYPE_GRE,
+                                            q_const.NET_TYPE_VXLAN,
+                                            q_const.NET_TYPE_NONE]:
             LOG.error(_("Invalid tenant_network_type: %s. "
                       "Server terminated!"),
                       self.tenant_network_type)
@@ -334,13 +334,13 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if binding.network_type in constants.TUNNEL_NETWORK_TYPES:
             network[provider.PHYSICAL_NETWORK] = None
             network[provider.SEGMENTATION_ID] = binding.segmentation_id
-        elif binding.network_type == constants.TYPE_FLAT:
+        elif binding.network_type == q_const.NET_TYPE_FLAT:
             network[provider.PHYSICAL_NETWORK] = binding.physical_network
             network[provider.SEGMENTATION_ID] = None
-        elif binding.network_type == constants.TYPE_VLAN:
+        elif binding.network_type == q_const.NET_TYPE_VLAN:
             network[provider.PHYSICAL_NETWORK] = binding.physical_network
             network[provider.SEGMENTATION_ID] = binding.segmentation_id
-        elif binding.network_type == constants.TYPE_LOCAL:
+        elif binding.network_type == q_const.NET_TYPE_LOCAL:
             network[provider.PHYSICAL_NETWORK] = None
             network[provider.SEGMENTATION_ID] = None
 
@@ -360,13 +360,13 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if not network_type_set:
             msg = _("provider:network_type required")
             raise q_exc.InvalidInput(error_message=msg)
-        elif network_type == constants.TYPE_FLAT:
+        elif network_type == q_const.NET_TYPE_FLAT:
             if segmentation_id_set:
                 msg = _("provider:segmentation_id specified for flat network")
                 raise q_exc.InvalidInput(error_message=msg)
             else:
                 segmentation_id = constants.FLAT_VLAN_ID
-        elif network_type == constants.TYPE_VLAN:
+        elif network_type == q_const.NET_TYPE_VLAN:
             if not segmentation_id_set:
                 msg = _("provider:segmentation_id required")
                 raise q_exc.InvalidInput(error_message=msg)
@@ -389,7 +389,7 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not segmentation_id_set:
                 msg = _("provider:segmentation_id required")
                 raise q_exc.InvalidInput(error_message=msg)
-        elif network_type == constants.TYPE_LOCAL:
+        elif network_type == q_const.NET_TYPE_LOCAL:
             if physical_network_set:
                 msg = _("provider:physical_network specified for local "
                         "network")
@@ -406,7 +406,7 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             msg = _("provider:network_type %s not supported") % network_type
             raise q_exc.InvalidInput(error_message=msg)
 
-        if network_type in [constants.TYPE_VLAN, constants.TYPE_FLAT]:
+        if network_type in [q_const.NET_TYPE_VLAN, q_const.NET_TYPE_FLAT]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
                     msg = _("Unknown provider:physical_network "
@@ -435,22 +435,23 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if not network_type:
                 # tenant network
                 network_type = self.tenant_network_type
-                if network_type == constants.TYPE_NONE:
+                if network_type == q_const.NET_TYPE_NONE:
                     raise q_exc.TenantNetworksDisabled()
-                elif network_type == constants.TYPE_VLAN:
+                elif network_type == q_const.NET_TYPE_VLAN:
                     (physical_network,
                      segmentation_id) = ovs_db_v2.reserve_vlan(session)
                 elif network_type in constants.TUNNEL_NETWORK_TYPES:
                     segmentation_id = ovs_db_v2.reserve_tunnel(session)
-                # no reservation needed for TYPE_LOCAL
+                # no reservation needed for NET_TYPE_LOCAL
             else:
                 # provider network
-                if network_type in [constants.TYPE_VLAN, constants.TYPE_FLAT]:
+                if network_type in [q_const.NET_TYPE_VLAN,
+                                    q_const.NET_TYPE_FLAT]:
                     ovs_db_v2.reserve_specific_vlan(session, physical_network,
                                                     segmentation_id)
                 elif network_type in constants.TUNNEL_NETWORK_TYPES:
                     ovs_db_v2.reserve_specific_tunnel(session, segmentation_id)
-                # no reservation needed for TYPE_LOCAL
+                # no reservation needed for NET_TYPE_LOCAL
             net = super(OVSQuantumPluginV2, self).create_network(context,
                                                                  network)
             ovs_db_v2.add_network_binding(session, net['id'], network_type,
@@ -483,8 +484,8 @@ class OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if binding.network_type in constants.TUNNEL_NETWORK_TYPES:
                 ovs_db_v2.release_tunnel(session, binding.segmentation_id,
                                          self.tunnel_id_ranges)
-            elif binding.network_type in [constants.TYPE_VLAN,
-                                          constants.TYPE_FLAT]:
+            elif binding.network_type in [q_const.NET_TYPE_VLAN,
+                                          q_const.NET_TYPE_FLAT]:
                 ovs_db_v2.release_vlan(session, binding.physical_network,
                                        binding.segmentation_id,
                                        self.network_vlan_ranges)

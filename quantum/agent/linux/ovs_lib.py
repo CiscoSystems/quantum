@@ -22,6 +22,7 @@ import re
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import utils
+from quantum.common import constants as q_const
 from quantum.openstack.common import jsonutils
 from quantum.openstack.common import log as logging
 from quantum.plugins.openvswitch.common import constants
@@ -166,11 +167,11 @@ class OVSBridge:
         self.run_ofctl("del-flows", [flow_str])
 
     def add_tunnel_port(self, port_name, remote_ip,
-                        tunnel_type=constants.TYPE_GRE,
+                        tunnel_type=q_const.NET_TYPE_GRE,
                         vxlan_udp_port=constants.VXLAN_UDP_PORT):
         self.run_vsctl(["add-port", self.br_name, port_name])
         self.set_db_attribute("Interface", port_name, "type", tunnel_type)
-        if tunnel_type == constants.TYPE_VXLAN:
+        if tunnel_type == q_const.NET_TYPE_VXLAN:
             # Only set the VXLAN UDP port if it's not the default
             if vxlan_udp_port != constants.VXLAN_UDP_PORT:
                 self.set_db_attribute("Interface", port_name,

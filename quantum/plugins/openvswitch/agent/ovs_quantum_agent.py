@@ -149,7 +149,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
 
     def __init__(self, integ_br, tun_br, local_ip,
                  bridge_mappings, root_helper,
-                 polling_interval, tunnel_type=constants.TYPE_NONE):
+                 polling_interval, tunnel_type=q_const.NET_TYPE_NONE):
         '''Constructor.
 
         :param integ_br: name of the integration bridge.
@@ -197,7 +197,8 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                                               root_helper)
 
     def _check_ovs_version(self):
-        if self.enable_tunneling and self.tunnel_type == constants.TYPE_VXLAN:
+        if (self.enable_tunneling and
+            self.tunnel_type == q_const.NET_TYPE_VXLAN):
             check_ovs_version(constants.MINIMUM_OVS_VXLAN_VERSION,
                               self.root_helper)
 
@@ -343,7 +344,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                           "net-id=%(net_uuid)s - tunneling disabled"),
                           {'network_type': network_type,
                            'net_uuid': net_uuid})
-        elif network_type == constants.TYPE_FLAT:
+        elif network_type == q_const.NET_TYPE_FLAT:
             if physical_network in self.phys_brs:
                 # outbound
                 br = self.phys_brs[physical_network]
@@ -363,7 +364,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                             "physical_network %(physical_network)s"),
                           {'net_uuid': net_uuid,
                            'physical_network': physical_network})
-        elif network_type == constants.TYPE_VLAN:
+        elif network_type == q_const.NET_TYPE_VLAN:
             if physical_network in self.phys_brs:
                 # outbound
                 br = self.phys_brs[physical_network]
@@ -383,7 +384,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                             "physical_network %(physical_network)s"),
                           {'net_uuid': net_uuid,
                            'physical_network': physical_network})
-        elif network_type == constants.TYPE_LOCAL:
+        elif network_type == q_const.NET_TYPE_LOCAL:
             # no flows needed for local networks
             pass
         else:
@@ -407,7 +408,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             if self.enable_tunneling:
                 self.tun_br.delete_flows(tun_id=lvm.segmentation_id)
                 self.tun_br.delete_flows(dl_vlan=lvm.vlan)
-        elif lvm.network_type == constants.TYPE_FLAT:
+        elif lvm.network_type == q_const.NET_TYPE_FLAT:
             if lvm.physical_network in self.phys_brs:
                 # outbound
                 br = self.phys_brs[lvm.physical_network]
@@ -418,7 +419,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 br = self.int_br
                 br.delete_flows(in_port=self.int_ofports[lvm.physical_network],
                                 dl_vlan=0xffff)
-        elif lvm.network_type == constants.TYPE_VLAN:
+        elif lvm.network_type == q_const.NET_TYPE_VLAN:
             if lvm.physical_network in self.phys_brs:
                 # outbound
                 br = self.phys_brs[lvm.physical_network]
@@ -429,7 +430,7 @@ class OVSQuantumAgent(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
                 br = self.int_br
                 br.delete_flows(in_port=self.int_ofports[lvm.physical_network],
                                 dl_vlan=lvm.segmentation_id)
-        elif lvm.network_type == constants.TYPE_LOCAL:
+        elif lvm.network_type == q_const.NET_TYPE_LOCAL:
             # no flows needed for local networks
             pass
         else:
@@ -812,7 +813,7 @@ def create_agent_config_map(config):
 
     # If enable_tunneling is TRUE, set tunnel_type to default to GRE
     if config.OVS.enable_tunneling and not kwargs['tunnel_type']:
-        kwargs['tunnel_type'] = constants.TYPE_GRE
+        kwargs['tunnel_type'] = q_const.NET_TYPE_GRE
 
     if kwargs['tunnel_type'] in constants.TUNNEL_NETWORK_TYPES:
         if not kwargs['local_ip']:
