@@ -266,14 +266,14 @@ class L3NATAgent(manager.Manager):
         return ri.ns_name()[:self.driver.DEV_NAME_LEN]
 
     def _csr_create_vrf(self, ri):
-        _csr_driver = self._he.get_driver(ri.router_id)
         vrf_name = self._csr_get_vrf_name(ri)
-        _csr_driver.create_vrf(vrf_name)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.create_vrf(vrf_name)
 
     def _csr_remove_vrf(self, ri):
-        _csr_driver = self._he.get_driver(ri.router_id)
         vrf_name = self._csr_get_vrf_name(ri)
-        _csr_driver.remove_vrf(vrf_name)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.remove_vrf(vrf_name)
 
     def _csr_create_subinterface(self, ri,  intfc_no,
                                  vlanid, ip_cidrs ):
@@ -288,19 +288,21 @@ class L3NATAgent(manager.Manager):
         netmask = netaddr.IPNetwork(ip_cidr).netmask
         gateway_ip = ip_cidr.split('/')[0]
         interface = 'GigabitEthernet'+str(intfc_no)+'.'+str(vlanid)
-        self._csr_driver.create_subinterface(interface,
-                                             vrf_name,
-                                             gateway_ip,
-                                             vlanid,
-                                             netmask)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.create_subinterface(interface,
+                                       vlanid,
+                                       vrf_name,
+                                       gateway_ip,
+                                       netmask)
 
     def _csr_remove_subinterface(self, ri, intc_no, vlan_id, ip_cidr):
         vrf_name = self._csr_get_vrf_name(ri)
         ip = ip_cidr.split('/')[0]
         netmask = netaddr.IPNetwork(ip_cidr).netmask
         interface = 'GigabitEthernet'+str(intfc_no)+'.'+str(vlanid)
-        self._csr_driver.remove_subinterface(interface, vrf_name, ip,
-                                             vlan_id, netmask)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.remove_subinterface(interface, vrf_name, ip,
+                                       vlan_id, netmask)
 
     def _csr_add_internalnw_nat_rules(self, ri, int_intfc_no,
                                            ext_intfc_no,
@@ -317,8 +319,8 @@ class L3NATAgent(manager.Manager):
         outer_intfc = 'GigabitEthernet'+str(ext_intfc_no)+'.'+str(outer_vlanid)
 
         #nat_pool_name = 'snat_net_'+(ri.ns_name()[:self.driver.DEV_NAME_LEN])
-
-        self._csr_driver.nat_rules_for_internet_access(acl_no,
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.nat_rules_for_internet_access(acl_no,
                                                        internal_net,
                                                        netmask,
                                                        inner_intfc,
@@ -335,7 +337,8 @@ class L3NATAgent(manager.Manager):
         netmask = netaddr.IPNetwork(internal_cidr).hostmask
         inner_intfc = 'GigabitEthernet'+str(int_intfc_no)+'.'+str(inner_vlanid)
         outer_intfc = 'GigabitEthernet'+str(ext_intfc_no)+'.'+str(outer_vlanid)
-        self._csr_driver.remove_nat_rules_for_internet_access(acl_no,
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.remove_nat_rules_for_internet_access(acl_no,
                                                            internal_net,
                                                            netmask,
                                                            inner_intfc,
@@ -344,12 +347,13 @@ class L3NATAgent(manager.Manager):
 
     def _csr_add_floating_ip(self,ri, floating_ip, fixed_ip):
         vrf_name = self._csr_get_vrf_name(ri)
-        self._csr_driver.add_floating_ip(floating_ip, fixed_ip, vrf_name)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.add_floating_ip(floating_ip, fixed_ip, vrf_name)
 
     def _csr_remove_floating_ip(self, ri, floating_ip, fixed_ip):
         vrf_name = self._csr_get_vrf_name(ri)
-        self._csr_driver.remove_floating_ip(self, floating_ip, fixed_ip,
-                                            vrf_name)
+        csr_driver = self._he.get_driver(ri.router_id)
+        csr_driver.remove_floating_ip(floating_ip, fixed_ip, vrf_name)
 
     def _csr_update_routing_table(self, ri, cmd, route):
         #cmd = ['ip', 'route', operation, 'to', route['destination'],
@@ -361,12 +365,13 @@ class L3NATAgent(manager.Manager):
         dest = destination_net.network
         dest_mask = destination_net.netmask
         next_hop = route['nexthop']
+        csr_driver = self._he.get_driver(ri.router_id)
         if cmd is 'replace':
-            self._csr_driver.add_static_route(dest, dest_mask,
-                                              next_hop, vrf_name)
+            csr_driver.add_static_route(dest, dest_mask,
+                                        next_hop, vrf_name)
         elif cmd is 'delete':
-            self._csr_driver.remove_static_route(dest, dest_mask,
-                                                 next_hop, vrf_name)
+            csr_driver.remove_static_route(dest, dest_mask,
+                                           next_hop, vrf_name)
         else:
             LOG.error(_('Unknown route command %s'), cmd)
         pass
@@ -574,7 +579,6 @@ class L3NATAgent(manager.Manager):
         return (EXTERNAL_DEV_PREFIX + port_id)[:self.driver.DEV_NAME_LEN]
 
     def external_gateway_added(self, ri, ex_gw_port, internal_cidrs):
-
         interface_name = self.get_external_device_name(ex_gw_port['id'])
         ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
         if not ip_lib.device_exists(interface_name,
@@ -589,8 +593,13 @@ class L3NATAgent(manager.Manager):
         self.driver.init_l3(interface_name, [ex_gw_port['ip_cidr']],
                             namespace=ri.ns_name())
         #Hareesh: CSR
-        outer_vlan = 60
-        self._csr_create_subinterface(ri, '2', outer_vlan,
+        #outer_vlan = 60
+        trunk_info = ex_gw_port['trunk_info']
+        outer_vlan = trunk_info['segmentation_id']
+        _name = trunk_info['hosting_port_name']
+        #Name will be of format 'T2:x' where x is (1,2,..)
+        itfc_no = str(int(_name.split(':')[1])*2)
+        self._csr_create_subinterface(ri, itfc_no, outer_vlan,
                                       [ex_gw_port['ip_cidr']])
         ip_address = ex_gw_port['ip_cidr'].split('/')[0]
         self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
@@ -624,7 +633,7 @@ class L3NATAgent(manager.Manager):
                                prefix=EXTERNAL_DEV_PREFIX)
 
         #Hareesh: CSR
-        outer_vlan = 60
+        #outer_vlan = 60
         self._csr_remove_subinterface(ri, '2', outer_vlan,
                                       [ex_gw_port['ip_cidr']])
 
@@ -673,9 +682,9 @@ class L3NATAgent(manager.Manager):
         #Hareesh: CSR changes
         #Internal Port
         inner_vlan = trunk_info['segmentation_id']
-        _name = trunk_info['name']
+        _name = trunk_info['hosting_port_name']
         #Name will be of format 'T1:x' where x is the index(1,2,..)
-        itfc_no = str(int(_name.split(':')[1])*2)
+        itfc_no = str(int(_name.split(':')[1])*2-1)
         self._csr_create_subinterface(ri, itfc_no, inner_vlan, [internal_cidr])
         ip_address = internal_cidr.split('/')[0]
         self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
@@ -689,7 +698,7 @@ class L3NATAgent(manager.Manager):
             # Hareesh: Apply CSR internal_network_nat_rules
             #External Port
             outer_vlan = ex_gw_port['trunk_info']['segmentation_id']
-            _ext_name = ex_gw_port['trunk_info']['name']
+            _ext_name = ex_gw_port['trunk_info']['hosting_port_name']
             #Name will be of format 'T2:x' where x is the index(1,2,..)
             ext_infc_no = str(int(_ext_name.split(':')[1])*2)
             self._csr_add_internalnw_nat_rules(ri, itfc_no, ext_infc_no,
