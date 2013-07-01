@@ -44,6 +44,8 @@ cisco_opts = [
                help=_("Maximum Port Profile value")),
     cfg.StrOpt('max_networks', default='65568',
                help=_("Maximum Network value")),
+    cfg.BoolOpt('svi_round_robin', default=False,
+                help=_("Distribute SVI interfaces over all switches")),
     cfg.StrOpt('model_class',
                default='quantum.plugins.cisco.models.virt_phy_sw_v2.'
                        'VirtualPhysicalSwitchModelV2',
@@ -53,7 +55,7 @@ cisco_opts = [
                        'l2network_vlan_mgr_v2.L2NetworkVLANMgr',
                help=_("Manager Class")),
     cfg.StrOpt('nexus_driver',
-               default='quantum.plugins.cisco.tests.unit.v2.nexus.'
+               default='quantum.plugins.cisco.test.nexus.'
                        'fake_nexus_driver.CiscoNEXUSFakeDriver',
                help=_("Nexus Driver Name")),
 ]

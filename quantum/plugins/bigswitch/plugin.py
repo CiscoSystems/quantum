@@ -48,6 +48,7 @@ import base64
 import copy
 import httplib
 import json
+import os
 import socket
 
 from oslo.config import cfg
@@ -65,14 +66,19 @@ from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.extensions import l3
 from quantum.extensions import portbindings
-from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
+from quantum.plugins.bigswitch.db import porttracker_db
+from quantum.plugins.bigswitch import routerrule_db
 from quantum.plugins.bigswitch.version import version_string_with_vcs
-
 
 LOG = logging.getLogger(__name__)
 
+# Include the BigSwitch Extensions path in the api_extensions
+EXTENSIONS_PATH = os.path.join(os.path.dirname(__file__), 'extensions')
+if not cfg.CONF.api_extensions_path:
+    cfg.CONF.set_override('api_extensions_path',
+                          EXTENSIONS_PATH)
 
 restproxy_opts = [
     cfg.StrOpt('servers', default='localhost:8800',
@@ -103,6 +109,17 @@ restproxy_opts = [
 
 cfg.CONF.register_opts(restproxy_opts, "RESTPROXY")
 
+router_opts = [
+    cfg.MultiStrOpt('tenant_default_router_rule', default=['*:any:any:permit'],
+                    help=_("The default router rules installed in new tenant "
+                           "routers. Repeat the config option for each rule. "
+                           "Format is <tenant>:<source>:<destination>:<action>"
+                           " Use an * to specify default for all tenants.")),
+    cfg.IntOpt('max_router_rules', default=200,
+               help=_("Maximum number of router rules")),
+]
+
+cfg.CONF.register_opts(router_opts, "ROUTER")
 
 nova_opts = [
     cfg.StrOpt('vif_type', default='ovs',
@@ -110,6 +127,15 @@ nova_opts = [
                       "Nova compute nodes")),
 ]
 
+# Each VIF Type can have a list of nova host IDs that are fixed to that type
+for i in portbindings.VIF_TYPES:
+    opt = cfg.ListOpt('node_override_vif_' + i, default=[],
+                      help=_("Nova compute nodes to manually set VIF "
+                             "type to %s") % i)
+    nova_opts.append(opt)
+
+# Add the vif types for reference later
+nova_opts.append(cfg.ListOpt('vif_types', default=portbindings.VIF_TYPES))
 
 cfg.CONF.register_opts(nova_opts, "NOVA")
 
@@ -160,7 +186,7 @@ class ServerProxy(object):
         if auth:
             self.auth = 'Basic ' + base64.encodestring(auth).strip()
 
-    @lockutils.synchronized('rest_call', 'bsn-', external=True)
+    @utils.synchronized('bsn-rest-call', external=True)
     def rest_call(self, action, resource, data, headers):
         uri = self.base_uri + resource
         body = json.dumps(data)
@@ -303,11 +329,11 @@ class RpcProxy(dhcp_rpc_base.DhcpRpcCallbackMixin):
 
 
 class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
-                         l3_db.L3_NAT_db_mixin):
+                         routerrule_db.RouterRule_db_mixin):
 
-    supported_extension_aliases = ["router", "binding"]
+    supported_extension_aliases = ["router", "binding", "router_rules"]
 
-    def __init__(self):
+    def __init__(self, server_timeout=None):
         LOG.info(_('QuantumRestProxy: Starting plugin. Version=%s'),
                  version_string_with_vcs())
 
@@ -321,9 +347,11 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         server_auth = cfg.CONF.RESTPROXY.server_auth
         server_ssl = cfg.CONF.RESTPROXY.server_ssl
         sync_data = cfg.CONF.RESTPROXY.sync_data
-        timeout = cfg.CONF.RESTPROXY.server_timeout
         quantum_id = cfg.CONF.RESTPROXY.quantum_id
         self.add_meta_server_route = cfg.CONF.RESTPROXY.add_meta_server_route
+        timeout = cfg.CONF.RESTPROXY.server_timeout
+        if server_timeout is not None:
+            timeout = server_timeout
 
         # validate config
         assert servers is not None, 'Servers not defined. Aborting plugin'
@@ -553,6 +581,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         # Update DB
         port["port"]["admin_state_up"] = False
+        if (portbindings.HOST_ID in port['port']
+            and 'device_id' in port['port']):
+            porttracker_db.put_port_hostid(context, port['port']['device_id'],
+                                           port['port'][portbindings.HOST_ID])
         new_port = super(QuantumRestProxyV2, self).create_port(context, port)
         net = super(QuantumRestProxyV2,
                     self).get_network(context, new_port["network_id"])
@@ -645,7 +677,10 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
         # Update DB
         new_port = super(QuantumRestProxyV2, self).update_port(context,
                                                                port_id, port)
-
+        if (portbindings.HOST_ID in port['port']
+            and 'device_id' in port['port']):
+            porttracker_db.put_port_hostid(context, port['port']['device_id'],
+                                           port['port'][portbindings.HOST_ID])
         # update on networl ctrl
         try:
             resource = PORTS_PATH % (orig_port["tenant_id"],
@@ -702,17 +737,22 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _delete_port(self, context, port_id):
         # Delete from DB
         port = super(QuantumRestProxyV2, self).get_port(context, port_id)
+        tenant_id = port['tenant_id']
+        if tenant_id == '':
+            net = super(QuantumRestProxyV2,
+                        self).get_network(context, port['network_id'])
+            tenant_id = net['tenant_id']
 
         # delete from network ctrl. Remote error on delete is ignored
         try:
-            resource = PORTS_PATH % (port["tenant_id"], port["network_id"],
+            resource = PORTS_PATH % (tenant_id, port["network_id"],
                                      port_id)
             ret = self.servers.delete(resource)
             if not self.servers.action_success(ret):
                 raise RemoteRestError(ret[2])
 
             if port.get("device_id"):
-                self._unplug_interface(context, port["tenant_id"],
+                self._unplug_interface(context, tenant_id,
                                        port["network_id"], port["id"])
             ret_val = super(QuantumRestProxyV2, self)._delete_port(context,
                                                                    port_id)
@@ -838,12 +878,42 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
             # TODO(Sumit): rollback deletion of subnet
             raise
 
+    def _get_tenant_default_router_rules(self, tenant):
+        rules = cfg.CONF.ROUTER.tenant_default_router_rule
+        defaultset = []
+        tenantset = []
+        for rule in rules:
+            items = rule.split(':')
+            if len(items) == 5:
+                (tenantid, source, destination, action, nexthops) = items
+            elif len(items) == 4:
+                (tenantid, source, destination, action) = items
+                nexthops = ''
+            else:
+                continue
+            parsedrule = {'source': source,
+                          'destination': destination, 'action': action,
+                          'nexthops': nexthops.split(',')}
+            if parsedrule['nexthops'][0] == '':
+                parsedrule['nexthops'] = []
+            if tenantid == '*':
+                defaultset.append(parsedrule)
+            if tenantid == tenant:
+                tenantset.append(parsedrule)
+        if tenantset:
+            return tenantset
+        return defaultset
+
     def create_router(self, context, router):
         LOG.debug(_("QuantumRestProxyV2: create_router() called"))
 
         self._warn_on_state_status(router['router'])
 
         tenant_id = self._get_tenant_id_for_create(context, router["router"])
+
+        # set default router rules
+        rules = self._get_tenant_default_router_rules(tenant_id)
+        router['router']['router_rules'] = rules
 
         # create router in DB
         new_router = super(QuantumRestProxyV2, self).create_router(context,
@@ -1284,10 +1354,21 @@ class QuantumRestProxyV2(db_base_plugin_v2.QuantumDbPluginV2,
                           "[%s]. Defaulting to ovs. "),
                         cfg_vif_type)
             cfg_vif_type = portbindings.VIF_TYPE_OVS
-
+        hostid = porttracker_db.get_port_hostid(context,
+                                                port.get("device_id"))
+        if hostid:
+            override = self._check_hostvif_override(hostid)
+            if override:
+                cfg_vif_type = override
         port[portbindings.VIF_TYPE] = cfg_vif_type
 
         port[portbindings.CAPABILITIES] = {
             portbindings.CAP_PORT_FILTER:
             'security-group' in self.supported_extension_aliases}
         return port
+
+    def _check_hostvif_override(self, hostid):
+        for v in cfg.CONF.NOVA.vif_types:
+            if hostid in getattr(cfg.CONF.NOVA, "node_override_vif_" + v, []):
+                return v
+        return False

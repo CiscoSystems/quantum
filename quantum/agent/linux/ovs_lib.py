@@ -22,7 +22,9 @@ import re
 
 from quantum.agent.linux import ip_lib
 from quantum.agent.linux import utils
+from quantum.openstack.common import jsonutils
 from quantum.openstack.common import log as logging
+from quantum.plugins.openvswitch.common import constants
 
 LOG = logging.getLogger(__name__)
 
@@ -163,9 +165,17 @@ class OVSBridge:
         flow_str = ",".join(flow_expr_arr)
         self.run_ofctl("del-flows", [flow_str])
 
-    def add_tunnel_port(self, port_name, remote_ip):
+    def add_tunnel_port(self, port_name, remote_ip,
+                        tunnel_type=constants.TYPE_GRE,
+                        vxlan_udp_port=constants.VXLAN_UDP_PORT):
         self.run_vsctl(["add-port", self.br_name, port_name])
-        self.set_db_attribute("Interface", port_name, "type", "gre")
+        self.set_db_attribute("Interface", port_name, "type", tunnel_type)
+        if tunnel_type == constants.TYPE_VXLAN:
+            # Only set the VXLAN UDP port if it's not the default
+            if vxlan_udp_port != constants.VXLAN_UDP_PORT:
+                self.set_db_attribute("Interface", port_name,
+                                      "options:dst_port",
+                                      vxlan_udp_port)
         self.set_db_attribute("Interface", port_name, "options:remote_ip",
                               remote_ip)
         self.set_db_attribute("Interface", port_name, "options:in_key", "flow")
@@ -243,10 +253,18 @@ class OVSBridge:
         return edge_ports
 
     def get_vif_port_set(self):
-        edge_ports = set()
         port_names = self.get_port_name_list()
-        for name in port_names:
-            external_ids = self.db_get_map("Interface", name, "external_ids")
+        edge_ports = set()
+        args = ['--format=json', '--', '--columns=name,external_ids',
+                'list', 'Interface']
+        result = self.run_vsctl(args)
+        if not result:
+            return edge_ports
+        for row in jsonutils.loads(result)['data']:
+            name = row[0]
+            if name not in port_names:
+                continue
+            external_ids = dict(row[1][1])
             if "iface-id" in external_ids and "attached-mac" in external_ids:
                 edge_ports.add(external_ids['iface-id'])
             elif ("xs-vif-uuid" in external_ids and
@@ -310,3 +328,25 @@ def get_bridges(root_helper):
     except Exception as e:
         LOG.exception(_("Unable to retrieve bridges. Exception: %s"), e)
         return []
+
+
+def get_installed_ovs_usr_version(root_helper):
+    args = ["ovs-vsctl", "--version"]
+    try:
+        cmd = utils.execute(args, root_helper=root_helper)
+        ver = re.findall("\d+\.\d+", cmd)[0]
+        return ver
+    except Exception:
+        LOG.exception(_("Unable to retrieve OVS userspace version."))
+
+
+def get_installed_ovs_klm_version():
+    args = ["modinfo", "openvswitch"]
+    try:
+        cmd = utils.execute(args)
+        for line in cmd.split('\n'):
+            if 'version: ' in line and not 'srcversion' in line:
+                ver = re.findall("\d+\.\d+", line)
+                return ver[0]
+    except Exception:
+        LOG.exception(_("Unable to retrieve OVS kernel module version."))

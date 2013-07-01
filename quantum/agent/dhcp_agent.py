@@ -32,11 +32,11 @@ from quantum.agent import rpc as agent_rpc
 from quantum.common import constants
 from quantum.common import exceptions
 from quantum.common import topics
+from quantum.common import utils
 from quantum import context
 from quantum import manager
 from quantum.openstack.common import importutils
 from quantum.openstack.common import jsonutils
-from quantum.openstack.common import lockutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import loopingcall
 from quantum.openstack.common.rpc import proxy
@@ -230,13 +230,16 @@ class DhcpAgent(manager.Manager):
         else:
             self.disable_dhcp_helper(network.id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+        if new_cidrs:
+            self.device_manager.update(network)
+
+    @utils.synchronized('dhcp-agent')
     def network_create_end(self, context, payload):
         """Handle the network.create.end notification event."""
         network_id = payload['network']['id']
         self.enable_dhcp_helper(network_id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def network_update_end(self, context, payload):
         """Handle the network.update.end notification event."""
         network_id = payload['network']['id']
@@ -245,12 +248,12 @@ class DhcpAgent(manager.Manager):
         else:
             self.disable_dhcp_helper(network_id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def network_delete_end(self, context, payload):
         """Handle the network.delete.end notification event."""
         self.disable_dhcp_helper(payload['network_id'])
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def subnet_update_end(self, context, payload):
         """Handle the subnet.update.end notification event."""
         network_id = payload['subnet']['network_id']
@@ -259,7 +262,7 @@ class DhcpAgent(manager.Manager):
     # Use the update handler for the subnet create event.
     subnet_create_end = subnet_update_end
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def subnet_delete_end(self, context, payload):
         """Handle the subnet.delete.end notification event."""
         subnet_id = payload['subnet_id']
@@ -267,7 +270,7 @@ class DhcpAgent(manager.Manager):
         if network:
             self.refresh_dhcp_helper(network.id)
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def port_update_end(self, context, payload):
         """Handle the port.update.end notification event."""
         port = DictModel(payload['port'])
@@ -279,7 +282,7 @@ class DhcpAgent(manager.Manager):
     # Use the update handler for the port create event.
     port_create_end = port_update_end
 
-    @lockutils.synchronized('agent', 'dhcp-')
+    @utils.synchronized('dhcp-agent')
     def port_delete_end(self, context, payload):
         """Handle the port.delete.end notification event."""
         port = self.cache.get_port_by_id(payload['port_id'])
@@ -525,6 +528,53 @@ class DeviceManager(object):
         host_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, socket.gethostname())
         return 'dhcp%s-%s' % (host_uuid, network.id)
 
+    def _get_device(self, network):
+        """Return DHCP ip_lib device for this host on the network."""
+        device_id = self.get_device_id(network)
+        port = self.plugin.get_dhcp_port(network.id, device_id)
+        interface_name = self.get_interface_name(network, port)
+        namespace = NS_PREFIX + network.id
+        return ip_lib.IPDevice(interface_name,
+                               self.root_helper,
+                               namespace)
+
+    def _set_default_route(self, network):
+        """Sets the default gateway for this dhcp namespace.
+
+        This method is idempotent and will only adjust the route if adjusting
+        it would change it from what it already is.  This makes it safe to call
+        and avoids unnecessary perturbation of the system.
+        """
+        device = self._get_device(network)
+        gateway = device.route.get_gateway()
+        if gateway:
+            gateway = gateway['gateway']
+
+        for subnet in network.subnets:
+            skip_subnet = (
+                subnet.ip_version != 4
+                or not subnet.enable_dhcp
+                or subnet.gateway_ip is None)
+
+            if skip_subnet:
+                continue
+
+            if gateway != subnet.gateway_ip:
+                m = _('Setting gateway for dhcp netns on net %(n)s to %(ip)s')
+                LOG.debug(m, {'n': network.id, 'ip': subnet.gateway_ip})
+
+                device.route.add_gateway(subnet.gateway_ip)
+
+            return
+
+        # No subnets on the network have a valid gateway.  Clean it up to avoid
+        # confusion from seeing an invalid gateway here.
+        if gateway is not None:
+            msg = _('Removing gateway for dhcp netns on net %s')
+            LOG.debug(msg, network.id)
+
+            device.route.delete_gateway(gateway)
+
     def setup(self, network, reuse_existing=False):
         """Create and initialize a device for network's DHCP on this host."""
         device_id = self.get_device_id(network)
@@ -583,8 +633,15 @@ class DeviceManager(object):
                 # Only 1 subnet on metadata access network
                 gateway_ip = metadata_subnets[0].gateway_ip
                 device.route.add_gateway(gateway_ip)
+        elif self.conf.use_namespaces:
+            self._set_default_route(network)
 
         return interface_name
+
+    def update(self, network):
+        """Update device settings for the network's DHCP on this host."""
+        if self.conf.use_namespaces and not self.conf.enable_metadata_network:
+            self._set_default_route(network)
 
     def destroy(self, network, device_name):
         """Destroy the device used for the network's DHCP on this host."""
@@ -638,7 +695,7 @@ class DhcpLeaseRelay(object):
                 if os.path.exists(cfg.CONF.dhcp_lease_relay_socket):
                     raise
         else:
-            os.makedirs(dirname, 0755)
+            os.makedirs(dirname, 0o755)
 
     def _handler(self, client_sock, client_addr):
         """Handle incoming lease relay stream connection.
@@ -684,10 +741,11 @@ class DhcpAgentWithStateReport(DhcpAgent):
             'configurations': {
                 'dhcp_driver': cfg.CONF.dhcp_driver,
                 'use_namespaces': cfg.CONF.use_namespaces,
-                'dhcp_lease_time': cfg.CONF.dhcp_lease_time},
+                'dhcp_lease_duration': cfg.CONF.dhcp_lease_duration},
             'start_flag': True,
             'agent_type': constants.AGENT_TYPE_DHCP}
         report_interval = cfg.CONF.AGENT.report_interval
+        self.use_call = True
         if report_interval:
             self.heartbeat = loopingcall.FixedIntervalLoopingCall(
                 self._report_state)
@@ -698,8 +756,8 @@ class DhcpAgentWithStateReport(DhcpAgent):
             self.agent_state.get('configurations').update(
                 self.cache.get_state())
             ctx = context.get_admin_context_without_session()
-            self.state_rpc.report_state(ctx,
-                                        self.agent_state)
+            self.state_rpc.report_state(ctx, self.agent_state, self.use_call)
+            self.use_call = False
         except AttributeError:
             # This means the server does not support report_state
             LOG.warn(_("Quantum server does not support state report."
