@@ -532,12 +532,15 @@ class L3NATAgent(manager.Manager):
 
     def internal_network_removed(self, ri, ex_gw_port, port_id,
                                  internal_cidr, trunk_info):
-        interface_name = self.get_internal_device_name(port_id)
+        LOG.debug(_("*** In internal network removed!**"))
+        #interface_name = self.get_internal_device_name(port_id)
         #Hareesh : CSR
+
         inner_vlan = trunk_info['segmentation_id']
         _name = trunk_info['hosting_port_name']
         #Name will be of format 'T1:x' where x is the index(1,2,..)
         itfc_no = str(int(_name.split(':')[1])*2-1)
+        LOG.debug(_("Params: %s %s %s"), (inner_vlan, _name, itfc_no))
         self._csr_remove_subinterface(ri, itfc_no, inner_vlan, internal_cidr)
 
         if ex_gw_port:
