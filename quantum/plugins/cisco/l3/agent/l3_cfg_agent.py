@@ -582,6 +582,7 @@ class L3NATAgent(manager.Manager):
             except Exception:
                 msg = _("Failed dealing with routers update RPC message")
                 LOG.debug(msg)
+                LOG.debug(Exception)
                 self.fullsync = True
 
     def router_removed_from_agent(self, context, payload):
