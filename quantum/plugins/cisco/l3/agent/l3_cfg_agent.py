@@ -250,7 +250,7 @@ class L3NATAgent(manager.Manager):
         vrf_name = self._csr_get_vrf_name(ri)
         ip = ip_cidr.split('/')[0]
         netmask = netaddr.IPNetwork(ip_cidr).netmask
-        interface = 'GigabitEthernet'+str(intfc_no)+'.'+str(vlanid)
+        interface = 'GigabitEthernet'+str(intc_no)+'.'+str(vlanid)
         csr_driver = self._he.get_driver(ri.router_id)
         csr_driver.remove_subinterface(interface, vrf_name, ip,
                                        vlan_id, netmask)
@@ -534,7 +534,11 @@ class L3NATAgent(manager.Manager):
                                  internal_cidr, trunk_info):
         interface_name = self.get_internal_device_name(port_id)
         #Hareesh : CSR
-        self._csr_remove_subinterface(ri,'1',inner_vlan,internal_cidr)
+        inner_vlan = trunk_info['segmentation_id']
+        _name = trunk_info['hosting_port_name']
+        #Name will be of format 'T1:x' where x is the index(1,2,..)
+        itfc_no = str(int(_name.split(':')[1])*2-1)
+        self._csr_remove_subinterface(ri, itfc_no, inner_vlan, internal_cidr)
 
         if ex_gw_port:
             ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
