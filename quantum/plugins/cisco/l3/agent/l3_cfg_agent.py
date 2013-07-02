@@ -210,8 +210,6 @@ class L3NATAgent(manager.Manager):
         self.plugin_rpc = L3PluginApi(topics.PLUGIN, host)
         self.fullsync = True
         self.sync_sem = semaphore.Semaphore(1)
-        if self.conf.use_namespaces:
-            self._destroy_router_namespaces(self.conf.router_id)
         #Hareesh
         if self.conf.use_hosting_entities:
             self._he = HostingEntities()
