@@ -113,8 +113,8 @@ class HostingEntities(object):
         _he_ip = hosting_entity['ip_address']
         _he_port = hosting_entity['port']
         _he_created_at = hosting_entity['created_at']
-        _he_user = 'stack'
-        _he_passwd = 'cisco'
+        _he_user = 'lab'
+        _he_passwd = 'lab'
 
         _csr_driver = cisco_csr_network_driver.CiscoCSRDriver(_he_ip,
                                                                _he_port,
