@@ -21,6 +21,7 @@ from oslo.config import cfg
 import webtest
 
 
+from quantum.api import extensions
 from quantum.common.test_lib import test_config
 from quantum.manager import QuantumManager
 from quantum.openstack.common import log as logging
@@ -76,14 +77,25 @@ class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
         self.tenant_id_fcn_p.stop()
         super(test_l3_plugin.L3NatDBTestCase, self).tearDown()
 
+
 class L3RouterApplianceTestCaseXML(L3RouterApplianceTestCase):
     fmt = 'xml'
 
+
 class myTestCase(base.BaseTestCase):
     def setUp(self):
+        # Ensure 'stale' patched copies of the plugin are never returned
+        QuantumManager._instance = None
+
+        # Ensure existing ExtensionManager is not used
+        extensions.PluginAwareExtensionManager._instance = None
         test_config['plugin_name_v2'] = (
             'quantum.plugins.cisco.l3.tests.unit.'
             'test_l3_router_appliance_plugin.TestL3RouterAppliancePlugin')
+        # Update the plugin and extensions path
+        cfg.CONF.set_override('core_plugin', test_config['plugin_name_v2'])
+        cfg.CONF.set_override('allow_pagination', True)
+        cfg.CONF.set_override('allow_sorting', True)
         # for these tests we need to enable overlapping ips
         cfg.CONF.set_default('allow_overlapping_ips', True)
         cfg.CONF.set_default('max_routes', 3)
@@ -110,4 +122,5 @@ class myTestCase(base.BaseTestCase):
 
     def basic_test(self):
         plugin = QuantumManager.get_plugin()
+        res = plugin.l3_tenant_id()
         self.assertEqual(plugin.l3_tenant_id(), 'L3AdminTenantId')

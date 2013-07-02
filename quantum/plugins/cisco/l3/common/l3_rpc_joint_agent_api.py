@@ -65,11 +65,13 @@ class L3JointAgentNotifyAPI(proxy.RpcProxy):
                     adminContext, [router['id']],
                     admin_state_up=True,
                     active=True)
-            else:
+            elif router['hosting_entity'] is not None:
                 agents = plugin.get_l3_cfg_agents_for_hosting_entities(
                     adminContext, [router['hosting_entity']['id']],
                     admin_state_up=True,
                     active=True)
+            else:
+                agents = []
             for agent in agents:
                 LOG.debug(_('Notify l3%(type)sagent at %(topic)s.%(host)s the message '
                             '%(method)s'),
