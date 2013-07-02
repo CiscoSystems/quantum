@@ -324,16 +324,16 @@ class CiscoCSRDriver():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, filemode="w")
-    driver = CiscoCSRDriver("localhost", 8000, "stack", 'cisco')
+    driver = CiscoCSRDriver("localhost", 8000, "lab", 'lab')
     if driver._get_connection():
         logging.info('Connection Established!')
-        #driver.get_capabilities()
-        #print driver.get_running_config(conn)
+        driver.get_capabilities()
+        #print driver.get_running_config()
         #driver.set_interface(conn, 'GigabitEthernet1', '10.0.200.1')
         #driver.get_interfaces(conn)
         #driver.get_interface_ip(conn, 'GigabitEthernet1')
         #driver.create_vrf('qrouter-dummy')
-        #driver.get_vrfs(conn)
+
         #driver.create_router(1, 'qrouter-dummy2', '10.0.110.1', 11)
         #driver.create_subinterface('GigabitEthernet1.11', 'qrouter-131666dc', '10.0.11.1', '11', '255.255.255.0')
         #driver.remove_subinterface('GigabitEthernet1.11', 'qrouter-131666dc', '10.0.11.1', '11', '255.255.255.0')
@@ -350,11 +350,12 @@ if __name__ == "__main__":
         #driver.add_static_route('172.16.0.0', '255.255.0.0', '10.0.20.254', 'qrouter-131666dc')
         #driver.remove_static_route('172.16.0.0', '255.255.0.0', '10.0.20.254', 'qrouter-131666dc')
         #driver.remove_vrf('wrong_vrf') #Wrong vrf
-        #driver.create_vrf("my_dummy_vrf")
+        driver.create_vrf("my_dummy_vrf")
+        driver.get_vrfs()
         #driver.remove_vrf("my_dummy_vrf")
         #driver._get_floating_ip_cfg()
-        print driver._check_acl('acl_10', '10.0.3.0', '0.0.0.255')
-        print driver._check_acl('acl_10', '10.0.4.0', '0.0.0.255')
-        print driver._check_acl('acl_101', '10.0.3.0', '0.0.0.255')
+        #print driver._check_acl('acl_10', '10.0.3.0', '0.0.0.255')
+        #print driver._check_acl('acl_10', '10.0.4.0', '0.0.0.255')
+        #print driver._check_acl('acl_101', '10.0.3.0', '0.0.0.255')
 
         print "All done"
