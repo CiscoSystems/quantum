@@ -143,7 +143,6 @@ class RouterInfo(object):
             root_helper=root_helper,
             #FIXME(danwent): use_ipv6=True,
             namespace=self.ns_name())
-
         self.routes = []
 
     def ns_name(self):
@@ -218,50 +217,6 @@ class L3NATAgent(manager.Manager):
             self._he = HostingEntities()
         super(L3NATAgent, self).__init__(host=self.conf.host)
 
-    # def _init_csr(self):
-    #     self._csr_driver = cisco_csr_network_driver.CiscoCSRDriver("localhost",
-    #                                                            8000,
-    #                                                            "stack",
-    #                                                            'cisco')
-
-    def _destroy_router_namespaces(self, only_router_id=None):
-        """Destroy router namespaces on the host to eliminate all stale
-        linux devices, iptables rules, and namespaces.
-
-        If only_router_id is passed, only destroy single namespace, to allow
-        for multiple l3 agents on the same host, without stepping on each
-        other's toes on init.  This only makes sense if router_id is set.
-        """
-        root_ip = ip_lib.IPWrapper(self.root_helper)
-        for ns in root_ip.get_namespaces(self.root_helper):
-            if ns.startswith(NS_PREFIX):
-                if only_router_id and not ns.endswith(only_router_id):
-                    continue
-
-                try:
-                    self._destroy_router_namespace(ns)
-                except Exception:
-                    LOG.exception(_("Failed deleting namespace '%s'"), ns)
-
-    def _destroy_router_namespace(self, namespace):
-        ns_ip = ip_lib.IPWrapper(self.root_helper, namespace=namespace)
-        for d in ns_ip.get_devices(exclude_loopback=True):
-            if d.name.startswith(INTERNAL_DEV_PREFIX):
-                # device is on default bridge
-                self.driver.unplug(d.name, namespace=namespace,
-                                   prefix=INTERNAL_DEV_PREFIX)
-            elif d.name.startswith(EXTERNAL_DEV_PREFIX):
-                self.driver.unplug(d.name,
-                                   bridge=self.conf.external_network_bridge,
-                                   namespace=namespace,
-                                   prefix=EXTERNAL_DEV_PREFIX)
-        #TODO(garyk) Address the failure for the deletion of the namespace
-
-    def _create_router_namespace(self, ri):
-        ip_wrapper_root = ip_lib.IPWrapper(self.root_helper)
-        ip_wrapper = ip_wrapper_root.ensure_namespace(ri.ns_name())
-        ip_wrapper.netns.execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
-
     def _csr_get_vrf_name(self, ri):
         return ri.ns_name()[:self.driver.DEV_NAME_LEN]
 
@@ -277,8 +232,6 @@ class L3NATAgent(manager.Manager):
 
     def _csr_create_subinterface(self, ri,  intfc_no,
                                  vlanid, ip_cidrs ):
-        #interface_no = '1'
-        #vlanid = random.randrange(1, 4096)
         if len(ip_cidrs) > 1:
             #ToDo (Hareesh): Implement ip_cidrs>1
             raise Exception("Not implemented yet")
@@ -311,9 +264,6 @@ class L3NATAgent(manager.Manager):
         vrf_name = self._csr_get_vrf_name(ri)
         acl_no = 'acl_'+str(inner_vlanid)
         internal_net = netaddr.IPNetwork(internal_cidr).network
-        #ip_address = internal_cidr.split('/')[0]
-        #start_ip = gw_ip
-        #end_ip = gw_ip
         netmask = netaddr.IPNetwork(internal_cidr).hostmask
         inner_intfc = 'GigabitEthernet'+str(int_intfc_no)+'.'+str(inner_vlanid)
         outer_intfc = 'GigabitEthernet'+str(ext_intfc_no)+'.'+str(outer_vlanid)
@@ -396,19 +346,10 @@ class L3NATAgent(manager.Manager):
         ri = RouterInfo(router_id, self.root_helper,
                         self.conf.use_namespaces, router)
         self.router_info[router_id] = ri
-        if self.conf.use_namespaces:
-            self._create_router_namespace(ri)
         #Hareeesh: CSR, Note that we are not adding the metadata NAT rules now
         if self.conf.use_hosting_entities:
             self._he.set_driver(router_id, router)
             self._csr_create_vrf(ri)
-        for c, r in self.metadata_filter_rules():
-            ri.iptables_manager.ipv4['filter'].add_rule(c, r)
-        for c, r in self.metadata_nat_rules():
-            ri.iptables_manager.ipv4['nat'].add_rule(c, r)
-        ri.iptables_manager.apply()
-        if self.conf.enable_metadata_proxy:
-            self._spawn_metadata_proxy(ri)
 
     def _router_removed(self, router_id):
         ri = self.router_info[router_id]
@@ -416,47 +357,12 @@ class L3NATAgent(manager.Manager):
         ri.router[l3_constants.INTERFACE_KEY] = []
         ri.router[l3_constants.FLOATINGIP_KEY] = []
         self.process_router(ri)
-        for c, r in self.metadata_filter_rules():
-            ri.iptables_manager.ipv4['filter'].remove_rule(c, r)
-        for c, r in self.metadata_nat_rules():
-            ri.iptables_manager.ipv4['nat'].remove_rule(c, r)
-        ri.iptables_manager.apply()
-        if self.conf.enable_metadata_proxy:
-            self._destroy_metadata_proxy(ri)
         del self.router_info[router_id]
-        self._destroy_router_namespace(ri.ns_name())
         #Hareesh : CSR
         if self.conf.use_hosting_entities:
             self._csr_create_vrf(ri)
             self._he.remove_driver(router_id)
 
-
-    def _spawn_metadata_proxy(self, router_info):
-        def callback(pid_file):
-            proxy_cmd = ['quantum-ns-metadata-proxy',
-                         '--pid_file=%s' % pid_file,
-                         '--router_id=%s' % router_info.router_id,
-                         '--state_path=%s' % self.conf.state_path,
-                         '--metadata_port=%s' % self.conf.metadata_port]
-            proxy_cmd.extend(config.get_log_args(
-                cfg.CONF, 'quantum-ns-metadata-proxy-%s.log' %
-                router_info.router_id))
-            return proxy_cmd
-
-        pm = external_process.ProcessManager(
-            self.conf,
-            router_info.router_id,
-            self.root_helper,
-            router_info.ns_name())
-        pm.enable(callback)
-
-    def _destroy_metadata_proxy(self, router_info):
-        pm = external_process.ProcessManager(
-            self.conf,
-            router_info.router_id,
-            self.root_helper,
-            router_info.ns_name())
-        pm.disable()
 
     def _set_subnet_info(self, port):
         ips = port['fixed_ips']
@@ -555,23 +461,6 @@ class L3NATAgent(manager.Manager):
     def _get_ex_gw_port(self, ri):
         return ri.router.get('gw_port')
 
-    def _send_gratuitous_arp_packet(self, ri, interface_name, ip_address):
-        if self.conf.send_arp_for_ha > 0:
-            arping_cmd = ['arping', '-A', '-U',
-                          '-I', interface_name,
-                          '-c', self.conf.send_arp_for_ha,
-                          ip_address]
-            try:
-                if self.conf.use_namespaces:
-                    ip_wrapper = ip_lib.IPWrapper(self.root_helper,
-                                                  namespace=ri.ns_name())
-                    ip_wrapper.netns.execute(arping_cmd, check_exit_code=True)
-                else:
-                    utils.execute(arping_cmd, check_exit_code=True,
-                                  root_helper=self.root_helper)
-            except Exception as e:
-                LOG.error(_("Failed sending gratuitous ARP: %s"), str(e))
-
     def get_internal_device_name(self, port_id):
         return (INTERNAL_DEV_PREFIX + port_id)[:self.driver.DEV_NAME_LEN]
 
@@ -581,17 +470,6 @@ class L3NATAgent(manager.Manager):
     def external_gateway_added(self, ri, ex_gw_port, internal_cidrs):
         interface_name = self.get_external_device_name(ex_gw_port['id'])
         ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-        if not ip_lib.device_exists(interface_name,
-                                    root_helper=self.root_helper,
-                                    namespace=ri.ns_name()):
-            self.driver.plug(ex_gw_port['network_id'],
-                             ex_gw_port['id'], interface_name,
-                             ex_gw_port['mac_address'],
-                             bridge=self.conf.external_network_bridge,
-                             namespace=ri.ns_name(),
-                             prefix=EXTERNAL_DEV_PREFIX)
-        self.driver.init_l3(interface_name, [ex_gw_port['ip_cidr']],
-                            namespace=ri.ns_name())
         #Hareesh: CSR
         #outer_vlan = 60
         trunk_info = ex_gw_port['trunk_info']
@@ -601,84 +479,39 @@ class L3NATAgent(manager.Manager):
         itfc_no = str(int(_name.split(':')[1])*2)
         self._csr_create_subinterface(ri, itfc_no, outer_vlan,
                                       [ex_gw_port['ip_cidr']])
-        ip_address = ex_gw_port['ip_cidr'].split('/')[0]
-        self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
+        #ip_address = ex_gw_port['ip_cidr'].split('/')[0]
+        #self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
 
         gw_ip = ex_gw_port['subnet']['gateway_ip']
         if ex_gw_port['subnet']['gateway_ip']:
-            cmd = ['route', 'add', 'default', 'gw', gw_ip]
-            if self.conf.use_namespaces:
-                ip_wrapper = ip_lib.IPWrapper(self.root_helper,
-                                              namespace=ri.ns_name())
-                ip_wrapper.netns.execute(cmd, check_exit_code=False)
-            else:
-                utils.execute(cmd, check_exit_code=False,
-                              root_helper=self.root_helper)
+            #ToDo (Hareesh): Check this
+            # cmd = ['route', 'add', 'default', 'gw', gw_ip]
+            # if self.conf.use_namespaces:
+            #     ip_wrapper = ip_lib.IPWrapper(self.root_helper,
+            #                                   namespace=ri.ns_name())
+            #     ip_wrapper.netns.execute(cmd, check_exit_code=False)
+            # else:
+            #     utils.execute(cmd, check_exit_code=False,
+            #                   root_helper=self.root_helper)
+            pass
 
-        for (c, r) in self.external_gateway_nat_rules(ex_gw_ip,
-                                                      internal_cidrs,
-                                                      interface_name):
-            ri.iptables_manager.ipv4['nat'].add_rule(c, r)
-        ri.iptables_manager.apply()
+        #ToDo(Hareesh) : Apply external gateway nat rules, if needed
 
     def external_gateway_removed(self, ri, ex_gw_port, internal_cidrs):
 
         interface_name = self.get_external_device_name(ex_gw_port['id'])
-        if ip_lib.device_exists(interface_name,
-                                root_helper=self.root_helper,
-                                namespace=ri.ns_name()):
-            self.driver.unplug(interface_name,
-                               bridge=self.conf.external_network_bridge,
-                               namespace=ri.ns_name(),
-                               prefix=EXTERNAL_DEV_PREFIX)
-
         #Hareesh: CSR
         #outer_vlan = 60
         self._csr_remove_subinterface(ri, '2', outer_vlan,
                                       [ex_gw_port['ip_cidr']])
 
         ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-        for c, r in self.external_gateway_nat_rules(ex_gw_ip, internal_cidrs,
-                                                    interface_name):
-            ri.iptables_manager.ipv4['nat'].remove_rule(c, r)
-        ri.iptables_manager.apply()
-
-    def metadata_filter_rules(self):
-        rules = []
-        rules.append(('INPUT', '-s 0.0.0.0/0 -d 127.0.0.1 '
-                      '-p tcp -m tcp --dport %s '
-                      '-j ACCEPT' % self.conf.metadata_port))
-        return rules
-
-    def metadata_nat_rules(self):
-        rules = []
-        rules.append(('PREROUTING', '-s 0.0.0.0/0 -d 169.254.169.254/32 '
-                     '-p tcp -m tcp --dport 80 -j REDIRECT '
-                     '--to-port %s' % self.conf.metadata_port))
-        return rules
-
-    def external_gateway_nat_rules(self, ex_gw_ip, internal_cidrs,
-                                   interface_name):
-        rules = [('POSTROUTING', '! -i %(interface_name)s '
-                  '! -o %(interface_name)s -m conntrack ! '
-                  '--ctstate DNAT -j ACCEPT' %
-                  {'interface_name': interface_name})]
-        for cidr in internal_cidrs:
-            rules.extend(self.internal_network_nat_rules(ex_gw_ip, cidr))
-        return rules
+        #ToDo(Hareesh) : Remove external gateway nat rules, if needed
 
     def internal_network_added(self, ri, ex_gw_port, network_id, port_id,
                                internal_cidr, mac_address, trunk_info):
         interface_name = self.get_internal_device_name(port_id)
-        if not ip_lib.device_exists(interface_name,
-                                    root_helper=self.root_helper,
-                                    namespace=ri.ns_name()):
-            self.driver.plug(network_id, port_id, interface_name, mac_address,
-                             namespace=ri.ns_name(),
-                             prefix=INTERNAL_DEV_PREFIX)
 
-        self.driver.init_l3(interface_name, [internal_cidr],
-                            namespace=ri.ns_name())
         #Hareesh: CSR changes
         #Internal Port
         inner_vlan = trunk_info['segmentation_id']
@@ -686,15 +519,9 @@ class L3NATAgent(manager.Manager):
         #Name will be of format 'T1:x' where x is the index(1,2,..)
         itfc_no = str(int(_name.split(':')[1])*2-1)
         self._csr_create_subinterface(ri, itfc_no, inner_vlan, [internal_cidr])
-        ip_address = internal_cidr.split('/')[0]
-        self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
 
         if ex_gw_port:
             ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-            for c, r in self.internal_network_nat_rules(ex_gw_ip,
-                                                        internal_cidr):
-                ri.iptables_manager.ipv4['nat'].add_rule(c, r)
-            ri.iptables_manager.apply()
             # Hareesh: Apply CSR internal_network_nat_rules
             #External Port
             outer_vlan = ex_gw_port['trunk_info']['segmentation_id']
@@ -708,43 +535,19 @@ class L3NATAgent(manager.Manager):
     def internal_network_removed(self, ri, ex_gw_port, port_id,
                                  internal_cidr, trunk_info):
         interface_name = self.get_internal_device_name(port_id)
-        if ip_lib.device_exists(interface_name,
-                                root_helper=self.root_helper,
-                                namespace=ri.ns_name()):
-            self.driver.unplug(interface_name, namespace=ri.ns_name(),
-                               prefix=INTERNAL_DEV_PREFIX)
         #Hareesh : CSR
         self._csr_remove_subinterface(ri,'1',inner_vlan,internal_cidr)
 
         if ex_gw_port:
             ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-            for c, r in self.internal_network_nat_rules(ex_gw_ip,
-                                                        internal_cidr):
-                ri.iptables_manager.ipv4['nat'].remove_rule(c, r)
-            ri.iptables_manager.apply()
             # Hareesh: Remove CSR internal_network_nat_rules
             self._csr_remove_internalnw_nat_rules(ri, '1', '2', ex_gw_ip, internal_cidr,
                                                inner_vlan, outer_vlan)
 
-    def internal_network_nat_rules(self, ex_gw_ip, internal_cidr):
-        rules = [('snat', '-s %s -j SNAT --to-source %s' %
-                 (internal_cidr, ex_gw_ip))]
-        return rules
-
     def floating_ip_added(self, ri, ex_gw_port, floating_ip, fixed_ip):
         ip_cidr = str(floating_ip) + '/32'
         interface_name = self.get_external_device_name(ex_gw_port['id'])
-        device = ip_lib.IPDevice(interface_name, self.root_helper,
-                                 namespace=ri.ns_name())
-
-        if ip_cidr not in [addr['cidr'] for addr in device.addr.list()]:
-            net = netaddr.IPNetwork(ip_cidr)
-            device.addr.add(net.version, ip_cidr, str(net.broadcast))
-            self._send_gratuitous_arp_packet(ri, interface_name, floating_ip)
-
-        for chain, rule in self.floating_forward_rules(floating_ip, fixed_ip):
-            ri.iptables_manager.ipv4['nat'].add_rule(chain, rule)
-        ri.iptables_manager.apply()
+        #ToDo(Hareesh) : Check send gratiotious ARP packet
         #Hareesh:CSR
         self._csr_add_floating_ip(ri, floating_ip, fixed_ip)
 
@@ -752,24 +555,8 @@ class L3NATAgent(manager.Manager):
         ip_cidr = str(floating_ip) + '/32'
         net = netaddr.IPNetwork(ip_cidr)
         interface_name = self.get_external_device_name(ex_gw_port['id'])
-
-        device = ip_lib.IPDevice(interface_name, self.root_helper,
-                                 namespace=ri.ns_name())
-        device.addr.delete(net.version, ip_cidr)
-
-        for chain, rule in self.floating_forward_rules(floating_ip, fixed_ip):
-            ri.iptables_manager.ipv4['nat'].remove_rule(chain, rule)
-        ri.iptables_manager.apply()
         #Hareesh: CSR
-        self._csr_remove_floating_ip(ri,floating_ip, fixed_ip)
-
-    def floating_forward_rules(self, floating_ip, fixed_ip):
-        return [('PREROUTING', '-d %s -j DNAT --to %s' %
-                 (floating_ip, fixed_ip)),
-                ('OUTPUT', '-d %s -j DNAT --to %s' %
-                 (floating_ip, fixed_ip)),
-                ('float-snat', '-s %s -j SNAT --to %s' %
-                 (fixed_ip, floating_ip))]
+        self._csr_remove_floating_ip(ri, floating_ip, fixed_ip)
 
     def router_deleted(self, context, router_id):
         """Deal with router deletion RPC message."""
@@ -867,18 +654,6 @@ class L3NATAgent(manager.Manager):
     def after_start(self):
         LOG.info(_("L3 Cfg Agent started"))
 
-    def _update_routing_table(self, ri, operation, route):
-        cmd = ['ip', 'route', operation, 'to', route['destination'],
-               'via', route['nexthop']]
-        #TODO(nati) move this code to iplib
-        if self.conf.use_namespaces:
-            ip_wrapper = ip_lib.IPWrapper(self.conf.root_helper,
-                                          namespace=ri.ns_name())
-            ip_wrapper.netns.execute(cmd, check_exit_code=False)
-        else:
-            utils.execute(cmd, check_exit_code=False,
-                          root_helper=self.conf.root_helper)
-
     def routes_updated(self, ri):
         new_routes = ri.router['routes']
         old_routes = ri.routes
@@ -891,12 +666,10 @@ class L3NATAgent(manager.Manager):
                 if route['destination'] == del_route['destination']:
                     removes.remove(del_route)
             #replace success even if there is no existing route
-            self._update_routing_table(ri, 'replace', route)
             self._csr_update_routing_table(ri, 'replace', route)
 
         for route in removes:
             LOG.debug(_("Removed route entry is '%s'"), route)
-            self._update_routing_table(ri, 'delete', route)
             self._csr_update_routing_table(ri, 'delete', route)
         ri.routes = new_routes
 
