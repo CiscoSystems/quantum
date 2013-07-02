@@ -52,7 +52,7 @@ from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
-from quantum.plugins.cisco.l3.db import l3_router_applicance_db
+from quantum.plugins.cisco.l3.db import l3_router_appliance_db
 from quantum.plugins.cisco.l3.db import composite_agentschedulers_db as agt_sch_db
 from quantum.plugins.cisco.l3.db import l3_cfg_rpc_base
 from quantum.plugins.csr1kv_openvswitch.common import config  # noqa
@@ -264,7 +264,7 @@ class TrunkPortNetwork(model_base.BASEV2):
 
 
 class CSR1kv_OVSQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
-                                l3_router_applicance_db.
+                                l3_router_appliance_db.
                                 L3_router_appliance_db_mixin,
                                 sg_db_rpc.SecurityGroupServerRpcMixin,
                                 agt_sch_db.CompositeAgentSchedulerDbMixin,

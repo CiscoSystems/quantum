@@ -25,7 +25,7 @@ from sqlalchemy import or_
 
 from quantum.openstack.common import log as logging
 from quantum.plugins.cisco.l3.common import constants as cl3_const
-from quantum.plugins.cisco.l3.db import l3_router_applicance_db as l3_ra_db
+from quantum.plugins.cisco.l3.db import l3_router_appliance_db as l3_ra_db
 
 
 LOG = logging.getLogger(__name__)

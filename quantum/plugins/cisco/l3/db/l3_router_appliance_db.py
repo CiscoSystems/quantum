@@ -71,13 +71,13 @@ router_appliance_opts = [
                        'l3_hosting_entity_scheduler.L3HostingEntityScheduler',
                help=_('Driver to use for scheduling router to a hosting '
                       'entity')),
-    cfg.StrOpt('max_routers_per_csr1kv', default=3,
+    cfg.IntOpt('max_routers_per_csr1kv', default=3,
                help=_("The maximum number of logical routers a CSR1kv VM "
                       "instance will host")),
-    cfg.StrOpt('standby_pool_size', default=2,
+    cfg.IntOpt('standby_pool_size', default=2,
                help=_("The number of running CSR1kv VMs to maintain "
                       "as a pool of standby VMs")),
-    cfg.StrOpt('csr1kv_booting_time', default=300,
+    cfg.IntOpt('csr1kv_booting_time', default=300,
                help=_("The time in seconds it typically takes to "
                       "boot a CSR1kv VM"))
 ]
@@ -183,8 +183,12 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             endpoint = (cfg.CONF.keystone_authtoken.auth_protocol + "://" +
                         cfg.CONF.keystone_authtoken.auth_host + ":" +
                         str(cfg.CONF.keystone_authtoken.auth_port) + "/v2.0")
-            keystone = k_client.Client(token="simple",
-                                       endpoint=endpoint)
+            user=cfg.CONF.keystone_authtoken.admin_user
+            pw=cfg.CONF.keystone_authtoken.admin_password
+            tenant=cfg.CONF.keystone_authtoken.admin_tenant_name
+            keystone = k_client.Client(username=user, password=pw,
+                                       tenant_name=tenant,
+                                       auth_url=endpoint)
             try:
                 tenant = keystone.tenants.find(name=cfg.CONF.l3_admin_tenant)
                 cls._l3_tenant_uuid = tenant.id
@@ -592,7 +596,9 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             # so we try to do it now.
             self.hosting_scheduler.schedule_router_on_hosting_entity(
                 self, context, router, binding_info)
-        if binding_info.hosting_entity is not None:
+        if binding_info.hosting_entity is None:
+            router['hosting_entity'] = None
+        else:
             router['hosting_entity'] = {
                 'id': binding_info.hosting_entity.id,
                 'host_type': binding_info.hosting_entity.host_type,
