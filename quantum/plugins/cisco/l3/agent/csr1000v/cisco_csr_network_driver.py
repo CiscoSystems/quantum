@@ -179,7 +179,7 @@ class CiscoCSRDriver():
         rpc_obj = conn.edit_config(target='running', config=confstr)
         print self._check_response(rpc_obj, 'CREATE_SUBINTERFACE')
 
-    def remove_subinterface(self, subinterface, vlan_id, vrf_name, ip, mask):
+    def remove_subinterface(self, subinterface, vlan_id, vrf_name, ip):
         conn = self._get_connection()
         confstr = snippets.REMOVE_SUBINTERFACE % ( subinterface )
         rpc_obj = conn.edit_config(target='running', config=confstr)
