@@ -183,9 +183,9 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
             endpoint = (cfg.CONF.keystone_authtoken.auth_protocol + "://" +
                         cfg.CONF.keystone_authtoken.auth_host + ":" +
                         str(cfg.CONF.keystone_authtoken.auth_port) + "/v2.0")
-            user=cfg.CONF.keystone_authtoken.admin_user
-            pw=cfg.CONF.keystone_authtoken.admin_password
-            tenant=cfg.CONF.keystone_authtoken.admin_tenant_name
+            user = cfg.CONF.keystone_authtoken.admin_user
+            pw = cfg.CONF.keystone_authtoken.admin_password
+            tenant = cfg.CONF.keystone_authtoken.admin_tenant_name
             keystone = k_client.Client(username=user, password=pw,
                                        tenant_name=tenant,
                                        auth_url=endpoint)
@@ -203,7 +203,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
     @classmethod
     def mgmt_nw_id(cls):
         if cls._mgmt_nw_uuid is None:
-            tenant_id=cls.l3_tenant_id()
+            tenant_id = cls.l3_tenant_id()
             if not tenant_id:
                 return None
             net = manager.QuantumManager.get_plugin().get_networks(
@@ -250,7 +250,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                 self.mgmt_nw_id()) is None:
             raise RouterCreateInternalError()
         router_created = (super(L3_router_appliance_db_mixin, self).
-            create_router(context, router))
+                          create_router(context, router))
 
         with context.session.begin(subtransactions=True):
             r_he_b_db = RouterHostingEntityBinding(
@@ -316,7 +316,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
 
     def add_router_interface(self, context, router_id, interface_info):
         info = (super(L3_router_appliance_db_mixin, self).
-            add_router_interface(context, router_id, interface_info))
+                add_router_interface(context, router_id, interface_info))
         routers = self.get_sync_data_ext(context.elevated(), [router_id],
                                      interfaces_changed=True)
         new_port_db = self._get_port(context, info['port_id'])
@@ -479,7 +479,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
         query = context.session.query(HostingEntity)
         query = query.outerjoin(
             RouterHostingEntityBinding,
-            HostingEntity.id==RouterHostingEntityBinding.hosting_entity_id)
+            HostingEntity.id == RouterHostingEntityBinding.hosting_entity_id)
         query = query.filter(and_(HostingEntity.host_type == host_type,
                                   HostingEntity.admin_state_up == True,
                                   HostingEntity.tenant_bound == None))
@@ -501,6 +501,15 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                     context.session.delete(he_candidates[i])
                     num_deleted += 1
         return num_deleted
+
+    def delete_all_service_vm_hosting_entities(
+            self, context, host_type=cl3_const.CSR1KV_HOST):
+        query = context.session.query(HostingEntity)
+        query = query.filter(HostingEntity.host_type == host_type)
+        svm = self.svc_vm_mgr()
+        for he in query:
+            svm.delete_service_vm(he.id, self.mgmt_nw_id(),
+                                  delete_networks=True)
 
     def get_router_binding_info(self, context, id, load_he_info=True):
         query = context.session.query(RouterHostingEntityBinding)
@@ -604,7 +613,7 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
                 'host_type': binding_info.hosting_entity.host_type,
                 'ip_address': binding_info.hosting_entity.ip_address,
                 'port': binding_info.hosting_entity.transport_port,
-                'created_at': binding_info.hosting_entity.created_at}
+                'created_at': str(binding_info.hosting_entity.created_at)}
 
     def _populate_port_trunk_info(self, context, router,
                                   update_gw_trunk=False,

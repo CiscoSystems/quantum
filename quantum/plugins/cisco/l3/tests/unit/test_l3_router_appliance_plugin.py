@@ -20,31 +20,40 @@ import mock
 from oslo.config import cfg
 import webtest
 
-
-from quantum.api import extensions
+from quantum.api.v2 import attributes
+from quantum import context
 from quantum.common.test_lib import test_config
+from quantum.extensions import l3
 from quantum.manager import QuantumManager
+from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common.notifier import test_notifier
-from quantum.openstack.common import uuidutils
+from quantum.plugins.cisco.l3.db import composite_agentschedulers_db as agt_sch_db
 from quantum.plugins.cisco.l3.db import l3_router_appliance_db
-from quantum.tests import base
-from quantum.tests.unit import test_api_v2
 from quantum.tests.unit import test_extension_extraroute
 from quantum.tests.unit import test_l3_plugin
 
 LOG = logging.getLogger(__name__)
 
-#_uuid = uuidutils.generate_uuid
-#_get_path = test_api_v2._get_path
-
 
 # This plugin class is just for testing
 class TestL3RouterAppliancePlugin(
     test_extension_extraroute.TestExtraRoutePlugin,
-    l3_router_appliance_db.L3_router_appliance_db_mixin):
-    pass
+    l3_router_appliance_db.L3_router_appliance_db_mixin,
+    agt_sch_db.CompositeAgentSchedulerDbMixin,):
+
+    def __init__(self):
+        self.hosting_scheduler = importutils.import_object(
+            cfg.CONF.hosting_scheduler_driver)
+        super(TestL3RouterAppliancePlugin, self).__init__()
+
+    @classmethod
+    def resetPlugin(cls):
+        cls._mgmt_nw_uuid = None
+        cls._l3_tenant_uuid = None
+        cls._svc_vm_mgr = None
+        cls.hosting_scheduler = None
 
 
 class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
@@ -66,61 +75,76 @@ class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
         notifier_api._drivers = None
         cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
 
+        cfg.CONF.set_override('allow_sorting', True)
+
+        # Mock l3 admin tenant
         self.tenant_id_fcn_p = mock.patch('quantum.plugins.cisco.l3.db.'
                                           'l3_router_appliance_db.'
                                           'L3_router_appliance_db_mixin.'
                                           'l3_tenant_id')
         self.tenant_id_fcn = self.tenant_id_fcn_p.start()
-        self.tenant_id_fcn = mock.MagicMock(return_value='L3AdminTenantId')
+        self.tenant_id_fcn.return_value = "L3AdminTenantId"
+
+        # A management network/subnet is needed
+        self.mgmt_nw = self._make_network(
+            self.fmt, cfg.CONF.management_network, True,
+            tenant_id="L3AdminTenantId", shared=False)
+        self.mgmt_subnet = self._make_subnet(self.fmt, self.mgmt_nw,
+                                             "10.0.100.1", "10.0.100.0/24",
+                                             ip_version=4)
 
     def tearDown(self):
+        plugin = QuantumManager.get_plugin()
+        plugin.delete_all_service_vm_hosting_entities(
+            context.get_admin_context())
+        self._delete('subnets', self.mgmt_subnet['subnet']['id'])
+        self._delete('networks', self.mgmt_nw['network']['id'])
+        plugin.resetPlugin()
         self.tenant_id_fcn_p.stop()
         super(test_l3_plugin.L3NatDBTestCase, self).tearDown()
+
+    def test_get_network_succeeds_without_filter(self):
+        plugin = QuantumManager.get_plugin()
+        ctx = context.Context(None, None, is_admin=True)
+        result = plugin.get_networks(ctx, filters=None)
+        # Remove mgmt network from list
+        to_del = -1
+        for i in xrange(0, len(result)):
+            if result[i].get('id') == plugin.mgmt_nw_id():
+                to_del = i
+        if to_del != -1:
+            del result[to_del]
+        self.assertEqual(result, [])
+
+    def test_list_nets_external(self):
+        with self.network() as n1:
+            self._set_net_external(n1['network']['id'])
+            with self.network():
+                body = self._list('networks')
+                # 3 networks since there is also the mgmt network
+                self.assertEqual(len(body['networks']), 3)
+
+                body = self._list('networks',
+                                  query_params="%s=True" % l3.EXTERNAL)
+                self.assertEqual(len(body['networks']), 1)
+
+                body = self._list('networks',
+                                  query_params="%s=False" % l3.EXTERNAL)
+                # 2 networks since there is also the mgmt network
+                self.assertEqual(len(body['networks']), 2)
 
 
 class L3RouterApplianceTestCaseXML(L3RouterApplianceTestCase):
     fmt = 'xml'
 
-
-class myTestCase(base.BaseTestCase):
     def setUp(self):
-        # Ensure 'stale' patched copies of the plugin are never returned
-        QuantumManager._instance = None
-
-        # Ensure existing ExtensionManager is not used
-        extensions.PluginAwareExtensionManager._instance = None
-        test_config['plugin_name_v2'] = (
-            'quantum.plugins.cisco.l3.tests.unit.'
-            'test_l3_router_appliance_plugin.TestL3RouterAppliancePlugin')
-        # Update the plugin and extensions path
-        cfg.CONF.set_override('core_plugin', test_config['plugin_name_v2'])
-        cfg.CONF.set_override('allow_pagination', True)
-        cfg.CONF.set_override('allow_sorting', True)
-        # for these tests we need to enable overlapping ips
-        cfg.CONF.set_default('allow_overlapping_ips', True)
-        cfg.CONF.set_default('max_routes', 3)
-        ext_mgr = test_extension_extraroute.ExtraRouteTestExtensionManager()
-        test_config['extension_manager'] = ext_mgr
-        #L3NatDBTestCase will overwrite plugin_name_v2,
-        #so we don't need to setUp on the class here
-        super(myTestCase, self).setUp()
-
-        # Set to None to reload the drivers
-        notifier_api._drivers = None
-        cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
-
-        self.tenant_id_fcn_p = mock.patch('quantum.plugins.cisco.l3.db.'
-                                          'l3_router_appliance_db.'
-                                          'L3_router_appliance_db_mixin.'
-                                          'l3_tenant_id')
-        self.tenant_id_fcn = self.tenant_id_fcn_p.start()
-        self.tenant_id_fcn = mock.MagicMock(return_value='L3AdminTenantId')
+        super(L3RouterApplianceTestCaseXML, self).setUp()
+        # TODO(bob-melander): Temporary fix to make unit tests pass.
+        # The proper way is modify the get_extended_resources() method
+        # in extraroute.py so that it extends the attributes.PLURALS
+        # dict, i.e., add this line attr.PLURALS.update({'routes': 'route'})
+        # Should be reported as a bug and solution upstreamed.
+        attributes.PLURALS.update({'routes': 'route'})
 
     def tearDown(self):
-        self.tenant_id_fcn_p.stop()
-        super(myTestCase, self).tearDown()
-
-    def basic_test(self):
-        plugin = QuantumManager.get_plugin()
-        res = plugin.l3_tenant_id()
-        self.assertEqual(plugin.l3_tenant_id(), 'L3AdminTenantId')
+        super(L3RouterApplianceTestCaseXML, self).tearDown()
