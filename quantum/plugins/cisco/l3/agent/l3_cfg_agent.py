@@ -469,11 +469,12 @@ class L3NATAgent(manager.Manager):
         outer_vlan = trunk_info['segmentation_id']
         _name = trunk_info['hosting_port_name']
         #Name will be of format 'T2:x' where x is (1,2,..)
-        itfc_no = str(int(_name.split(':')[1])*2)
-        self._csr_create_subinterface(ri, itfc_no, outer_vlan,
+        ext_itfc_no = str(int(_name.split(':')[1])*2)
+        self._csr_create_subinterface(ri, ext_itfc_no, outer_vlan,
                                       [ex_gw_port['ip_cidr']])
         #ToDo(Hareesh) : Check need to send gratuitous ARP
-        gw_ip = ex_gw_port['subnet']['gateway_ip']
+        #ToDo: Check if we need this
+        ex_gw_ip = ex_gw_port['subnet']['gateway_ip']
         if ex_gw_port['subnet']['gateway_ip']:
             #ToDo (Hareesh): Check this
             # cmd = ['route', 'add', 'default', 'gw', gw_ip]
@@ -486,7 +487,21 @@ class L3NATAgent(manager.Manager):
             #                   root_helper=self.root_helper)
             pass
 
-        #ToDo(Hareesh) : Apply external gateway nat rules, if needed
+        #Apply NAT rules for internal networks
+        if len(ri.internal_ports) > 0:
+            #Internal networks exist
+            for internal_port in ri.internal_ports:
+                trunk_info = internal_port['trunk_info']
+                inner_vlan = trunk_info['segmentation_id']
+                _name = trunk_info['hosting_port_name']
+                #Name will be of format 'T1:x' where x is the index(1,2,..)
+                int_itfc_no = str(int(_name.split(':')[1])*2-1)
+                internal_cidr = internal_port['ip_cidr']
+
+                self._csr_add_internalnw_nat_rules(ri, int_itfc_no, ext_itfc_no,
+                                                   ex_gw_ip, internal_cidr,
+                                                   inner_vlan, outer_vlan)
+
 
     def external_gateway_removed(self, ri, ex_gw_port, internal_cidrs):
         interface_name = self.get_external_device_name(ex_gw_port['id'])
