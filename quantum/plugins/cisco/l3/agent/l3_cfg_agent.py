@@ -246,14 +246,11 @@ class L3NATAgent(manager.Manager):
                                        gateway_ip,
                                        netmask)
 
-    def _csr_remove_subinterface(self, ri, intc_no, vlan_id, ip_cidr):
+    def _csr_remove_subinterface(self, ri, intc_no, vlan_id, ip):
         vrf_name = self._csr_get_vrf_name(ri)
-        ip = ip_cidr.split('/')[0]
-        netmask = netaddr.IPNetwork(ip_cidr).netmask
-        interface = 'GigabitEthernet'+str(intc_no)+'.'+str(vlanid)
+        interface = 'GigabitEthernet'+str(intc_no)+'.'+str(vlan_id)
         csr_driver = self._he.get_driver(ri.router_id)
-        csr_driver.remove_subinterface(interface, vrf_name, ip,
-                                       vlan_id, netmask)
+        csr_driver.remove_subinterface(interface, vlan_id, vrf_name, ip)
 
     def _csr_add_internalnw_nat_rules(self, ri, int_intfc_no,
                                            ext_intfc_no,
@@ -276,9 +273,10 @@ class L3NATAgent(manager.Manager):
                                                        vrf_name)
 
     def _csr_remove_internalnw_nat_rules(self, ri, int_intfc_no,
-                                           ext_intfc_no,
-                                           gw_ip, internal_cidr,
-                                           inner_vlanid, outer_vlanid):
+                                         ext_intfc_no,
+                                         internal_cidr,
+                                         inner_vlanid,
+                                         outer_vlanid):
         vrf_name = self._csr_get_vrf_name(ri)
         acl_no = 'acl_'+str(inner_vlanid)
         internal_net = netaddr.IPNetwork(internal_cidr).network
@@ -466,10 +464,7 @@ class L3NATAgent(manager.Manager):
         return (EXTERNAL_DEV_PREFIX + port_id)[:self.driver.DEV_NAME_LEN]
 
     def external_gateway_added(self, ri, ex_gw_port, internal_cidrs):
-        interface_name = self.get_external_device_name(ex_gw_port['id'])
-        ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-        #Hareesh: CSR
-        #outer_vlan = 60
+        #ToDo (Hareesh) : Parameterize interface name
         trunk_info = ex_gw_port['trunk_info']
         outer_vlan = trunk_info['segmentation_id']
         _name = trunk_info['hosting_port_name']
@@ -477,9 +472,7 @@ class L3NATAgent(manager.Manager):
         itfc_no = str(int(_name.split(':')[1])*2)
         self._csr_create_subinterface(ri, itfc_no, outer_vlan,
                                       [ex_gw_port['ip_cidr']])
-        #ip_address = ex_gw_port['ip_cidr'].split('/')[0]
-        #self._send_gratuitous_arp_packet(ri, interface_name, ip_address)
-
+        #ToDo(Hareesh) : Check need to send gratuitous ARP
         gw_ip = ex_gw_port['subnet']['gateway_ip']
         if ex_gw_port['subnet']['gateway_ip']:
             #ToDo (Hareesh): Check this
@@ -496,14 +489,13 @@ class L3NATAgent(manager.Manager):
         #ToDo(Hareesh) : Apply external gateway nat rules, if needed
 
     def external_gateway_removed(self, ri, ex_gw_port, internal_cidrs):
-
         interface_name = self.get_external_device_name(ex_gw_port['id'])
-        #Hareesh: CSR
-        #outer_vlan = 60
-        self._csr_remove_subinterface(ri, '2', outer_vlan,
-                                      [ex_gw_port['ip_cidr']])
-
-        ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
+        ip = ex_gw_port['fixed_ips'][0]['ip_address']
+        outer_vlan = ex_gw_port['trunk_info']['segmentation_id']
+        _ext_name = ex_gw_port['trunk_info']['hosting_port_name']
+        #Name will be of format 'T2:x' where x is the index(1,2,..)
+        ext_infc_no = str(int(_ext_name.split(':')[1])*2)
+        self._csr_remove_subinterface(ri, ext_infc_no, outer_vlan, ip)
         #ToDo(Hareesh) : Remove external gateway nat rules, if needed
 
     def internal_network_added(self, ri, ex_gw_port, network_id, port_id,
@@ -532,22 +524,24 @@ class L3NATAgent(manager.Manager):
 
     def internal_network_removed(self, ri, ex_gw_port, port_id,
                                  internal_cidr, trunk_info):
-        LOG.debug(_("*** In internal network removed!**"))
         #interface_name = self.get_internal_device_name(port_id)
         #Hareesh : CSR
-
         inner_vlan = trunk_info['segmentation_id']
         _name = trunk_info['hosting_port_name']
         #Name will be of format 'T1:x' where x is the index(1,2,..)
         itfc_no = str(int(_name.split(':')[1])*2-1)
-        LOG.debug(_("Params: %s %s %s"), (inner_vlan, _name, itfc_no))
+        if ex_gw_port:
+            outer_vlan = ex_gw_port['trunk_info']['segmentation_id']
+            _ext_name = ex_gw_port['trunk_info']['hosting_port_name']
+            #Name will be of format 'T2:x' where x is the index(1,2,..)
+            ext_itfc_no = str(int(_ext_name.split(':')[1])*2)
+            self._csr_remove_internalnw_nat_rules(ri, itfc_no, ext_itfc_no,
+                                                  internal_cidr, inner_vlan,
+                                                  outer_vlan)
+        #Delete sub-interface now
         self._csr_remove_subinterface(ri, itfc_no, inner_vlan, internal_cidr)
 
-        if ex_gw_port:
-            ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
-            # Hareesh: Remove CSR internal_network_nat_rules
-            self._csr_remove_internalnw_nat_rules(ri, '1', '2', ex_gw_ip, internal_cidr,
-                                               inner_vlan, outer_vlan)
+
 
     def floating_ip_added(self, ri, ex_gw_port, floating_ip, fixed_ip):
         ip_cidr = str(floating_ip) + '/32'
@@ -583,9 +577,8 @@ class L3NATAgent(manager.Manager):
             try:
                 self._process_routers(routers)
             except Exception:
-                msg = _("Failed dealing with routers update RPC message")
-                LOG.debug(msg)
-                LOG.debug(Exception)
+                msg = _("Failed dealing with routers update RPC message. Exception %s")
+                LOG.debug(msg, str(Exception))
                 self.fullsync = True
 
     def router_removed_from_agent(self, context, payload):
