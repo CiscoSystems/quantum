@@ -29,6 +29,7 @@ from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common.notifier import api as notifier_api
 from quantum.openstack.common.notifier import test_notifier
+from quantum.openstack.common import uuidutils
 from quantum.plugins.cisco.l3.db import composite_agentschedulers_db as agt_sch_db
 from quantum.plugins.cisco.l3.db import l3_router_appliance_db
 from quantum.tests.unit import test_extension_extraroute
@@ -54,6 +55,47 @@ class TestL3RouterAppliancePlugin(
         cls._l3_tenant_uuid = None
         cls._svc_vm_mgr = None
         cls.hosting_scheduler = None
+
+
+# Functions to mock service VM creation.
+def dispatch_service_vm(self, vm_image, vm_flavor, mgmt_port, ports):
+    vm_id=uuidutils.generate_uuid()
+
+    if mgmt_port is not None:
+        p_dict = {'port': {'device_id': vm_id,
+                           'device_owner': 'nova'}}
+        self._core_plugin.update_port(self._context, mgmt_port['id'],
+                                      p_dict)
+
+    for port in ports:
+        p_dict = {'port': {'device_id': vm_id,
+                           'device_owner': 'nova'}}
+        self._core_plugin.update_port(self._context, port['id'], p_dict)
+
+    myserver = {'server': {'adminPass': "MVk5HPrazHcG",
+                'id': vm_id,
+                'links': [{'href': "http://openstack.example.com/v2/"
+                                   "openstack/servers/" + vm_id,
+                           'rel': "self"},
+                          {'href': "http://openstack.example.com/"
+                                   "openstack/servers/" + vm_id,
+                           'rel': "bookmark"}]}}
+
+    return myserver['server']
+
+
+def delete_service_vm(self, id, mgmt_nw_id, delete_networks=False):
+    ports = self._core_plugin.get_ports(self._context,
+                                        filters={'device_id': [id]})
+
+    nets_to_delete = []
+    for port in ports:
+        if delete_networks and port['network_id'] != mgmt_nw_id:
+            nets_to_delete.append(port['network_id'])
+        self._core_plugin.delete_port(self._context, port['id'])
+    for net_id in nets_to_delete:
+        self._core_plugin.delete_network(self._context, net_id)
+    return True
 
 
 class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):

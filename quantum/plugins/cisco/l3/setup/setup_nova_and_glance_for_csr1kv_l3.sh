@@ -13,7 +13,6 @@ aggregateMetadata=$aggregateMetadataKey"="$aggregateMetadataValue
 computeNetworkNodes=(ComputeNode1 ComputeNode3)
 csr1kvImageSrc="/home/stack/csr1000v-XE310_Throttle_20130506.qcow2"
 csr1kvImageName="csr1kv_openstack_img"
-#csr1kvImageName='cirros-0.3.0-x86_64-uec'
 csr1kvDiskFormat="qcow2"
 csr1kvContainerFormat="bare"
 csr1kvGlanceExtraParams="--property hw_vif_model=e1000 --property hw_disk_bus=ide --property hw_cdrom_bus=ide"
@@ -34,7 +33,7 @@ flavorId=`nova flavor-show $csr1kvFlavorId 2>&1 | awk '/No flavor|id/ { if ($2 =
 
 if [ "$flavorId" == "No" ]; then
    echo " No, it does not. Creating it."
-   flavorId=`nova flavor-create $csr1kvFlavorName $csr1kvFlavorId 8192 8 4 --is-public False | awk -v r=$csr1kvFlavorName '$0 ~ r { print $2 }'`
+   flavorId=`nova flavor-create $csr1kvFlavorName $csr1kvFlavorId 8192 0 4 --is-public False | awk -v r=$csr1kvFlavorName '$0 ~ r { print $2 }'`
 else
    echo " Yes, it does."
 fi
@@ -57,7 +56,6 @@ aggregateId=`nova aggregate-list 2>&1 | awk -v name=$networkHostsAggregateName -
 if [ "$aggregateId" == "No" ]; then
    echo " No, it does not. Creating it."
    aggregateId=`nova aggregate-create $networkHostsAggregateName 2>&1 | awk -v name=$networkHostsAggregateName -v r=$networkHostsAggregateName"|Id" 'BEGIN { res = "No" } $0 ~ r { if ($2 != "Id" && $4 == name) res = $2; } END { print res; }'`
-  echo $aggregateId
 else
    echo " Yes, it does."
 fi
@@ -91,7 +89,7 @@ hasImage=`glance image-show $csr1kvImageName 2>&1 | awk '/Property|No/ { if ($1 
 
 if [ "$hasImage" == "No" ]; then
    echo " No, it does not. Creating it."
-   echo "glance image-create --name $csr1kvImageName --owner $tenantId --disk-format $csr1kvDiskFormat --container-format $csr1kvContainerFormat --file $csr1kvImageSrc $csr1kvGlanceExtraParams"
+   glance image-create --name $csr1kvImageName --owner $tenantId --disk-format $csr1kvDiskFormat --container-format $csr1kvContainerFormat --file $csr1kvImageSrc $csr1kvGlanceExtraParams
 else
    echo " Yes, it does."
 fi
