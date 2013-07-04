@@ -25,6 +25,8 @@ from quantum.api.v2 import attributes
 
 PROFILE_ID = 'n1kv:profile_id'
 MULTICAST_IP = 'n1kv:multicast_ip'
+SEGMENT_ADD = 'n1kv:segment_add'
+SEGMENT_DEL = 'n1kv:segment_del'
 
 EXTENDED_ATTRIBUTES_2_0 = {
     'networks': {
@@ -35,6 +37,12 @@ EXTENDED_ATTRIBUTES_2_0 = {
         MULTICAST_IP: {'allow_post': True, 'allow_put': True,
                        'default': attributes.ATTR_NOT_SPECIFIED,
                        'is_visible': True},
+        SEGMENT_ADD: {'allow_post': True, 'allow_put': True,
+                      'default': attributes.ATTR_NOT_SPECIFIED,
+                      'is_visible': True},
+        SEGMENT_DEL: {'allow_post': True, 'allow_put': True,
+                      'default': attributes.ATTR_NOT_SPECIFIED,
+                      'is_visible': True},
     },
     'ports': {
         PROFILE_ID: {'allow_post': True, 'allow_put': True,

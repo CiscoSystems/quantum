@@ -48,6 +48,7 @@ from quantum.extensions import providernet
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
+from quantum.openstack.common import uuidutils as uuidutils
 
 from quantum.plugins.cisco.common import cisco_constants as c_const
 from quantum.plugins.cisco.common import cisco_credentials_v2 as c_cred
@@ -282,6 +283,11 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         elif binding.network_type == c_const.TYPE_VLAN:
             network[providernet.PHYSICAL_NETWORK] = binding.physical_network
             network[providernet.SEGMENTATION_ID] = binding.segmentation_id
+        elif binding.network_type in [c_const.TYPE_MULTI_SEGMENT,
+                                      c_const.TYPE_TRUNK]:
+            network[providernet.PHYSICAL_NETWORK] = None
+            network[providernet.SEGMENTATION_ID] = binding.segmentation_id
+            network[n1kv_profile.MULTICAST_IP] = binding.multicast_ip
 
     def _process_provider_create(self, context, attrs):
         network_type = attrs.get(providernet.NETWORK_TYPE)
@@ -478,6 +484,107 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             n1kvclient.delete_bridge_domain(name)
         n1kvclient.delete_network_segment(network['name'])
 
+    def _send_add_multi_segment_request(self, context, segment_pairs):
+        """
+        Send Add multi-segment network request to VSM.
+
+        :param context: quantum api request context
+        :param segment_pairs: List of segments in UUID pairs
+                                that need to be bridged
+        """
+
+        if segment_pairs == []:
+            return
+
+        # GET list of VXLAN gateway clusters
+        n1kvclient = n1kv_client.Client()
+        clusters = n1kvclient.get_vxlan_gw_clusters()
+        # Select the first cluster with no encapsulation
+        for cluster in clusters['body'][c_const.SET]:
+            if c_const.ENCAPSULATIONS not in \
+                    cluster[c_const.
+                            PROPERTIES][c_const.
+                                        SERVICEINSTANCES][c_const.
+                                                          SERVICEINSTANCE]:
+                cluster_id = cluster[c_const.NAME]
+                service_instance = cluster[c_const.PROPERTIES]
+                [c_const.SERVICEINSTANCES][c_const.SERVICEINSTANCE][c_const.ID]
+                break
+        # Pair the VLAN and VXLAN segment
+        for (segment1, segment2) in segment_pairs:
+            encap_dict = {}
+            encap_dict['serviceInstance'] = service_instance
+            encap_dict['segment1'] = segment1
+            encap_dict['segment2'] = segment2
+            n1kvclient.add_multi_segment(context, cluster_id, encap_dict)
+            LOG.debug('_send_add_multi_segment_request: %s '
+                      'cluster_id %s', segment_pairs, cluster_id)
+
+    def _send_del_multi_segment_request(self, context, segment_pairs):
+        """
+        Send Delete multi-segment network request to VSM.
+
+        :param context: quantum api request context
+        :param segment_pairs: List of segments in UUID pairs
+                              whose bridging needs to be removed
+        """
+        if segment_pairs == []:
+            return
+        # Check on which cluster segments are mapped
+        n1kvclient = n1kv_client.Client()
+        clusters = n1kvclient.get_vxlan_gw_clusters()
+        for (segment1, segment2) in segment_pairs:
+            for cluster in clusters['body'][c_const.SET]:
+                service_instances = \
+                    cluster[c_const.PROPERTIES][c_const.SERVICEINSTANCES]
+                if (segment1, segment2) in \
+                    service_instances[c_const.
+                                      SERVICEINSTANCE][c_const.
+                                                       ENCAPSULTATIONS]:
+                    cluster_id = cluster[c_const.NAME]
+                    service_instance = \
+                        service_instances[c_const.SERVICEINSTANCE][c_const.ID]
+                    n1kvclient.del_multi_segment(context,
+                                                 cluster_id, service_instance)
+                    LOG.debug('_send_del_multi_segment_request:'
+                              ' cluster_id %s segments %s %s',
+                              cluster_id, segment1, segment2)
+
+    def _send_add_trunk_segment_request(self, context, network, segment_pairs):
+        """
+        Send Add trunk segment request to VSM.
+
+        :param context: quantum api request context
+        :param network: Dictionary containing the trunk network information
+        :param segment_pairs: List of segments in UUID pairs
+                                that needs to be trunked
+        """
+        LOG.debug('_send_add_trunk_segment_request: %s ', segment_pairs)
+        if segment_pairs == []:
+            return
+        n1kvclient = n1kv_client.Client()
+        for (segment, dot1qtag) in segment_pairs:
+            trunk_dict = {}
+            trunk_dict['segment'] = segment
+            trunk_dict['dot1qtag'] = dot1qtag
+            n1kvclient.add_trunk_segment(context, network['name'], trunk_dict)
+
+    def _send_del_trunk_segment_request(self, context, network, segment_pairs):
+        """
+        Send Delete trunk segment request to VSM.
+
+        :param context: quantum api request context
+        :param network: Dictionary containing the trunk network information
+        :param segment_pairs: List of segments in UUID pairs that needs
+                                to be removed from the trunk
+        """
+        LOG.debug('_send_del_trunk_segment_request: %s ', segment_pairs)
+        if segment_pairs == []:
+            return
+        n1kvclient = n1kv_client.Client()
+        for (segment, dot1qtag) in segment_pairs:
+            n1kvclient.del_trunk_segment(context, network['name'], segment)
+
     def _send_create_subnet_request(self, context, subnet):
         """
         Send create subnet request to VSM
@@ -597,6 +704,64 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         binding = n1kv_db_v2.get_network_binding(session, id)
         return binding.segmentation_id
 
+    def _parse_multi_segments(self, context, attrs, param):
+        """
+        Parse the multi-segment network attributes
+
+        :param context: quantum api request context
+        :param attrs: Attributes of the network
+        :param param: Additional parameter indicating an add
+                        or del operation
+        :returns: List of segment UUIDs in set pairs
+        """
+        pair_list = []
+        segments = attrs.get(param)
+        if not attributes.is_attr_set(segments):
+            return pair_list
+        for pair in segments.split(','):
+            segment1 = pair[0:36]
+            segment2 = pair[37:73]
+            if uuidutils.is_uuid_like(segment1) and \
+                    uuidutils.is_uuid_like(segment2):
+                if self.get_network(context, segment1) and \
+                        self.get_network(context, segment2):
+                    pair_list.append((segment1, segment2))
+                else:
+                    msg = _("Network does not exist")
+            else:
+                LOG.debug("%s or %s is not a valid uuid", segment1, segment2)
+                msg = _("Invalid UUID supplied")
+                raise q_exc.InvalidInput(error_message=msg)
+        return pair_list
+
+    def _parse_trunk_segments(self, context, attrs, param):
+        """
+        Parse the trunk network attributes
+
+        :param context: quantum api request context
+        :param attrs: Attributes of the network
+        :param param: Additional parameter indicating an add
+                        or del operation
+        :returns: List of segment UUIDs and dot1qtag (for vxlan) in set pairs
+        """
+        pair_list = []
+        segments = attrs.get(param)
+        if not attributes.is_attr_set(segments):
+            return pair_list
+        for pair in segments.split(','):
+            segment1 = pair[0:36]
+            dot1qtag = pair[37:]
+            if uuidutils.is_uuid_like(segment1):
+                if self.get_network(context, segment1):
+                    pair_list.append((segment1, dot1qtag))
+                else:
+                    msg = _("Network does not exist")
+            else:
+                LOG.debug("%s is not a valid uuid", segment1)
+                msg = _("Invalid UUID supplied")
+                raise q_exc.InvalidInput(error_message=msg)
+        return pair_list
+
     def create_network(self, context, network):
         """
         Create network based on network profile
@@ -610,6 +775,7 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                           network['network'])
         self._add_dummy_profile_only_if_testing(network)
         profile_id = self._process_network_profile(context, network['network'])
+        segment_pairs = ""
 
         LOG.debug(_('create network: profile_id=%s'), profile_id)
         session = context.session
@@ -627,8 +793,23 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                            'net_type': network_type,
                            'seg_id': segmentation_id,
                            'multicast_ip': multicast_ip})
-                if not segmentation_id:
-                    raise q_exc.TenantNetworksDisabled()
+                if network_type in [c_const.TYPE_MULTI_SEGMENT]:
+                    segment_pairs = self._parse_multi_segments(context,
+                                                               network
+                                                               ['network'],
+                                                               n1kv_profile.
+                                                               SEGMENT_ADD)
+                    LOG.debug("seg list %s ", segment_pairs)
+                elif network_type in [c_const.TYPE_TRUNK]:
+                    segment_pairs = self._parse_trunk_segments(context,
+                                                               network
+                                                               ['network'],
+                                                               n1kv_profile.
+                                                               SEGMENT_ADD)
+                    LOG.debug("seg list %s ", segment_pairs)
+                else:
+                    if not segmentation_id:
+                        raise q_exc.TenantNetworksDisabled()
             else:
                 # provider network
                 if network_type == c_const.TYPE_VLAN:
@@ -642,13 +823,22 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                            physical_network,
                                            segmentation_id,
                                            multicast_ip,
-                                           profile_id)
+                                           profile_id,
+                                           segment_pairs)
 
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
 
         try:
-            self._send_create_network_request(context, net)
+            if network_type not in [c_const.TYPE_MULTI_SEGMENT,
+                                    c_const.TYPE_TRUNK]:
+                self._send_create_network_request(context, net)
+                # note - exception will rollback entire transaction
+            elif network_type == c_const.TYPE_MULTI_SEGMENT:
+                self._send_add_multi_segment_request(context, segment_pairs)
+            elif network_type == c_const.TYPE_TRUNK:
+                self._send_add_trunk_segment_request(context,
+                                                     net, segment_pairs)
         except(cisco_exceptions.VSMError,
                cisco_exceptions.VSMConnectionFailed):
             self.delete_network(context, net['id'])
@@ -671,9 +861,47 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             net = super(N1kvQuantumPluginV2, self).update_network(context, id,
                                                                   network)
+            binding = n1kv_db_v2.get_network_binding(session, id)
+            LOG.debug("network type is %s", binding.network_type)
+            if binding.network_type == c_const.TYPE_MULTI_SEGMENT:
+                add_segments = self._parse_multi_segments(context,
+                                                          network['network'],
+                                                          n1kv_profile.
+                                                          SEGMENT_ADD)
+                n1kv_db_v2.add_multi_segment_binding(session,
+                                                     net['id'], add_segments)
+                del_segments = self._parse_multi_segments(context,
+                                                          network['network'],
+                                                          n1kv_profile.
+                                                          SEGMENT_DEL)
+                n1kv_db_v2.del_multi_segment_binding(session,
+                                                     net['id'], del_segments)
+                self._send_add_multi_segment_request(context, add_segments)
+                self._send_del_multi_segment_request(context, del_segments)
+            elif binding.network_type == c_const.TYPE_TRUNK:
+                add_segments = self._parse_trunk_segments(context,
+                                                          network['network'],
+                                                          n1kv_profile
+                                                          .SEGMENT_ADD)
+                n1kv_db_v2.add_trunk_segment_binding(session,
+                                                     net['id'], add_segments)
+                del_segments = self._parse_trunk_segments(context,
+                                                          network['network'],
+                                                          n1kv_profile.
+                                                          SEGMENT_DEL)
+                n1kv_db_v2.del_trunk_segment_binding(session,
+                                                     net['id'], del_segments)
+                self._send_add_trunk_segment_request(context,
+                                                     net, add_segments)
+                self._send_del_trunk_segment_request(context,
+                                                     net, del_segments)
+
             self._extend_network_dict_provider(context, net)
             self._extend_network_dict_profile(context, net)
-        self._send_update_network_request(net)
+
+        if binding.network_type not in [c_const.TYPE_MULTI_SEGMENT,
+                                        c_const.TYPE_TRUNK]:
+            self._send_update_network_request(net)
         LOG.debug(_("Updated network: %s"), net['id'])
         return net
 

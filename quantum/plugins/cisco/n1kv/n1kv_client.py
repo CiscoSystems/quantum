@@ -15,6 +15,7 @@
 #    under the License.
 #
 # @author: Abhishek Raut, Cisco Systems, Inc.
+# @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
 import base64
 import httplib
@@ -123,6 +124,7 @@ class Client(object):
     port_profiles_path = "/virtual-port-profile"
     network_segments_path = "/vm-network-definition"
     network_segment_path = "/vm-network-definition/%s"
+    network_segment_trunk_path = "/vm-network-definition/%s/segments/%s"
     network_segment_pools_path = "/fabric-network-definition"
     network_segment_pool_path = "/fabric-network-definition/%s"
     ip_pools_path = "/ip-address-pool"
@@ -135,6 +137,9 @@ class Client(object):
     bridge_domain_path = "/bridge-domain/%s"
     logical_networks_path = "/fabric-network"
     events_path = "/events"
+    clusters_path = "/cluster"
+    cluster_path = "/cluster/%s"
+    cluster_service_instance_path = "/cluster/%s/service-instance/%s"
 
     def __init__(self, **kwargs):
         """Initialize a new client for the plugin."""
@@ -358,6 +363,63 @@ class Client(object):
         :param port_id: UUID of the port
         """
         return self._delete(self.port_path % ((vm_network_name), (port_id)))
+
+    def get_vxlan_gw_clusters(self, **_params):
+        """
+        Fetches a list of all vxlan gateway clusters
+        """
+        return self._get(self.clusters_path, params=_params)
+
+    def add_trunk_segment(self, context, network_segment, trunk_dict):
+        """
+        Adds a segment to a trunk network segment on the VSM
+
+        :param network_segment: Name of the trunk network segment
+        :param trunk_dict: Dictionary containing the segment information (uuid
+                            and link local vlan, if applicable) to be added to
+                            the trunk network
+        """
+        body = {'segment': trunk_dict['segment'],
+                'dot1q': trunk_dict['dot1qtag'],
+                }
+        return self._post(self.network_segment_path
+                          % (network_segment), body=body)
+
+    def del_trunk_segment(self, context, network_segment, segment):
+        """
+        Deletes a segment from a trunk network segment on the VSM
+
+        :param network_segment: Name of the trunk network segment
+        :param segment: Segment to be removed from the trunk
+        """
+        return self._delete(self.network_segment_trunk_path
+                            % ((network_segment), (segment)))
+
+    def add_multi_segment(self, context, cluster_id, encapsulation):
+        """
+        Adds a segment to a trunk network on the VSM
+
+        :param cluster_id: The cluster id of the VXLAN gateway service module
+        :param encapsulation: The encapsulation dictionary
+                                containing the mapping
+        """
+        body = {'name': cluster_id,
+                'serviceInstanceId': encapsulation['serviceInstance'],
+                'segment1': encapsulation['segment1'],
+                'segment2': encapsulation['segment2'],
+                }
+        return self._post(self.cluster_path % (cluster_id), body=body)
+
+    def del_multi_segment(self, context, cluster_id, service_instance):
+        """
+        Deletes a multi-segment network pair on the VSM
+
+        :param cluster_id: The cluster id of the VXLAN gateway service module
+        :param service_instance: The service instance which
+                                contains the encapsulation mapping
+        """
+        return self._delete(self.cluster_service_instance_path
+                            % ((cluster_id), (service_instance)))
 
     def _handle_fault_response(self, status_code, replybody):
         """

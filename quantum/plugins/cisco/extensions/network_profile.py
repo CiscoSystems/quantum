@@ -16,6 +16,7 @@
 #
 # @author: Abhishek Raut, Cisco Systems, Inc.
 # @author: Sergey Sudakovich, Cisco Systems, Inc.
+# @author: Rudrajit Tapadar, Cisco Systems, Inc.
 
 from quantum.api import extensions
 from quantum.api.v2 import attributes
@@ -33,6 +34,8 @@ RESOURCE_ATTRIBUTE_MAP = {
                  'is_visible': True, 'default': ''},
         'segment_type': {'allow_post': True, 'allow_put': True,
                          'is_visible': True, 'default': ''},
+        'sub_type': {'allow_post': True, 'allow_put': True,
+                     'is_visible': True, 'default': ''},
         'segment_range': {'allow_post': True, 'allow_put': True,
                           'is_visible': True, 'default': ''},
         'multicast_ip_range': {'allow_post': True, 'allow_put': True,

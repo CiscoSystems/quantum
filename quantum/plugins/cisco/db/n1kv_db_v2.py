@@ -41,6 +41,128 @@ def initialize():
     db.configure_db()
 
 
+def del_trunk_segment_binding(db_session, trunk_segment_id, segment_pairs):
+    """
+    Delete a trunk network binding
+
+    :param db_session: database session
+    :param trunk_segment_id: UUID representing the trunk network
+    :param segment_pairs: List of segment UUIDs in pair
+                            representing the segments that are trunked
+    """
+    with db_session.begin(subtransactions=True):
+        for (segment_id, dot1qtag) in segment_pairs:
+            alloc = (db_session.query(n1kv_models_v2.
+                     N1kvTrunkSegmentBinding).filter_by(trunk_segment_id=
+                                                        trunk_segment_id,
+                                                        segment_id=
+                                                        segment_id,
+                                                        dot1qtag=dot1qtag).
+                     one())
+            db_session.delete(alloc)
+
+
+def del_multi_segment_binding(db_session, multi_segment_id, segment_pairs):
+    """
+    Delete a multi-segment network binding
+
+    :param db_session: database session
+    :param multi_segment_id: UUID representing the multi-segment network
+    :param segment_pairs: List of segment UUIDs in pair
+                            representing the segments that are bridged
+    """
+    with db_session.begin(subtransactions=True):
+        for (segment1_id, segment2_id) in segment_pairs:
+            alloc = (db_session.query(n1kv_models_v2.
+                     N1kvMultiSegmentNetworkBinding).filter_by(
+                         multi_segment_id=multi_segment_id,
+                         segment1_id=segment1_id,
+                         segment2_id=segment2_id).
+                     one())
+            db_session.delete(alloc)
+
+
+def add_trunk_segment_binding(db_session, trunk_segment_id, segment_pairs):
+    """
+    Create a trunk network binding
+
+    :param db_session: database session
+    :param trunk_segment_id: UUID representing the multi-segment network
+    :param segment_pairs: List of segment UUIDs in pair
+                            representing the segments to be trunked
+    """
+    with db_session.begin(subtransactions=True):
+        for (segment_id, tag) in segment_pairs:
+            trunk_segment_binding = \
+                n1kv_models_v2.N1kvTrunkSegmentBinding(trunk_segment_id,
+                                                       segment_id, tag)
+            db_session.add(trunk_segment_binding)
+
+
+def add_multi_segment_binding(db_session, multi_segment_id, segment_pairs):
+    """
+    Create a multi-segment network binding
+
+    :param db_session: database session
+    :param multi_segment_id: UUID representing the multi-segment network
+    :param segment_pairs: List of segment UUIDs in pair
+                            representing the segments to be bridged
+    """
+    with db_session.begin(subtransactions=True):
+        for (segment1_id, segment2_id) in segment_pairs:
+            multi_segment_binding = \
+                n1kv_models_v2.N1kvMultiSegmentNetworkBinding(multi_segment_id,
+                                                              segment1_id,
+                                                              segment2_id)
+            db_session.add(multi_segment_binding)
+
+
+def get_multi_segment_network_binding(db_session,
+                                      multi_segment_id, segment_pair):
+    """
+    Retrieve multi-segment network binding
+
+    :param db_session: database session
+    :param multi_segment_id: UUID representing the trunk network whose binding
+                                is to fetch
+    :param segment_pair: set containing the segment UUIDs that are bridged
+    :returns: binding object
+    """
+    db_session = db_session or db.get_session()
+    try:
+        (segment1_id, segment2_id) = segment_pair
+        binding = (db_session.query(
+                   n1kv_models_v2.N1kvMultiSegmentNetworkBinding).
+                   filter_by(multi_segment_id=multi_segment_id,
+                             segment1_id=segment1_id,
+                             segment2_id=segment2_id).one())
+        return binding
+    except exc.NoResultFound:
+        raise c_exc.N1kvNetworkBindingNotFound(network_id=multi_segment_id)
+
+
+def get_trunk_network_binding(db_session, trunk_segment_id, segment_pair):
+    """
+    Retrieve trunk network binding
+
+    :param db_session: database session
+    :param trunk_segment_id: UUID representing the trunk network whose binding
+                                is to fetch
+    :param segment_pair: set containing the segment_id and dot1qtag
+    :returns: binding object
+    """
+    db_session = db_session or db.get_session()
+    try:
+        (segment_id, dot1qtag) = segment_pair
+        binding = (db_session.query(n1kv_models_v2.N1kvTrunkSegmentBinding).
+                   filter_by(trunk_segment_id=trunk_segment_id,
+                             segment_id=segment_id,
+                             dot1qtag=dot1qtag).one())
+        return binding
+    except exc.NoResultFound:
+        raise c_exc.N1kvNetworkBindingNotFound(network_id=trunk_segment_id)
+
+
 def get_network_binding(db_session, network_id):
     """
     Retrieve network binding
@@ -62,13 +184,14 @@ def get_network_binding(db_session, network_id):
 
 def add_network_binding(db_session, network_id, network_type,
                         physical_network, segmentation_id,
-                        multicast_ip, network_profile_id):
+                        multicast_ip, network_profile_id, add_segments):
     """
     Create network binding.
 
     :param db_session: database session
     :param network_id: UUID representing the network
-    :param network_type: string representing type of network (VLAN or VXLAN)
+    :param network_type: string representing type of network (VLAN, VXLAN,
+                        MULTI-SEGMENT or TRUNK)
     :param physical_network: Only applicable for VLAN networks. It
                              represents a L2 Domain
     :param segmentation_id: integer representing VLAN or VXLAN ID
@@ -78,6 +201,8 @@ def add_network_binding(db_session, network_id, network_type,
                          IDs.
     :param network_profile_id: network profile ID based on which this network
                                is created
+    :param add_segments: List of segment UUIDs in pairs to be added to either a
+                         multi-segment or trunk network
     """
     with db_session.begin(subtransactions=True):
         binding = n1kv_models_v2.N1kvNetworkBinding(network_id,
@@ -87,6 +212,10 @@ def add_network_binding(db_session, network_id, network_type,
                                                     multicast_ip,
                                                     network_profile_id)
         db_session.add(binding)
+        if network_type == c_const.TYPE_MULTI_SEGMENT and add_segments != '':
+            add_multi_segment_binding(db_session, network_id, add_segments)
+        elif network_type == c_const.TYPE_TRUNK and add_segments != '':
+            add_trunk_segment_binding(db_session, network_id, add_segments)
 
 
 def get_port_binding(db_session, port_id):
@@ -268,10 +397,14 @@ def alloc_network(db_session, network_profile_id):
         try:
             network_profile = get_network_profile(network_profile_id)
             if network_profile:
-                if network_profile.segment_type == 'vlan':
+                if network_profile.segment_type == c_const.TYPE_VLAN:
                     return reserve_vlan(db_session, network_profile)
-                else:
+                elif network_profile.segment_type == c_const.TYPE_VXLAN:
                     return reserve_vxlan(db_session, network_profile)
+                elif network_profile.segment_type == c_const.TYPE_TRUNK:
+                    return ('', c_const.TYPE_TRUNK, 0, '0.0.0.0')
+                else:
+                    return ('', c_const.TYPE_MULTI_SEGMENT, 0, '0.0.0.0')
         except q_exc.NotFound:
             LOG.debug(_("NetworkProfile not found"))
 
@@ -574,19 +707,30 @@ def create_network_profile(network_profile):
     LOG.debug(_("create_network_profile()"))
     db_session = db.get_session()
     with db_session.begin(subtransactions=True):
-        if network_profile['segment_type'] == 'vlan':
+        if network_profile['segment_type'] == c_const.TYPE_VLAN:
             net_profile = n1kv_models_v2.NetworkProfile(
                 name=network_profile['name'],
                 segment_type=network_profile['segment_type'],
                 segment_range=network_profile['segment_range'],
                 physical_network=network_profile['physical_network'])
-        elif network_profile['segment_type'] == 'vxlan':
+        elif network_profile['segment_type'] == c_const.TYPE_VXLAN:
+            net_profile = n1kv_models_v2.NetworkProfile(
+                name=network_profile['name'],
+                segment_type=network_profile['segment_type'],
+                segment_range=network_profile['segment_range'],
+                mcast_ip_index=0,
+                mcast_ip_range=network_profile['multicast_ip_range'])
+        elif network_profile['segment_type'] == c_const.TYPE_MULTI_SEGMENT:
+            net_profile = n1kv_models_v2.NetworkProfile(
+                name=network_profile['name'],
+                segment_type=network_profile['segment_type'])
+        elif network_profile['segment_type'] == c_const.TYPE_TRUNK:
             net_profile = n1kv_models_v2.NetworkProfile(
                 name=network_profile['name'],
                 segment_type=network_profile['segment_type'],
                 mcast_ip_index=0,
-                segment_range=network_profile['segment_range'],
-                mcast_ip_range=network_profile['multicast_ip_range'])
+                physical_network=None,
+                sub_type=network_profile['sub_type'])
         db_session.add(net_profile)
         return net_profile
 
@@ -924,18 +1068,35 @@ class NetworkProfile_db_mixin(object):
         :param p:
         :return:
         """
-        if any(net_p[arg] == '' for arg in ('segment_type', 'segment_range')):
-            msg = _("arguments segment_type and segment_range missing"
+        if any(net_p[arg] == '' for arg in ['segment_type']):
+            msg = _("argument segment_type missing"
                     " for network profile")
             LOG.exception(msg)
             raise q_exc.InvalidInput(error_message=msg)
         _segment_type = net_p['segment_type'].lower()
-        if _segment_type not in ['vlan', 'vxlan']:
-            msg = _("segment_type should either be vlan or vxlan")
+        if _segment_type not in [n1kv_models_v2.SEGMENT_TYPE_VLAN,
+                                 n1kv_models_v2.SEGMENT_TYPE_VXLAN,
+                                 n1kv_models_v2.SEGMENT_TYPE_MULTI_SEGMENT,
+                                 n1kv_models_v2.SEGMENT_TYPE_TRUNK]:
+            msg = _("segment_type should either be vlan,"
+                    "vxlan, multi-segment or trunk")
             LOG.exception(msg)
             raise q_exc.InvalidInput(error_message=msg)
-        self._validate_segment_range(net_p)
-        if _segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
+        if _segment_type == n1kv_models_v2.SEGMENT_TYPE_TRUNK:
+            if any(net_p[arg] == '' for arg in ['sub_type']):
+                msg = _("argument sub_type missing"
+                        " for trunk network profile")
+                LOG.exception(msg)
+                raise q_exc.InvalidInput(error_message=msg)
+        elif _segment_type in [n1kv_models_v2.SEGMENT_TYPE_VLAN,
+                               n1kv_models_v2.SEGMENT_TYPE_VXLAN]:
+            if any(net_p[arg] == '' for arg in ['segment_range']):
+                msg = _("argument segment_range missing"
+                        " for network profile")
+                LOG.exception(msg)
+                raise q_exc.InvalidInput(error_message=msg)
+            self._validate_segment_range(net_p)
+        if _segment_type not in [n1kv_models_v2.SEGMENT_TYPE_VXLAN]:
             net_p['multicast_ip_range'] = '0.0.0.0'
 
     def _validate_segment_range_uniqueness(self, context, net_p):
@@ -960,6 +1121,11 @@ class NetworkProfile_db_mixin(object):
                            net_p['name'])
                     LOG.exception(msg)
                     raise q_exc.InvalidInput(error_message=msg)
+                if n1kv_models_v2.SEGMENT_TYPE_MULTI_SEGMENT in \
+                        [prfl.segment_type, net_p['segment_type']] or \
+                        n1kv_models_v2.SEGMENT_TYPE_TRUNK in \
+                        [prfl.segment_type, net_p['segment_type']]:
+                    continue
                 seg_min, seg_max = self._get_segment_range(
                     net_p['segment_range'])
                 prfl_seg_min, prfl_seg_max = self._get_segment_range(
