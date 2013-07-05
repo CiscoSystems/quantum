@@ -17,7 +17,7 @@
 # @author: Hareesh Puthalath, Cisco Systems, Inc.
 # @author: Bob Melander, Cisco Systems, Inc.
 
-#from novaclient.v1_1 import client
+from novaclient.v1_1 import client
 from quantum.api.v2 import attributes
 from quantum.common import exceptions as q_exc
 from quantum import context as q_context
@@ -32,9 +32,8 @@ class ServiceVMManager:
 
     def __init__(self, user=None, passwd=None, l3_admin_tenant=None,
                  auth_url=None):
-#        self.nclient = client.Client(user, passwd, l3_admin_tenant, auth_url,
-#                                     service_type="compute")
-        self._nclient = None
+        self._nclient = client.Client(user, passwd, l3_admin_tenant, auth_url,
+                                     service_type="compute")
         self._context = q_context.get_admin_context()
         #self._context.tenant_id=tenant_id
         self._core_plugin = manager.QuantumManager.get_plugin()

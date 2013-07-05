@@ -238,7 +238,15 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
     @classmethod
     def svc_vm_mgr(cls):
         if cls._svc_vm_mgr is None:
-            cls._svc_vm_mgr = service_vm_lib.ServiceVMManager()
+            endpoint = (cfg.CONF.keystone_authtoken.auth_protocol + "://" +
+                        cfg.CONF.keystone_authtoken.auth_host + ":" +
+                        str(cfg.CONF.keystone_authtoken.auth_port) + "/v2.0")
+            username = cfg.CONF.keystone_authtoken.admin_user
+            pw = cfg.CONF.keystone_authtoken.admin_password
+            tenant = cls.l3_tenant_id()
+            cls._svc_vm_mgr = service_vm_lib.ServiceVMManager(
+                user=username, passwd=pw, l3_admin_tenant=tenant,
+                auth_url=endpoint)
         return cls._svc_vm_mgr
 
     def create_router(self, context, router):
@@ -734,7 +742,6 @@ class L3_router_appliance_db_mixin(extraroute_db.ExtraRoute_db_mixin):
 
     def _update_trunking_on_hosting_port(self, context, trunk_network_id,
                                          trunk_mappings):
-        # Should return the trunk mapping
         network_dict = {'network': {TRUNKED_NETWORKS: trunk_mappings}}
         net = self.update_network(context, trunk_network_id, network_dict)
         return net.get(TRUNKED_NETWORKS)

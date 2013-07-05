@@ -118,6 +118,13 @@ class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
         cfg.CONF.set_override("notification_driver", [test_notifier.__name__])
 
         cfg.CONF.set_override('allow_sorting', True)
+        test_opts = [
+            cfg.StrOpt('auth_protocol', default='http'),
+            cfg.StrOpt('auth_host', default='localhost'),
+            cfg.IntOpt('auth_port', default=35357),
+            cfg.StrOpt('admin_user', default='quantum'),
+            cfg.StrOpt('admin_password', default='secrete')]
+        cfg.CONF.register_opts(test_opts, 'keystone_authtoken')
 
         # Mock l3 admin tenant
         self.tenant_id_fcn_p = mock.patch('quantum.plugins.cisco.l3.db.'
@@ -126,6 +133,20 @@ class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
                                           'l3_tenant_id')
         self.tenant_id_fcn = self.tenant_id_fcn_p.start()
         self.tenant_id_fcn.return_value = "L3AdminTenantId"
+
+        # Mock creation/deletion of service VMs
+        self.dispatch_svc_vm_fcn_p = mock.patch('quantum.plugins.cisco.l3.'
+                                                'common.service_vm_lib.'
+                                                'ServiceVMManager.'
+                                                'dispatch_service_vm',
+                                                dispatch_service_vm)
+        self.dispatch_svc_vm_fcn_p.start()
+        self.delete_svc_vm_fcn_p = mock.patch('quantum.plugins.cisco.l3.'
+                                              'common.service_vm_lib.'
+                                              'ServiceVMManager.'
+                                              'delete_service_vm',
+                                              delete_service_vm)
+        self.delete_svc_vm_fcn_p.start()
 
         # A management network/subnet is needed
         self.mgmt_nw = self._make_network(
@@ -142,6 +163,8 @@ class L3RouterApplianceTestCase(test_extension_extraroute.ExtraRouteDBTestCase):
         self._delete('subnets', self.mgmt_subnet['subnet']['id'])
         self._delete('networks', self.mgmt_nw['network']['id'])
         plugin.resetPlugin()
+        self.delete_svc_vm_fcn_p.stop()
+        self.dispatch_svc_vm_fcn_p.stop()
         self.tenant_id_fcn_p.stop()
         super(test_l3_plugin.L3NatDBTestCase, self).tearDown()
 
@@ -188,5 +211,3 @@ class L3RouterApplianceTestCaseXML(L3RouterApplianceTestCase):
         # Should be reported as a bug and solution upstreamed.
         attributes.PLURALS.update({'routes': 'route'})
 
-    def tearDown(self):
-        super(L3RouterApplianceTestCaseXML, self).tearDown()
