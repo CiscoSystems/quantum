@@ -751,6 +751,8 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         for pair in segments.split(','):
             segment1 = pair[0:36]
             dot1qtag = pair[37:]
+            if not dot1qtag:
+                dot1qtag = 0
             if uuidutils.is_uuid_like(segment1):
                 if self.get_network(context, segment1):
                     pair_list.append((segment1, dot1qtag))
@@ -1182,8 +1184,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         _network_profile = super(N1kvQuantumPluginV2, self).\
             create_network_profile(
                 context, network_profile)
-        seg_min, seg_max = self.\
-            _get_segment_range(_network_profile['segment_range'])
+        if _network_profile['segment_type'] in [c_const.TYPE_VLAN,
+                                                c_const.TYPE_VXLAN]:
+            seg_min, seg_max = self.\
+                _get_segment_range(_network_profile['segment_range'])
         if _network_profile['segment_type'] == c_const.TYPE_VLAN:
             self._add_network_vlan_range(_network_profile['physical_network'],
                                          int(seg_min),
@@ -1216,8 +1220,10 @@ class N1kvQuantumPluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         """
         _network_profile = super(N1kvQuantumPluginV2, self).\
             delete_network_profile(context, id)
-        seg_min, seg_max = self._get_segment_range(
-            _network_profile['segment_range'])
+        if _network_profile['segment_type'] in [c_const.TYPE_VLAN,
+                                                c_const.TYPE_VXLAN]:
+            seg_min, seg_max = self._get_segment_range(
+                _network_profile['segment_range'])
         if _network_profile['segment_type'] == c_const.TYPE_VLAN:
             self._add_network_vlan_range(_network_profile['physical_network'],
                                          int(seg_min),

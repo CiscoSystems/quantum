@@ -364,11 +364,11 @@ class Client(object):
         """
         return self._delete(self.port_path % ((vm_network_name), (port_id)))
 
-    def get_vxlan_gw_clusters(self, **_params):
+    def get_vxlan_gw_clusters(self):
         """
         Fetches a list of all vxlan gateway clusters
         """
-        return self._get(self.clusters_path, params=_params)
+        return self._get(self.clusters_path)
 
     def add_trunk_segment(self, context, network_segment, trunk_dict):
         """

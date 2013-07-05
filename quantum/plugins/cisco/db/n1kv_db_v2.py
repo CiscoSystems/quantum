@@ -1110,7 +1110,7 @@ class NetworkProfile_db_mixin(object):
         if segment_type == n1kv_models_v2.SEGMENT_TYPE_VLAN:
             profiles = _get_network_profiles(
                 physical_network=net_p['physical_network'])
-        elif segment_type == n1kv_models_v2.SEGMENT_TYPE_VXLAN:
+        else:
             profiles = _get_network_profiles()
         if profiles:
             for prfl in profiles:
