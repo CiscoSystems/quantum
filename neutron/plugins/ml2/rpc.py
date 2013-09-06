@@ -26,6 +26,9 @@ from neutron.openstack.common import log
 from neutron.openstack.common.rpc import proxy
 from neutron.plugins.ml2 import db
 from neutron.plugins.ml2 import driver_api as api
+from neutron.plugins.ml2.drivers import type_tunnel
+# REVISIT(kmestery): Allow the type and mechanism drivers to supply the
+# mixins and eventually remove the direct dependencies on type_tunnel.
 
 LOG = log.getLogger(__name__)
 
@@ -35,15 +38,20 @@ TAP_DEVICE_PREFIX_LENGTH = 3
 
 class RpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                    l3_rpc_base.L3RpcCallbackMixin,
-                   sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
+                   sg_db_rpc.SecurityGroupServerRpcCallbackMixin,
+                   type_tunnel.TunnelRpcCallbackMixin):
 
     RPC_API_VERSION = '1.1'
     # history
     #   1.0 Initial version (from openvswitch/linuxbridge)
     #   1.1 Support Security Group RPC
 
-    def __init__(self, notifier):
-        self.notifier = notifier
+    def __init__(self, notifier, type_manager):
+        # REVISIT(kmestery): This depends on the first three super classes
+        # not having their own __init__ functions. If an __init__() is added
+        # to one, this could break. Fix this and add a unit test to cover this
+        # test in H3.
+        super(RpcCallbacks, self).__init__(notifier, type_manager)
 
     def create_rpc_dispatcher(self):
         '''Get the rpc dispatcher for this manager.
@@ -89,17 +97,39 @@ class RpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                               "%(agent_id)s not found in database"),
                             {'device': device, 'agent_id': agent_id})
                 return {'device': device}
+
             segments = db.get_network_segments(session, port.network_id)
             if not segments:
                 LOG.warning(_("Device %(device)s requested by agent "
-                              "%(agent_id)s has network %(network_id) with "
+                              "%(agent_id)s has network %(network_id)s with "
                               "no segments"),
                             {'device': device,
                              'agent_id': agent_id,
                              'network_id': port.network_id})
                 return {'device': device}
-            #TODO(rkukura): Use/create port binding
-            segment = segments[0]
+
+            binding = db.ensure_port_binding(session, port.id)
+            if not binding.segment:
+                LOG.warning(_("Device %(device)s requested by agent "
+                              "%(agent_id)s on network %(network_id)s not "
+                              "bound, vif_type: %(vif_type)s"),
+                            {'device': device,
+                             'agent_id': agent_id,
+                             'network_id': port.network_id,
+                             'vif_type': binding.vif_type})
+                return {'device': device}
+
+            segment = self._find_segment(segments, binding.segment)
+            if not segment:
+                LOG.warning(_("Device %(device)s requested by agent "
+                              "%(agent_id)s on network %(network_id)s "
+                              "invalid segment, vif_type: %(vif_type)s"),
+                            {'device': device,
+                             'agent_id': agent_id,
+                             'network_id': port.network_id,
+                             'vif_type': binding.vif_type})
+                return {'device': device}
+
             new_status = (q_const.PORT_STATUS_ACTIVE if port.admin_state_up
                           else q_const.PORT_STATUS_DOWN)
             if port.status != new_status:
@@ -113,6 +143,11 @@ class RpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                      'physical_network': segment[api.PHYSICAL_NETWORK]}
             LOG.debug(_("Returning: %s"), entry)
             return entry
+
+    def _find_segment(self, segments, segment_id):
+        for segment in segments:
+            if segment[api.ID] == segment_id:
+                return segment
 
     def update_device_down(self, rpc_context, **kwargs):
         """Device no longer exists on agent."""
@@ -156,19 +191,20 @@ class RpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
             if port.status != q_const.PORT_STATUS_ACTIVE:
                 port.status = q_const.PORT_STATUS_ACTIVE
 
-    # TODO(rkukura) Add tunnel_sync() here if not implemented via a
-    # driver.
-
 
 class AgentNotifierApi(proxy.RpcProxy,
-                       sg_rpc.SecurityGroupAgentRpcApiMixin):
+                       sg_rpc.SecurityGroupAgentRpcApiMixin,
+                       type_tunnel.TunnelAgentRpcApiMixin):
     """Agent side of the openvswitch rpc API.
 
     API version history:
         1.0 - Initial version.
+        1.1 - Added get_active_networks_info, create_dhcp_port,
+              update_dhcp_port, and removed get_dhcp_port methods.
+
     """
 
-    BASE_RPC_API_VERSION = '1.0'
+    BASE_RPC_API_VERSION = '1.1'
 
     def __init__(self, topic):
         super(AgentNotifierApi, self).__init__(
@@ -179,9 +215,6 @@ class AgentNotifierApi(proxy.RpcProxy,
         self.topic_port_update = topics.get_topic_name(topic,
                                                        topics.PORT,
                                                        topics.UPDATE)
-
-        # TODO(rkukura): Add topic_tunnel_update here if not
-        # implemented via a driver.
 
     def network_delete(self, context, network_id):
         self.fanout_cast(context,
@@ -198,6 +231,3 @@ class AgentNotifierApi(proxy.RpcProxy,
                                        segmentation_id=segmentation_id,
                                        physical_network=physical_network),
                          topic=self.topic_port_update)
-
-    # TODO(rkukura): Add tunnel_update() here if not
-    # implemented via a driver.

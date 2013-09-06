@@ -55,11 +55,12 @@ def main():
     cfg.CONF.register_opts(manager.OPTS)
     # import interface options just in case the driver uses namespaces
     cfg.CONF.register_opts(interface.OPTS)
+    config.register_agent_state_opts_helper(cfg.CONF)
     config.register_root_helper(cfg.CONF)
 
     cfg.CONF(project='neutron')
-    legacy.modernize_quantum_config(cfg.CONF)
     config.setup_logging(cfg.CONF)
+    legacy.modernize_quantum_config(cfg.CONF)
 
     mgr = manager.LbaasAgentManager(cfg.CONF)
     svc = LbaasAgentService(

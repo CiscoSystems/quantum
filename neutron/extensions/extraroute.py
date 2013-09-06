@@ -40,6 +40,7 @@ EXTENDED_ATTRIBUTES_2_0 = {
     'routers': {
         'routes': {'allow_post': False, 'allow_put': True,
                    'validate': {'type:hostroutes': None},
+                   'convert_to': attr.convert_none_to_empty_list,
                    'is_visible': True, 'default': attr.ATTR_NOT_SPECIFIED},
     }
 }
@@ -69,6 +70,7 @@ class Extraroute():
 
     def get_extended_resources(self, version):
         if version == "2.0":
+            attr.PLURALS.update({'routes': 'route'})
             return EXTENDED_ATTRIBUTES_2_0
         else:
             return {}

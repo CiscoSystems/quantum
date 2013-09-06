@@ -19,7 +19,9 @@ from oslo.config import cfg
 import stevedore
 
 from neutron.common import exceptions as exc
+from neutron.extensions import portbindings
 from neutron.openstack.common import log
+from neutron.plugins.ml2.common import exceptions as ml2_exc
 from neutron.plugins.ml2 import driver_api as api
 
 
@@ -29,13 +31,9 @@ LOG = log.getLogger(__name__)
 class TypeManager(stevedore.named.NamedExtensionManager):
     """Manage network segment types using drivers."""
 
-    # Mapping from type name to DriverManager
-    drivers = {}
-
     def __init__(self):
-        # REVISIT(rkukura): Need way to make stevedore use our logging
-        # configuration. Currently, nothing is logged if loading a
-        # driver fails.
+        # Mapping from type name to DriverManager
+        self.drivers = {}
 
         LOG.info(_("Configured type driver names: %s"),
                  cfg.CONF.ml2.type_drivers)
@@ -81,7 +79,7 @@ class TypeManager(stevedore.named.NamedExtensionManager):
         network_type = segment[api.NETWORK_TYPE]
         driver = self.drivers.get(network_type)
         if driver:
-            return driver.obj.validate_provider_segment(segment)
+            driver.obj.validate_provider_segment(segment)
         else:
             msg = _("network_type value '%s' not supported") % network_type
             raise exc.InvalidInput(error_message=msg)
@@ -106,28 +104,405 @@ class TypeManager(stevedore.named.NamedExtensionManager):
 
 
 class MechanismManager(stevedore.named.NamedExtensionManager):
-    """Manage networking mechanisms using drivers.
-
-    Note that this is currently a stub class, but it is expected to be
-    functional for the H-2 milestone. It currently serves mainly to
-    help solidify the architectural distinction between TypeDrivers
-    and MechanismDrivers.
-    """
+    """Manage networking mechanisms using drivers."""
 
     def __init__(self):
-        # REVISIT(rkukura): Need way to make stevedore use our logging
-        # configuration. Currently, nothing is logged if loading a
-        # driver fails.
+        # Registered mechanism drivers, keyed by name.
+        self.mech_drivers = {}
+        # Ordered list of mechanism drivers, defining
+        # the order in which the drivers are called.
+        self.ordered_mech_drivers = []
 
         LOG.info(_("Configured mechanism driver names: %s"),
                  cfg.CONF.ml2.mechanism_drivers)
         super(MechanismManager, self).__init__('neutron.ml2.mechanism_drivers',
                                                cfg.CONF.ml2.mechanism_drivers,
-                                               invoke_on_load=True)
+                                               invoke_on_load=True,
+                                               name_order=True)
         LOG.info(_("Loaded mechanism driver names: %s"), self.names())
-        # TODO(rkukura): Register mechanisms.
+        self._register_mechanisms()
+
+    def _register_mechanisms(self):
+        """Register all mechanism drivers.
+
+        This method should only be called once in the MechanismManager
+        constructor.
+        """
+        for ext in self:
+            self.mech_drivers[ext.name] = ext
+            self.ordered_mech_drivers.append(ext)
+        LOG.info(_("Registered mechanism drivers: %s"),
+                 [driver.name for driver in self.ordered_mech_drivers])
 
     def initialize(self):
-        pass
+        for driver in self.ordered_mech_drivers:
+            LOG.info(_("Initializing mechanism driver '%s'"), driver.name)
+            driver.obj.initialize()
 
-    # TODO(rkukura): Define mechanism dispatch methods
+    def _call_on_drivers(self, method_name, context,
+                         continue_on_failure=False):
+        """Helper method for calling a method across all mechanism drivers.
+
+        :param method_name: name of the method to call
+        :param context: context parameter to pass to each method call
+        :param continue_on_failure: whether or not to continue to call
+        all mechanism drivers once one has raised an exception
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver call fails.
+        """
+        error = False
+        for driver in self.ordered_mech_drivers:
+            try:
+                getattr(driver.obj, method_name)(context)
+            except Exception:
+                LOG.exception(
+                    _("Mechanism driver '%(name)s' failed in %(method)s"),
+                    {'name': driver.name, 'method': method_name}
+                )
+                error = True
+                if not continue_on_failure:
+                    break
+        if error:
+            raise ml2_exc.MechanismDriverError(
+                method=method_name
+            )
+
+    def create_network_precommit(self, context):
+        """Notify all mechanism drivers during network creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_network_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("create_network_precommit", context)
+
+    def create_network_postcommit(self, context):
+        """Notify all mechanism drivers after network creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_network_postcommit call fails.
+
+        Called after the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propagated
+        to the caller, where the network will be deleted, triggering
+        any required cleanup. There is no guarantee that all mechanism
+        drivers are called in this case.
+        """
+        self._call_on_drivers("create_network_postcommit", context)
+
+    def update_network_precommit(self, context):
+        """Notify all mechanism drivers during network update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_network_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_network_precommit", context)
+
+    def update_network_postcommit(self, context):
+        """Notify all mechanism drivers after network update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_network_postcommit call fails.
+
+        Called after the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propagated
+        to the caller, where an error is returned to the user. The
+        user is expected to take the appropriate action, whether by
+        retrying the call or deleting the network. There is no
+        guarantee that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_network_postcommit", context)
+
+    def delete_network_precommit(self, context):
+        """Notify all mechanism drivers during network deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_network_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("delete_network_precommit", context)
+
+    def delete_network_postcommit(self, context):
+        """Notify all mechanism drivers after network deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_network_postcommit call fails.
+
+        Called after the database transaction. If any mechanism driver
+        raises an error, then the error is logged but we continue to
+        call every other mechanism driver. A MechanismDriverError is
+        then reraised at the end to notify the caller of a failure. In
+        general we expect the caller to ignore the error, as the
+        network resource has already been deleted from the database
+        and it doesn't make sense to undo the action by recreating the
+        network.
+        """
+        self._call_on_drivers("delete_network_postcommit", context,
+                              continue_on_failure=True)
+
+    def create_subnet_precommit(self, context):
+        """Notify all mechanism drivers during subnet creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_subnet_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("create_subnet_precommit", context)
+
+    def create_subnet_postcommit(self, context):
+        """Notify all mechanism drivers after subnet creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_subnet_postcommit call fails.
+
+        Called after the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propagated
+        to the caller, where the subnet will be deleted, triggering
+        any required cleanup. There is no guarantee that all mechanism
+        drivers are called in this case.
+        """
+        self._call_on_drivers("create_subnet_postcommit", context)
+
+    def update_subnet_precommit(self, context):
+        """Notify all mechanism drivers during subnet update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_subnet_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_subnet_precommit", context)
+
+    def update_subnet_postcommit(self, context):
+        """Notify all mechanism drivers after subnet update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_subnet_postcommit call fails.
+
+        Called after the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propagated
+        to the caller, where an error is returned to the user. The
+        user is expected to take the appropriate action, whether by
+        retrying the call or deleting the subnet. There is no
+        guarantee that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_subnet_postcommit", context)
+
+    def delete_subnet_precommit(self, context):
+        """Notify all mechanism drivers during subnet deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_subnet_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("delete_subnet_precommit", context)
+
+    def delete_subnet_postcommit(self, context):
+        """Notify all mechanism drivers after subnet deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_subnet_postcommit call fails.
+
+        Called after the database transaction. If any mechanism driver
+        raises an error, then the error is logged but we continue to
+        call every other mechanism driver. A MechanismDriverError is
+        then reraised at the end to notify the caller of a failure. In
+        general we expect the caller to ignore the error, as the
+        subnet resource has already been deleted from the database
+        and it doesn't make sense to undo the action by recreating the
+        subnet.
+        """
+        self._call_on_drivers("delete_subnet_postcommit", context,
+                              continue_on_failure=True)
+
+    def create_port_precommit(self, context):
+        """Notify all mechanism drivers during port creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_port_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("create_port_precommit", context)
+
+    def create_port_postcommit(self, context):
+        """Notify all mechanism drivers of port creation.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver create_port_postcommit call fails.
+
+        Called after the database transaction. Errors raised by
+        mechanism drivers are left to propogate to the caller, where
+        the port will be deleted, triggering any required
+        cleanup. There is no guarantee that all mechanism drivers are
+        called in this case.
+        """
+        self._call_on_drivers("create_port_postcommit", context)
+
+    def update_port_precommit(self, context):
+        """Notify all mechanism drivers during port update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_port_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_port_precommit", context)
+
+    def update_port_postcommit(self, context):
+        """Notify all mechanism drivers after port update.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver update_port_postcommit call fails.
+
+        Called after the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propagated
+        to the caller, where an error is returned to the user. The
+        user is expected to take the appropriate action, whether by
+        retrying the call or deleting the port. There is no
+        guarantee that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("update_port_postcommit", context)
+
+    def delete_port_precommit(self, context):
+        """Notify all mechanism drivers during port deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_port_precommit call fails.
+
+        Called within the database transaction. If a mechanism driver
+        raises an exception, then a MechanismDriverError is propogated
+        to the caller, triggering a rollback. There is no guarantee
+        that all mechanism drivers are called in this case.
+        """
+        self._call_on_drivers("delete_port_precommit", context)
+
+    def delete_port_postcommit(self, context):
+        """Notify all mechanism drivers after port deletion.
+
+        :raises: neutron.plugins.ml2.common.MechanismDriverError
+        if any mechanism driver delete_port_postcommit call fails.
+
+        Called after the database transaction. If any mechanism driver
+        raises an error, then the error is logged but we continue to
+        call every other mechanism driver. A MechanismDriverError is
+        then reraised at the end to notify the caller of a failure. In
+        general we expect the caller to ignore the error, as the
+        port resource has already been deleted from the database
+        and it doesn't make sense to undo the action by recreating the
+        port.
+        """
+        self._call_on_drivers("delete_port_postcommit", context,
+                              continue_on_failure=True)
+
+    def bind_port(self, context):
+        """Attempt to bind a port using registered mechanism drivers.
+
+        :param context: PortContext instance describing the port
+
+        Called inside transaction context on session, prior to
+        create_network_precommit or update_network_precommit, to
+        attempt to establish a port binding.
+        """
+        binding = context._binding
+        LOG.debug(_("Attempting to bind port %(port)s on host %(host)s"),
+                  {'port': context._port['id'],
+                   'host': binding.host})
+        for driver in self.ordered_mech_drivers:
+            try:
+                driver.obj.bind_port(context)
+                if binding.segment:
+                    binding.driver = driver.name
+                    LOG.debug(_("Bound port: %(port)s, host: %(host)s, "
+                                "driver: %(driver)s, vif_type: %(vif_type)s, "
+                                "cap_port_filter: %(cap_port_filter)s, "
+                                "segment: %(segment)s"),
+                              {'port': context._port['id'],
+                               'host': binding.host,
+                               'driver': binding.driver,
+                               'vif_type': binding.vif_type,
+                               'cap_port_filter': binding.cap_port_filter,
+                               'segment': binding.segment})
+                    return
+            except Exception:
+                LOG.exception(_("Mechanism driver %s failed in "
+                                "bind_port"),
+                              driver.name)
+        binding.vif_type = portbindings.VIF_TYPE_BINDING_FAILED
+        LOG.warning(_("Failed to bind port %(port)s on host %(host)s"),
+                    {'port': context._port['id'],
+                     'host': binding.host})
+
+    def validate_port_binding(self, context):
+        """Check whether existing port binding is still valid.
+
+        :param context: PortContext instance describing the port
+        :returns: True if binding is valid, otherwise False
+
+        Called inside transaction context on session to validate that
+        the bound MechanismDriver's existing binding for the port is
+        still valid.
+        """
+        binding = context._binding
+        driver = self.mech_drivers.get(binding.driver, None)
+        if driver:
+            try:
+                return driver.obj.validate_port_binding(context)
+            except Exception:
+                LOG.exception(_("Mechanism driver %s failed in "
+                                "validate_port_binding"),
+                              driver.name)
+        return False
+
+    def unbind_port(self, context):
+        """Undo existing port binding.
+
+        :param context: PortContext instance describing the port
+
+        Called inside transaction context on session to notify the
+        bound MechanismDriver that its existing binding for the port
+        is no longer valid.
+        """
+        binding = context._binding
+        driver = self.mech_drivers.get(binding.driver, None)
+        if driver:
+            try:
+                driver.obj.unbind_port(context)
+            except Exception:
+                LOG.exception(_("Mechanism driver %s failed in "
+                                "unbind_port"),
+                              driver.name)
+        binding.vif_type = portbindings.VIF_TYPE_UNBOUND
+        binding.cap_port_filter = False
+        binding.driver = None
+        binding.segment = None

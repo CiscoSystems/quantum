@@ -15,12 +15,10 @@
 
 from oslo.config import cfg
 
-from neutron import scheduler
-
 
 ml2_opts = [
     cfg.ListOpt('type_drivers',
-                default=['local', 'flat', 'vlan'],
+                default=['local', 'flat', 'vlan', 'gre', 'vxlan'],
                 help=_("List of network type driver entrypoints to be loaded "
                        "from the neutron.ml2.type_drivers namespace.")),
     cfg.ListOpt('tenant_network_types',
@@ -29,11 +27,10 @@ ml2_opts = [
                        "networks.")),
     cfg.ListOpt('mechanism_drivers',
                 default=[],
-                help=_("List of networking mechanism driver entrypoints to "
-                       "be loaded from the neutron.ml2.mechanism_drivers "
-                       "namespace.")),
+                help=_("An ordered list of networking mechanism driver "
+                       "entrypoints to be loaded from the "
+                       "neutron.ml2.mechanism_drivers namespace.")),
 ]
 
 
 cfg.CONF.register_opts(ml2_opts, "ml2")
-cfg.CONF.register_opts(scheduler.AGENTS_SCHEDULER_OPTS)

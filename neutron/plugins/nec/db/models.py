@@ -16,6 +16,7 @@
 # @author: Ryota MIBU
 
 import sqlalchemy as sa
+from sqlalchemy import orm
 
 from neutron.db import model_base
 from neutron.db import models_v2
@@ -46,6 +47,10 @@ class OFCPortMapping(model_base.BASEV2, NeutronId, OFCId):
     """Represents a Port on OpenFlow Network/Controller."""
 
 
+class OFCRouterMapping(model_base.BASEV2, NeutronId, OFCId):
+    """Represents a router on OpenFlow Network/Controller."""
+
+
 class OFCFilterMapping(model_base.BASEV2, NeutronId, OFCId):
     """Represents a Filter on OpenFlow Network/Controller."""
 
@@ -74,31 +79,17 @@ class OFCFilter(model_base.BASEV2, models_v2.HasId, HasNeutronId):
     """Represents a Filter on OpenFlow Network/Controller."""
 
 
-class PortInfo(model_base.BASEV2, models_v2.HasId):
+class PortInfo(model_base.BASEV2):
     """Represents a Virtual Interface."""
+    id = sa.Column(sa.String(36),
+                   sa.ForeignKey('ports.id', ondelete="CASCADE"),
+                   primary_key=True)
     datapath_id = sa.Column(sa.String(36), nullable=False)
     port_no = sa.Column(sa.Integer, nullable=False)
     vlan_id = sa.Column(sa.Integer, nullable=False)
     mac = sa.Column(sa.String(32), nullable=False)
-
-
-class PacketFilter(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-    """Represents a packet filter."""
-    network_id = sa.Column(sa.String(36),
-                           sa.ForeignKey('networks.id', ondelete="CASCADE"),
-                           nullable=False)
-    priority = sa.Column(sa.Integer, nullable=False)
-    action = sa.Column(sa.String(16), nullable=False)
-    # condition
-    in_port = sa.Column(sa.String(36), nullable=False)
-    src_mac = sa.Column(sa.String(32), nullable=False)
-    dst_mac = sa.Column(sa.String(32), nullable=False)
-    eth_type = sa.Column(sa.Integer, nullable=False)
-    src_cidr = sa.Column(sa.String(64), nullable=False)
-    dst_cidr = sa.Column(sa.String(64), nullable=False)
-    protocol = sa.Column(sa.String(16), nullable=False)
-    src_port = sa.Column(sa.Integer, nullable=False)
-    dst_port = sa.Column(sa.Integer, nullable=False)
-    # status
-    admin_state_up = sa.Column(sa.Boolean(), nullable=False)
-    status = sa.Column(sa.String(16), nullable=False)
+    port = orm.relationship(
+        models_v2.Port,
+        backref=orm.backref("portinfo",
+                            lazy='joined', uselist=False,
+                            cascade='delete'))

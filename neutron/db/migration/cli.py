@@ -30,6 +30,9 @@ _core_opts = [
     cfg.StrOpt('core_plugin',
                default='',
                help=_('Neutron plugin provider module')),
+    cfg.ListOpt('service_plugins',
+                default=[],
+                help=_("The service plugins Neutron will use")),
 ]
 
 _quota_opts = [
@@ -135,5 +138,6 @@ def main():
     config.neutron_config = CONF
 
     CONF()
+    #TODO(gongysh) enable logging
     legacy.modernize_quantum_config(CONF)
     CONF.command.func(config, CONF.command.name)

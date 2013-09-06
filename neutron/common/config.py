@@ -25,7 +25,6 @@ from oslo.config import cfg
 from paste import deploy
 
 from neutron.api.v2 import attributes
-from neutron.common import legacy
 from neutron.common import utils
 from neutron.openstack.common.db.sqlalchemy import session as db_session
 from neutron.openstack.common import log as logging
@@ -72,7 +71,7 @@ core_opts = [
                help=_("Maximum number of host routes per subnet")),
     cfg.IntOpt('max_fixed_ips_per_port', default=5,
                help=_("Maximum number of fixed ips per port")),
-    cfg.IntOpt('dhcp_lease_duration', default=120,
+    cfg.IntOpt('dhcp_lease_duration', default=86400,
                deprecated_name='dhcp_lease_time',
                help=_("DHCP lease duration")),
     cfg.BoolOpt('dhcp_agent_notification', default=True,
@@ -87,7 +86,10 @@ core_opts = [
 ]
 
 core_cli_opts = [
-    cfg.StrOpt('state_path', default='/var/lib/neutron'),
+    cfg.StrOpt('state_path',
+               default='/var/lib/neutron',
+               help=_("Where to store Neutron state files. "
+                      "This directory must be writable by the agent.")),
 ]
 
 # Register the configuration options
@@ -107,8 +109,6 @@ db_session.set_defaults(sql_connection=_SQL_CONNECTION_DEFAULT,
 def parse(args):
     cfg.CONF(args=args, project='neutron',
              version='%%prog %s' % neutron_version.release_string())
-
-    legacy.modernize_quantum_config(cfg.CONF)
 
     # Validate that the base_mac is of the correct format
     msg = attributes._validate_regex(cfg.CONF.base_mac,

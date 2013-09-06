@@ -125,10 +125,31 @@ class TestAttributes(base.BaseTestCase):
         self.assertIsNone(msg)
 
         msg = attributes._validate_range(0, [1, 9])
-        self.assertEqual(msg, "'0' is not in range 1 through 9")
+        self.assertEqual(msg, "'0' is too small - must be at least '1'")
 
         msg = attributes._validate_range(10, (1, 9))
-        self.assertEqual(msg, "'10' is not in range 1 through 9")
+        self.assertEqual(msg,
+                         "'10' is too large - must be no larger than '9'")
+
+        msg = attributes._validate_range("bogus", (1, 9))
+        self.assertEqual(msg, "'bogus' is not an integer")
+
+        msg = attributes._validate_range(10, (attributes.UNLIMITED,
+                                              attributes.UNLIMITED))
+        self.assertIsNone(msg)
+
+        msg = attributes._validate_range(10, (1, attributes.UNLIMITED))
+        self.assertIsNone(msg)
+
+        msg = attributes._validate_range(1, (attributes.UNLIMITED, 9))
+        self.assertIsNone(msg)
+
+        msg = attributes._validate_range(-1, (0, attributes.UNLIMITED))
+        self.assertEqual(msg, "'-1' is too small - must be at least '0'")
+
+        msg = attributes._validate_range(10, (attributes.UNLIMITED, 9))
+        self.assertEqual(msg,
+                         "'10' is too large - must be no larger than '9'")
 
     def test_validate_mac_address(self):
         mac_addr = "ff:16:3e:4f:00:00"
@@ -266,7 +287,7 @@ class TestAttributes(base.BaseTestCase):
                            [{'nexthop': '10.0.2.20',
                              'destination': '100.0.0.0/8'},
                             {'nexthop': '10.0.2.20',
-                             'destination': '100.0.0.1/8'}]]
+                             'destination': '101.0.0.0/8'}]]
         for host_routes in hostroute_pools:
             msg = attributes._validate_hostroutes(host_routes, None)
             self.assertIsNone(msg)
@@ -371,7 +392,7 @@ class TestAttributes(base.BaseTestCase):
         self.assertIsNone(msg)
 
         # Valid - IPv6 with final octets
-        cidr = "fe80::0/24"
+        cidr = "fe80::/24"
         msg = attributes._validate_subnet(cidr,
                                           None)
         self.assertIsNone(msg)
@@ -380,21 +401,36 @@ class TestAttributes(base.BaseTestCase):
         cidr = "10.0.2.0"
         msg = attributes._validate_subnet(cidr,
                                           None)
-        error = "'%s' is not a valid IP subnet" % cidr
+        error = _("'%(data)s' isn't a recognized IP subnet cidr,"
+                  " '%(cidr)s' is recommended") % {"data": cidr,
+                                                   "cidr": "10.0.2.0/32"}
+        self.assertEqual(msg, error)
+
+        # Invalid - IPv4 with final octets
+        cidr = "192.168.1.1/24"
+        msg = attributes._validate_subnet(cidr,
+                                          None)
+        error = _("'%(data)s' isn't a recognized IP subnet cidr,"
+                  " '%(cidr)s' is recommended") % {"data": cidr,
+                                                   "cidr": "192.168.1.0/24"}
         self.assertEqual(msg, error)
 
         # Invalid - IPv6 without final octets, missing mask
         cidr = "fe80::"
         msg = attributes._validate_subnet(cidr,
                                           None)
-        error = "'%s' is not a valid IP subnet" % cidr
+        error = _("'%(data)s' isn't a recognized IP subnet cidr,"
+                  " '%(cidr)s' is recommended") % {"data": cidr,
+                                                   "cidr": "fe80::/128"}
         self.assertEqual(msg, error)
 
         # Invalid - IPv6 with final octets, missing mask
         cidr = "fe80::0"
         msg = attributes._validate_subnet(cidr,
                                           None)
-        error = "'%s' is not a valid IP subnet" % cidr
+        error = _("'%(data)s' isn't a recognized IP subnet cidr,"
+                  " '%(cidr)s' is recommended") % {"data": cidr,
+                                                   "cidr": "fe80::/128"}
         self.assertEqual(msg, error)
 
         # Invalid - Address format error
@@ -521,6 +557,20 @@ class TestAttributes(base.BaseTestCase):
         dictionary['key1'] = 'UNSUPPORTED'
         msg = attributes._validate_dict(dictionary, constraints)
         self.assertIsNotNone(msg)
+
+    def test_validate_dict_convert_boolean(self):
+        dictionary, constraints = self._construct_dict_and_constraints()
+
+        constraints['key_bool'] = {
+            'type:boolean': None,
+            'required': False,
+            'convert_to': attributes.convert_to_boolean}
+        dictionary['key_bool'] = 'true'
+        msg = attributes._validate_dict(dictionary, constraints)
+        self.assertIsNone(msg)
+        # Explicitly comparing with literal 'True' as assertTrue
+        # succeeds also for 'true'
+        self.assertIs(True, dictionary['key_bool'])
 
     def test_subdictionary(self):
         dictionary, constraints = self._construct_dict_and_constraints()

@@ -18,7 +18,6 @@
 #
 
 import eventlet
-from eventlet import semaphore
 import netaddr
 from oslo.config import cfg
 
@@ -36,6 +35,7 @@ from neutron.common import utils as common_utils
 from neutron import context
 from neutron import manager
 from neutron.openstack.common import importutils
+from neutron.openstack.common import lockutils
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import loopingcall
 from neutron.openstack.common import periodic_task
@@ -43,12 +43,13 @@ from neutron.openstack.common.rpc import common as rpc_common
 from neutron.openstack.common.rpc import proxy
 from neutron.openstack.common import service
 from neutron import service as neutron_service
-
+from neutron.services.firewall.agents.l3reference import firewall_l3_agent
 
 LOG = logging.getLogger(__name__)
 NS_PREFIX = 'qrouter-'
 INTERNAL_DEV_PREFIX = 'qr-'
 EXTERNAL_DEV_PREFIX = 'qg-'
+RPC_LOOP_INTERVAL = 1
 
 
 class L3PluginApi(proxy.RpcProxy):
@@ -66,12 +67,10 @@ class L3PluginApi(proxy.RpcProxy):
             topic=topic, default_version=self.BASE_RPC_API_VERSION)
         self.host = host
 
-    def get_routers(self, context, fullsync=True, router_id=None):
+    def get_routers(self, context, router_ids=None):
         """Make a remote process call to retrieve the sync data for routers."""
-        router_ids = [router_id] if router_id else None
         return self.call(context,
                          self.make_msg('sync_routers', host=self.host,
-                                       fullsync=fullsync,
                                        router_ids=router_ids),
                          topic=self.topic)
 
@@ -117,15 +116,15 @@ class RouterInfo(object):
         self._router = value
         if not self._router:
             return
+        # enable_snat by default if it wasn't specified by plugin
+        self._snat_enabled = self._router.get('enable_snat', True)
         # Set a SNAT action for the router
         if self._router.get('gw_port'):
-            self._snat_action = (
-                'add_rules' if self._router.get('enable_snat')
-                else 'remove_rules')
+            self._snat_action = ('add_rules' if self._snat_enabled
+                                 else 'remove_rules')
         elif self.ex_gw_port:
             # Gateway port was removed, remove rules
             self._snat_action = 'remove_rules'
-        self._snat_enabled = self._router.get('enable_snat')
 
     def ns_name(self):
         if self.use_namespaces:
@@ -139,7 +138,18 @@ class RouterInfo(object):
         self._snat_action = None
 
 
-class L3NATAgent(manager.Manager):
+class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback, manager.Manager):
+    """Manager for L3NatAgent
+
+        API version history:
+        1.0 initial Version
+        1.1 changed the type of the routers parameter
+            to the routers_updated method.
+            It was previously a list of routers in dict format.
+            It is now a list of router IDs only.
+            Per rpc versioning rules,  it is backwards compatible.
+    """
+    RPC_API_VERSION = '1.1'
 
     OPTS = [
         cfg.StrOpt('external_network_bridge', default='br-ex',
@@ -171,6 +181,10 @@ class L3NATAgent(manager.Manager):
                           "by the agents.")),
         cfg.BoolOpt('enable_metadata_proxy', default=True,
                     help=_("Allow running metadata proxy.")),
+        cfg.StrOpt('metadata_proxy_socket',
+                   default='$state_path/metadata_proxy',
+                   help=_('Location of Metadata Proxy UNIX domain '
+                          'socket')),
     ]
 
     def __init__(self, host, conf=None):
@@ -196,10 +210,16 @@ class L3NATAgent(manager.Manager):
         self.context = context.get_admin_context_without_session()
         self.plugin_rpc = L3PluginApi(topics.PLUGIN, host)
         self.fullsync = True
-        self.sync_sem = semaphore.Semaphore(1)
+        self.updated_routers = set()
+        self.removed_routers = set()
+        self.sync_progress = False
         if self.conf.use_namespaces:
             self._destroy_router_namespaces(self.conf.router_id)
-        super(L3NATAgent, self).__init__(host=self.conf.host)
+
+        self.rpc_loop = loopingcall.FixedIntervalLoopingCall(
+            self._rpc_loop)
+        self.rpc_loop.start(interval=RPC_LOOP_INTERVAL)
+        super(L3NATAgent, self).__init__(conf=self.conf)
 
     def _destroy_router_namespaces(self, only_router_id=None):
         """Destroy router namespaces on the host to eliminate all stale
@@ -266,6 +286,7 @@ class L3NATAgent(manager.Manager):
         for c, r in self.metadata_nat_rules():
             ri.iptables_manager.ipv4['nat'].add_rule(c, r)
         ri.iptables_manager.apply()
+        super(L3NATAgent, self).process_router_add(ri)
         if self.conf.enable_metadata_proxy:
             self._spawn_metadata_proxy(ri)
 
@@ -287,8 +308,10 @@ class L3NATAgent(manager.Manager):
 
     def _spawn_metadata_proxy(self, router_info):
         def callback(pid_file):
+            metadata_proxy_socket = cfg.CONF.metadata_proxy_socket
             proxy_cmd = ['neutron-ns-metadata-proxy',
                          '--pid_file=%s' % pid_file,
+                         '--metadata_proxy_socket=%s' % metadata_proxy_socket,
                          '--router_id=%s' % router_info.router_id,
                          '--state_path=%s' % self.conf.state_path,
                          '--metadata_port=%s' % self.conf.metadata_port]
@@ -323,6 +346,7 @@ class L3NATAgent(manager.Manager):
         port['ip_cidr'] = "%s/%s" % (ips[0]['ip_address'], prefixlen)
 
     def process_router(self, ri):
+        ri.iptables_manager.defer_apply_on()
         ex_gw_port = self._get_ex_gw_port(ri)
         internal_ports = ri.router.get(l3_constants.INTERFACE_KEY, [])
         existing_port_ids = set([p['id'] for p in ri.internal_ports])
@@ -371,6 +395,7 @@ class L3NATAgent(manager.Manager):
         ri.ex_gw_port = ex_gw_port
         ri.enable_snat = ri.router.get('enable_snat')
         self.routes_updated(ri)
+        ri.iptables_manager.defer_apply_off()
 
     def _handle_router_snat_rules(self, ri, ex_gw_port, internal_cidrs,
                                   interface_name, action):
@@ -380,8 +405,12 @@ class L3NATAgent(manager.Manager):
         # each router's SNAT rules will be in their own namespace
         ri.iptables_manager.ipv4['nat'].empty_chain('POSTROUTING')
         ri.iptables_manager.ipv4['nat'].empty_chain('snat')
+
+        # Add back the jump to float-snat
+        ri.iptables_manager.ipv4['nat'].add_rule('snat', '-j $float-snat')
+
         # And add them back if the action if add_rules
-        if action == 'add_rules':
+        if action == 'add_rules' and ex_gw_port:
             # ex_gw_port should not be None in this case
             ex_gw_ip = ex_gw_port['fixed_ips'][0]['ip_address']
             for rule in self.external_gateway_nat_rules(ex_gw_ip,
@@ -586,35 +615,28 @@ class L3NATAgent(manager.Manager):
 
     def router_deleted(self, context, router_id):
         """Deal with router deletion RPC message."""
-        with self.sync_sem:
-            if router_id in self.router_info:
-                try:
-                    self._router_removed(router_id)
-                except Exception:
-                    msg = _("Failed dealing with router "
-                            "'%s' deletion RPC message")
-                    LOG.debug(msg, router_id)
-                    self.fullsync = True
+        LOG.debug(_('Got router deleted notification for %s'), router_id)
+        self.removed_routers.add(router_id)
 
     def routers_updated(self, context, routers):
         """Deal with routers modification and creation RPC message."""
-        if not routers:
-            return
-        with self.sync_sem:
-            try:
-                self._process_routers(routers)
-            except Exception:
-                msg = _("Failed dealing with routers update RPC message")
-                LOG.debug(msg)
-                self.fullsync = True
+        LOG.debug(_('Got routers updated notification :%s'), routers)
+        if routers:
+            # This is needed for backward compatiblity
+            if isinstance(routers[0], dict):
+                routers = [router['id'] for router in routers]
+            self.updated_routers.update(routers)
 
     def router_removed_from_agent(self, context, payload):
-        self.router_deleted(context, payload['router_id'])
+        LOG.debug(_('Got router removed from agent :%r'), payload)
+        self.removed_routers.add(payload['router_id'])
 
     def router_added_to_agent(self, context, payload):
+        LOG.debug(_('Got router added to agent :%r'), payload)
         self.routers_updated(context, payload)
 
     def _process_routers(self, routers, all_routers=False):
+        pool = eventlet.GreenPool()
         if (self.conf.external_network_bridge and
             not ip_lib.device_exists(self.conf.external_network_bridge)):
             LOG.error(_("The external network bridge '%s' does not exist"),
@@ -652,28 +674,60 @@ class L3NATAgent(manager.Manager):
                 self._router_added(r['id'], r)
             ri = self.router_info[r['id']]
             ri.router = r
-            self.process_router(ri)
+            pool.spawn_n(self.process_router, ri)
         # identify and remove routers that no longer exist
         for router_id in prev_router_ids - cur_router_ids:
+            pool.spawn_n(self._router_removed, router_id)
+        pool.waitall()
+
+    @lockutils.synchronized('l3-agent', 'neutron-')
+    def _rpc_loop(self):
+        # _rpc_loop and _sync_routers_task will not be
+        # executed in the same time because of lock.
+        # so we can clear the value of updated_routers
+        # and removed_routers
+        try:
+            if self.updated_routers:
+                router_ids = list(self.updated_routers)
+                self.updated_routers.clear()
+                routers = self.plugin_rpc.get_routers(
+                    self.context, router_ids)
+                self._process_routers(routers)
+            self._process_router_delete()
+        except Exception:
+            LOG.exception(_("Failed synchronizing routers"))
+            self.fullsync = True
+
+    def _process_router_delete(self):
+        current_removed_routers = list(self.removed_routers)
+        for router_id in current_removed_routers:
             self._router_removed(router_id)
+            self.removed_routers.remove(router_id)
+
+    def _router_ids(self):
+        if not self.conf.use_namespaces:
+            return [self.conf.router_id]
 
     @periodic_task.periodic_task
+    @lockutils.synchronized('l3-agent', 'neutron-')
     def _sync_routers_task(self, context):
-        # we need to sync with router deletion RPC message
-        with self.sync_sem:
-            if self.fullsync:
-                try:
-                    if not self.conf.use_namespaces:
-                        router_id = self.conf.router_id
-                    else:
-                        router_id = None
-                    routers = self.plugin_rpc.get_routers(
-                        context, router_id)
-                    self._process_routers(routers, all_routers=True)
-                    self.fullsync = False
-                except Exception:
-                    LOG.exception(_("Failed synchronizing routers"))
-                    self.fullsync = True
+        if self.services_sync:
+            super(L3NATAgent, self).process_services_sync(context)
+        if not self.fullsync:
+            return
+        try:
+            router_ids = self._router_ids()
+            self.updated_routers.clear()
+            self.removed_routers.clear()
+            routers = self.plugin_rpc.get_routers(
+                context, router_ids)
+
+            LOG.debug(_('Processing :%r'), routers)
+            self._process_routers(routers, all_routers=True)
+            self.fullsync = False
+        except Exception:
+            LOG.exception(_("Failed synchronizing routers"))
+            self.fullsync = True
 
     def after_start(self):
         LOG.info(_("L3 agent started"))
@@ -774,7 +828,7 @@ class L3NATAgentWithStateReport(L3NATAgent):
         LOG.info(_("agent_updated by server side %s!"), payload)
 
 
-def main():
+def main(manager='neutron.agent.l3_agent.L3NATAgentWithStateReport'):
     eventlet.monkey_patch()
     conf = cfg.CONF
     conf.register_opts(L3NATAgent.OPTS)
@@ -789,5 +843,5 @@ def main():
         binary='neutron-l3-agent',
         topic=topics.L3_AGENT,
         report_interval=cfg.CONF.AGENT.report_interval,
-        manager='neutron.agent.l3_agent.L3NATAgentWithStateReport')
+        manager=manager)
     service.launch(server).wait()

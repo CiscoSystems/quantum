@@ -31,10 +31,22 @@ def _find_nvp_version_in_headers(headers):
     for (header_name, header_value) in (headers or ()):
         try:
             if header_name == 'server':
-                return header_value.split('/')[1]
+                return NVPVersion(header_value.split('/')[1])
         except IndexError:
             LOG.warning(_("Unable to fetch NVP version from response "
                           "headers:%s"), headers)
+
+
+class NVPVersion(object):
+    """Abstracts NVP version by exposing major and minor."""
+
+    def __init__(self, nvp_version):
+        self.full_version = nvp_version.split('.')
+        self.major = int(self.full_version[0])
+        self.minor = int(self.full_version[1])
+
+    def __str__(self):
+        return '.'.join(self.full_version)
 
 
 class NVPApiHelper(client_eventlet.NvpApiClientEventlet):
@@ -135,7 +147,7 @@ class NVPApiHelper(client_eventlet.NvpApiClientEventlet):
         if status in self.error_codes:
             LOG.error(_("Received error code: %s"), status)
             LOG.error(_("Server Error Message: %s"), response.body)
-            self.error_codes[status](self)
+            self.error_codes[status](self, response)
 
         # Continue processing for non-error condition.
         if (status != httplib.OK and status != httplib.CREATED
@@ -153,25 +165,31 @@ class NVPApiHelper(client_eventlet.NvpApiClientEventlet):
 
     def get_nvp_version(self):
         if not self._nvp_version:
-            # generate a simple request (/ws.v1/log)
-            # this will cause nvp_version to be fetched
-            # don't bother about response
-            self.request('GET', '/ws.v1/log')
+            # Determine the NVP version by querying the control
+            # cluster nodes. Currently, the version will be the
+            # one of the server that responds.
+            self.request('GET', '/ws.v1/control-cluster/node')
+            if not self._nvp_version:
+                LOG.error(_('Unable to determine NVP version. '
+                          'Plugin might not work as expected.'))
         return self._nvp_version
 
-    def fourZeroFour(self):
+    def fourZeroFour(self, response=None):
         raise ResourceNotFound()
 
-    def fourZeroNine(self):
+    def fourZeroNine(self, response=None):
         raise Conflict()
 
-    def fiveZeroThree(self):
+    def fiveZeroThree(self, response=None):
         raise ServiceUnavailable()
 
-    def fourZeroThree(self):
-        raise Forbidden()
+    def fourZeroThree(self, response=None):
+        if 'read-only' in response.body:
+            raise ReadOnlyMode()
+        else:
+            raise Forbidden()
 
-    def zero(self):
+    def zero(self, response=None):
         raise NvpApiException()
 
     # TODO(del): ensure error_codes are handled/raised appropriately
@@ -184,6 +202,7 @@ class NVPApiHelper(client_eventlet.NvpApiClientEventlet):
                    307: zero,
                    400: zero,
                    500: zero,
+                   501: zero,
                    503: zero}
 
 
@@ -230,6 +249,10 @@ class ServiceUnavailable(NvpApiException):
 class Forbidden(NvpApiException):
     message = _("The request is forbidden from accessing the "
                 "referenced resource.")
+
+
+class ReadOnlyMode(Forbidden):
+    message = _("Create/Update actions are forbidden when in read-only mode.")
 
 
 class RequestTimeout(NvpApiException):

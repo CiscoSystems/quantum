@@ -71,7 +71,7 @@ class PluginApi(proxy.RpcProxy):
 
     '''
 
-    BASE_RPC_API_VERSION = '1.0'
+    BASE_RPC_API_VERSION = '1.1'
 
     def __init__(self, topic):
         super(PluginApi, self).__init__(
@@ -95,7 +95,8 @@ class PluginApi(proxy.RpcProxy):
                                        agent_id=agent_id),
                          topic=self.topic)
 
-    def tunnel_sync(self, context, tunnel_ip):
+    def tunnel_sync(self, context, tunnel_ip, tunnel_type=None):
         return self.call(context,
-                         self.make_msg('tunnel_sync', tunnel_ip=tunnel_ip),
+                         self.make_msg('tunnel_sync', tunnel_ip=tunnel_ip,
+                                       tunnel_type=tunnel_type),
                          topic=self.topic)

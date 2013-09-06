@@ -16,115 +16,41 @@
 #
 # @author: Rohit Agarwalla, Cisco Systems, Inc.
 
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.orm import object_mapper
+import sqlalchemy as sa
 
 from neutron.db import model_base
-from neutron.db import models_v2 as models  # noqa
-from neutron.openstack.common import uuidutils
 
 
-class L2NetworkBase(object):
-    """Base class for L2Network Models."""
+class QoS(model_base.BASEV2):
+    """Represents QoS policies for a tenant."""
 
-    #__table_args__ = {'mysql_engine': 'InnoDB'}
+    __tablename__ = 'cisco_qos_policies'
 
-    def __setitem__(self, key, value):
-        """Internal Dict set method."""
-        setattr(self, key, value)
-
-    def __getitem__(self, key):
-        """Internal Dict get method."""
-        return getattr(self, key)
-
-    def get(self, key, default=None):
-        """Dict get method."""
-        return getattr(self, key, default)
-
-    def __iter__(self):
-        """Iterate over table columns."""
-        self._i = iter(object_mapper(self).columns)
-        return self
-
-    def next(self):
-        """Next method for the iterator."""
-        n = self._i.next().name
-        return n, getattr(self, n)
-
-    def update(self, values):
-        """Make the model object behave like a dict."""
-        for k, v in values.iteritems():
-            setattr(self, k, v)
-
-    def iteritems(self):
-        """Make the model object behave like a dict.
-
-        Includes attributes from joins.
-        """
-        local = dict(self)
-        joined = dict([(k, v) for k, v in self.__dict__.iteritems()
-                       if not k[0] == '_'])
-        local.update(joined)
-        return local.iteritems()
+    qos_id = sa.Column(sa.String(255))
+    tenant_id = sa.Column(sa.String(255), primary_key=True)
+    qos_name = sa.Column(sa.String(255), primary_key=True)
+    qos_desc = sa.Column(sa.String(255))
 
 
-class VlanID(model_base.BASEV2, L2NetworkBase):
-    """Represents a vlan_id usage."""
-    __tablename__ = 'cisco_vlan_ids'
+class Credential(model_base.BASEV2):
+    """Represents credentials for a tenant to control Cisco switches."""
 
-    vlan_id = Column(Integer, primary_key=True)
-    vlan_used = Column(Boolean)
+    __tablename__ = 'cisco_credentials'
 
-    def __init__(self, vlan_id):
-        self.vlan_id = vlan_id
-        self.vlan_used = False
-
-    def __repr__(self):
-        return "<VlanID(%d,%s)>" % (self.vlan_id, self.vlan_used)
+    credential_id = sa.Column(sa.String(255))
+    credential_name = sa.Column(sa.String(255), primary_key=True)
+    user_name = sa.Column(sa.String(255))
+    password = sa.Column(sa.String(255))
+    type = sa.Column(sa.String(255))
 
 
-class QoS(model_base.BASEV2, L2NetworkBase):
-    """Represents QoS for a tenant."""
+class ProviderNetwork(model_base.BASEV2):
+    """Represents networks that were created as provider networks."""
 
-    __tablename__ = 'qoss'
+    __tablename__ = 'cisco_provider_networks'
 
-    qos_id = Column(String(255))
-    tenant_id = Column(String(255), primary_key=True)
-    qos_name = Column(String(255), primary_key=True)
-    qos_desc = Column(String(255))
-
-    def __init__(self, tenant_id, qos_name, qos_desc):
-        self.qos_id = uuidutils.generate_uuid()
-        self.tenant_id = tenant_id
-        self.qos_name = qos_name
-        self.qos_desc = qos_desc
-
-    def __repr__(self):
-        return "<QoS(%s,%s,%s,%s)>" % (self.qos_id, self.tenant_id,
-                                       self.qos_name, self.qos_desc)
-
-
-class Credential(model_base.BASEV2, L2NetworkBase):
-    """Represents credentials for a tenant."""
-
-    __tablename__ = 'credentials'
-
-    credential_id = Column(String(255))
-    tenant_id = Column(String(255), primary_key=True)
-    credential_name = Column(String(255), primary_key=True)
-    user_name = Column(String(255))
-    password = Column(String(255))
-
-    def __init__(self, tenant_id, credential_name, user_name, password):
-        self.credential_id = uuidutils.generate_uuid()
-        self.tenant_id = tenant_id
-        self.credential_name = credential_name
-        self.user_name = user_name
-        self.password = password
-
-    def __repr__(self):
-        return "<Credentials(%s,%s,%s,%s,%s)>" % (self.credential_id,
-                                                  self.tenant_id,
-                                                  self.credential_name,
-                                                  self.user_name,
-                                                  self.password)
+    network_id = sa.Column(sa.String(36),
+                           sa.ForeignKey('networks.id', ondelete="CASCADE"),
+                           primary_key=True)
+    network_type = sa.Column(sa.String(255), nullable=False)
+    segmentation_id = sa.Column(sa.Integer, nullable=False)

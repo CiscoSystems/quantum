@@ -18,12 +18,12 @@ from oslo.config import cfg
 
 from neutron.agent.common import config
 from neutron.plugins.openvswitch.common import constants
-from neutron import scheduler
 
 
 DEFAULT_BRIDGE_MAPPINGS = []
 DEFAULT_VLAN_RANGES = []
 DEFAULT_TUNNEL_RANGES = []
+DEFAULT_TUNNEL_TYPES = []
 
 ovs_opts = [
     cfg.StrOpt('integration_bridge', default='br-int',
@@ -53,17 +53,22 @@ ovs_opts = [
     cfg.ListOpt('tunnel_id_ranges',
                 default=DEFAULT_TUNNEL_RANGES,
                 help=_("List of <tun_min>:<tun_max>")),
+    cfg.StrOpt('tunnel_type', default='',
+               help=_("The type of tunnels to use when utilizing tunnels, "
+                      "either 'gre' or 'vxlan'")),
 ]
 
 agent_opts = [
     cfg.IntOpt('polling_interval', default=2,
                help=_("The number of seconds the agent will wait between "
                       "polling for local device changes.")),
-    cfg.StrOpt('tunnel_type', default=None,
-               help=_("Network type for agent tunnel networks "
-                      "(gre or vxlan)")),
+    cfg.ListOpt('tunnel_types', default=DEFAULT_TUNNEL_TYPES,
+                help=_("Network types supported by the agent "
+                       "(gre and/or vxlan)")),
     cfg.IntOpt('vxlan_udp_port', default=constants.VXLAN_UDP_PORT,
                help=_("The UDP port to use for VXLAN tunnels.")),
+    cfg.IntOpt('veth_mtu', default=None,
+               help=_("MTU size of veth interfaces")),
 ]
 
 
@@ -71,4 +76,3 @@ cfg.CONF.register_opts(ovs_opts, "OVS")
 cfg.CONF.register_opts(agent_opts, "AGENT")
 config.register_agent_state_opts_helper(cfg.CONF)
 config.register_root_helper(cfg.CONF)
-cfg.CONF.register_opts(scheduler.AGENTS_SCHEDULER_OPTS)
