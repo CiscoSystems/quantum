@@ -160,3 +160,6 @@ class Network(model_base.BASEV2, HasId, HasTenant):
     status = sa.Column(sa.String(16))
     admin_state_up = sa.Column(sa.Boolean)
     shared = sa.Column(sa.Boolean)
+    config_profile = sa.Column(sa.String(255))
+    forwarding_mode = sa.Column(sa.String(255))
+    gateway_mac = sa.Column(sa.String(255))

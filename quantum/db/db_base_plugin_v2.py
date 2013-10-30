@@ -881,6 +881,9 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                'admin_state_up': network['admin_state_up'],
                'status': network['status'],
                'shared': network['shared'],
+               'config_profile': network['config_profile'],
+               'forwarding_mode': network['forwarding_mode'],
+               'gateway_mac': network['gateway_mac'],
                'subnets': [subnet['id']
                            for subnet in network['subnets']]}
 
@@ -960,6 +963,9 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     'name': n['name'],
                     'admin_state_up': n['admin_state_up'],
                     'shared': n['shared'],
+                    'config_profile': n['config_profile'],
+                    'forwarding_mode': n['forwarding_mode'],
+                    'gateway_mac': n['gateway_mac'],
                     'status': constants.NET_STATUS_ACTIVE}
             network = models_v2.Network(**args)
             context.session.add(network)
