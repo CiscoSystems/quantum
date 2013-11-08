@@ -222,13 +222,13 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
         ipv4_addresses = []
         ipv6_addresses = []
         for ip in port['fixed_ips']:
-#            sp1 = ip.split('.')
-#            ipnew = sp1[0]+'.0.0.0/8'
+            sp1 = ip.split('.')
+            ipnew = sp1[0]+'.0.0.0/8'
             if netaddr.IPAddress(ip).version == 4:
-#                ipv4_rules += [' -s %s -j RETURN' % ipnew]
+                ipv4_rules += [' -s %s -j RETURN' % ipnew]
                 ipv4_addresses.append(ip)
             else:
-#                ipv6_rules += [' -s %s -j RETURN' % ipnew]
+                ipv6_rules += [' -s %s -j RETURN' % ipnew]
                 ipv6_addresses.append(ip)
         self._setup_ip_spoof_filter_chain(port, self.iptables.ipv4['filter'],
                                           ipv4_addresses, ipv4_rules)
@@ -257,10 +257,10 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
                                    ipv4_iptables_rule,
                                    ipv6_iptables_rule)
             ipv4_iptables_rule += self._drop_dhcp_rule()
-#        if direction == INGRESS_DIRECTION:
-#            self._ip_spoofing_rule2(port,
-#                                   ipv4_iptables_rule,
-#                                  ipv6_iptables_rule)
+        if direction == INGRESS_DIRECTION:
+            self._ip_spoofing_rule2(port,
+                                   ipv4_iptables_rule,
+                                  ipv6_iptables_rule)
 
         ipv4_iptables_rule += self._convert_sgr_to_iptables_rules(
             ipv4_sg_rules)
