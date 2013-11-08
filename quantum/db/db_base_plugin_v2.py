@@ -881,9 +881,11 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                'admin_state_up': network['admin_state_up'],
                'status': network['status'],
                'shared': network['shared'],
-               'config_profile': network['config_profile'],
-               'forwarding_mode': network['forwarding_mode'],
-               'gateway_mac': network['gateway_mac'],
+               'config_profile': network.get('config_profile',
+                                             'defaultNetworkIpv4Profile'),
+               'forwarding_mode': network.get('forwarding_mode',
+                                              'proxy-gateway'),
+               'gateway_mac': network.get('gateway_mac', '00:00:de:ad:be:ef'),
                'subnets': [subnet['id']
                            for subnet in network['subnets']]}
 
@@ -963,9 +965,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     'name': n['name'],
                     'admin_state_up': n['admin_state_up'],
                     'shared': n['shared'],
-                    'config_profile': n['config_profile'],
-                    'forwarding_mode': n['forwarding_mode'],
-                    'gateway_mac': n['gateway_mac'],
+                    'config_profile': n.get('config_profile',
+                                            'defaultNetworkIpv4Profile'),
+                    'forwarding_mode': n.get('forwarding_mode', 'proxy-gateway'),
+                    'gateway_mac': n.get('gateway_mac', '00:00:de:ad:be:ef'),
                     'status': constants.NET_STATUS_ACTIVE}
             network = models_v2.Network(**args)
             context.session.add(network)
