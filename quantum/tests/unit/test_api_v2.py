@@ -770,7 +770,11 @@ class JSONV2TestCase(APIv2TestBase, testlib_api.WebTestCase):
         net_id = _uuid()
         initial_input = {'network': {'name': 'net1', 'tenant_id': _uuid()}}
         full_input = {'network': {'admin_state_up': True,
-                                  'shared': False}}
+                                  'shared': False,
+                                  'config_profile': '',
+                                  'gateway_mac':'',
+                                  'forwarding_mode':'',
+                                  }}
         full_input['network'].update(initial_input['network'])
 
         return_value = {'id': net_id, 'status': "ACTIVE"}
@@ -808,7 +812,9 @@ class JSONV2TestCase(APIv2TestBase, testlib_api.WebTestCase):
         # tenant_id should be fetched from env
         initial_input = {'network': {'name': 'net1'}}
         full_input = {'network': {'admin_state_up': True,
-                      'shared': False, 'tenant_id': tenant_id}}
+                      'shared': False, 'tenant_id': tenant_id,
+                      'config_profile':'', 'forwarding_mode': '',
+                      'gateway_mac': '',}}
         full_input['network'].update(initial_input['network'])
 
         return_value = {'id': net_id, 'status': "ACTIVE"}
@@ -1375,7 +1381,10 @@ class ExtensionTestCase(base.BaseTestCase):
         net_id = _uuid()
         initial_input = {'network': {'name': 'net1', 'tenant_id': _uuid(),
                                      'v2attrs:something_else': "abc"}}
-        data = {'network': {'admin_state_up': True, 'shared': False}}
+        data = {'network': {'admin_state_up': True, 'shared': False,
+                            'forwarding_mode': '',
+                            'config_profile': '',
+                            'gateway_mac': ''}}
         data['network'].update(initial_input['network'])
 
         return_value = {'subnets': [], 'status': "ACTIVE",
