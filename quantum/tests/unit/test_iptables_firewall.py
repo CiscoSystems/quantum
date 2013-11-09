@@ -876,6 +876,12 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                      '--physdev-out tapfake_dev -j $ifake_dev'),
                  call.add_rule(
                      'ifake_dev',
+                     '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule(
+                     'ifake_dev',
+                     ' -d 10.0.0.0/8 -j RETURN'),
+                 call.add_rule(
+                     'ifake_dev',
                      '-m state --state INVALID -j DROP'),
                  call.add_rule(
                      'ifake_dev',
@@ -899,6 +905,8 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                      '-m mac ! --mac-source ff:ff:ff:ff -j DROP'),
                  call.add_rule(
                      'ofake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule(
+                     'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
                  call.add_rule(
                      'ofake_dev', '! -s 10.0.0.1 -j DROP'),
                  call.add_rule(
