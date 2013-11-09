@@ -767,9 +767,9 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                   call.add_rule(
                       'ofake_dev',
                       '-m mac ! --mac-source ff:ff:ff:ff -j DROP'),
+                  dhcp_rule,
                   call.add_rule(
                       'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
-                  dhcp_rule,
                   call.add_rule('ofake_dev', '! -s %s -j DROP' % prefix)]
 
         if ethertype == 'IPv4':
@@ -1056,11 +1056,11 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                  call.add_rule(
                      'ofake_dev',
                      '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule(
+                     'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
+                 call.add_rule(
+                     'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
                  call.add_rule('ofake_dev', '-j $sfake_dev'),
-                 call.add_rule(
-                     'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
-                 call.add_rule(
-                     'ofake_dev', ' -s 10.0.0.0/8 -j RETURN'),
                  call.add_rule(
                      'ofake_dev',
                      '-p udp --sport 67 --dport 68 -j DROP'),
