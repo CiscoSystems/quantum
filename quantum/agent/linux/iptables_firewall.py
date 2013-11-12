@@ -199,22 +199,6 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
             table.add_rule(chain_name, '-j DROP')
             rules.append('-j $%s' % chain_name)
 
-    def _ip_spoofing_rule2(self, port, ipv4_rules, ipv6_rules):
-        #Note(nati) allow dhcp or RA packet
-        ipv4_rules += ['-p udp --sport 68 --dport 67 -j RETURN']
-        ipv6_rules += ['-p icmpv6 -j RETURN']
-        ipv4_addresses = []
-        ipv6_addresses = []
-        for ip in port['fixed_ips']:
-            sp1 = ip.split('.')
-            ipnew = sp1[0]+'.0.0.0/8'
-            if netaddr.IPAddress(ip).version == 4:
-                ipv4_rules += [' -d %s -j RETURN' % ipnew]
-                ipv4_addresses.append(ip)
-            else:
-                ipv6_rules += [' -d %s -j RETURN' % ipnew]
-                ipv6_addresses.append(ip)
-
     def _ip_spoofing_rule(self, port, ipv4_rules, ipv6_rules):
         #Note(nati) allow dhcp or RA packet
         ipv4_rules += ['-p udp --sport 68 --dport 67 -j RETURN']
@@ -222,13 +206,11 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
         ipv4_addresses = []
         ipv6_addresses = []
         for ip in port['fixed_ips']:
-#            sp1 = ip.split('.')
-#            ipnew = sp1[0]+'.0.0.0/8'
             if netaddr.IPAddress(ip).version == 4:
-#                ipv4_rules += [' -s %s -j RETURN' % ipnew]
+                sp1 = ip.split('.')
+                ipv4_rules += ['-s %s -j RETURN' % (sp1[0]+'.0.0.0/8')]
                 ipv4_addresses.append(ip)
             else:
-#                ipv6_rules += [' -s %s -j RETURN' % ipnew]
                 ipv6_addresses.append(ip)
         self._setup_ip_spoof_filter_chain(port, self.iptables.ipv4['filter'],
                                           ipv4_addresses, ipv4_rules)
@@ -257,10 +239,15 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
                                    ipv4_iptables_rule,
                                    ipv6_iptables_rule)
             ipv4_iptables_rule += self._drop_dhcp_rule()
-#        if direction == INGRESS_DIRECTION:
-#            self._ip_spoofing_rule2(port,
-#                                   ipv4_iptables_rule,
-#                                  ipv6_iptables_rule)
+        if direction == INGRESS_DIRECTION:
+            for ip in port['fixed_ips']:
+                if netaddr.IPAddress(ip).version == 4:
+                    sp1 = ip.split('.')
+                    ipnew = sp1[0]+'.0.0.0/8'
+                    ipv4_iptables_rule += \
+                                  ['-p udp --sport 68 --dport 67 -j RETURN']
+                    ipv4_iptables_rule += \
+                                  ['-d %s -j RETURN' % (sp1[0]+'.0.0.0/8')]
 
         ipv4_iptables_rule += self._convert_sgr_to_iptables_rules(
             ipv4_sg_rules)

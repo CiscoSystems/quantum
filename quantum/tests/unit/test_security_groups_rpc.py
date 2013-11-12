@@ -618,6 +618,8 @@ IPTABLES_FILTER_1 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-sg-fallback -j DROP
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-i_port1
+-A %(bn)s-i_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port1 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port1 -m state --state INVALID -j DROP
 -A %(bn)s-i_port1 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port1 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -628,6 +630,7 @@ IPTABLES_FILTER_1 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port1 -j %(bn)s-o_port1
 -A %(bn)s-o_port1 -m mac ! --mac-source 12:34:56:78:9a:bc -j DROP
 -A %(bn)s-o_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port1 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port1 ! -s 10.0.0.3 -j DROP
 -A %(bn)s-o_port1 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port1 -m state --state INVALID -j DROP
@@ -655,6 +658,8 @@ IPTABLES_FILTER_1_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-sg-fallback -j DROP
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-i_port1
+-A %(bn)s-i_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port1 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port1 -m state --state INVALID -j DROP
 -A %(bn)s-i_port1 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port1 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -666,6 +671,7 @@ IPTABLES_FILTER_1_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port1 -j %(bn)s-o_port1
 -A %(bn)s-o_port1 -m mac ! --mac-source 12:34:56:78:9a:bc -j DROP
 -A %(bn)s-o_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port1 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port1 ! -s 10.0.0.3 -j DROP
 -A %(bn)s-o_port1 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port1 -m state --state INVALID -j DROP
@@ -697,6 +703,8 @@ IPTABLES_FILTER_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-sg-fallback -j DROP
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-i_port1
+-A %(bn)s-i_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port1 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port1 -m state --state INVALID -j DROP
 -A %(bn)s-i_port1 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port1 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -708,6 +716,7 @@ IPTABLES_FILTER_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port1 -j %(bn)s-o_port1
 -A %(bn)s-o_port1 -m mac ! --mac-source 12:34:56:78:9a:bc -j DROP
 -A %(bn)s-o_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port1 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port1 ! -s 10.0.0.3 -j DROP
 -A %(bn)s-o_port1 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port1 -m state --state INVALID -j DROP
@@ -716,6 +725,8 @@ IPTABLES_FILTER_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-o_port1 -j %(bn)s-sg-fallback
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-i_port2
+-A %(bn)s-i_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port2 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port2 -m state --state INVALID -j DROP
 -A %(bn)s-i_port2 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port2 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -727,6 +738,7 @@ IPTABLES_FILTER_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port2 -j %(bn)s-o_port2
 -A %(bn)s-o_port2 -m mac ! --mac-source 12:34:56:78:9a:bd -j DROP
 -A %(bn)s-o_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port2 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port2 ! -s 10.0.0.4 -j DROP
 -A %(bn)s-o_port2 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port2 -m state --state INVALID -j DROP
@@ -756,6 +768,8 @@ IPTABLES_FILTER_2_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-sg-fallback -j DROP
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-i_port1
+-A %(bn)s-i_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port1 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port1 -m state --state INVALID -j DROP
 -A %(bn)s-i_port1 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port1 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -766,6 +780,7 @@ IPTABLES_FILTER_2_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port1 -j %(bn)s-o_port1
 -A %(bn)s-o_port1 -m mac ! --mac-source 12:34:56:78:9a:bc -j DROP
 -A %(bn)s-o_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port1 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port1 ! -s 10.0.0.3 -j DROP
 -A %(bn)s-o_port1 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port1 -m state --state INVALID -j DROP
@@ -774,6 +789,8 @@ IPTABLES_FILTER_2_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-o_port1 -j %(bn)s-sg-fallback
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-i_port2
+-A %(bn)s-i_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port2 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port2 -m state --state INVALID -j DROP
 -A %(bn)s-i_port2 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port2 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -785,6 +802,7 @@ IPTABLES_FILTER_2_2 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port2 -j %(bn)s-o_port2
 -A %(bn)s-o_port2 -m mac ! --mac-source 12:34:56:78:9a:bd -j DROP
 -A %(bn)s-o_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port2 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port2 ! -s 10.0.0.4 -j DROP
 -A %(bn)s-o_port2 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port2 -m state --state INVALID -j DROP
@@ -814,6 +832,8 @@ IPTABLES_FILTER_2_3 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-sg-fallback -j DROP
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port1 -j %(bn)s-i_port1
+-A %(bn)s-i_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port1 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port1 -m state --state INVALID -j DROP
 -A %(bn)s-i_port1 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port1 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -826,6 +846,7 @@ IPTABLES_FILTER_2_3 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port1 -j %(bn)s-o_port1
 -A %(bn)s-o_port1 -m mac ! --mac-source 12:34:56:78:9a:bc -j DROP
 -A %(bn)s-o_port1 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port1 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port1 ! -s 10.0.0.3 -j DROP
 -A %(bn)s-o_port1 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port1 -m state --state INVALID -j DROP
@@ -834,6 +855,8 @@ IPTABLES_FILTER_2_3 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-o_port1 -j %(bn)s-sg-fallback
 -A %(bn)s-FORWARD %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-sg-chain
 -A %(bn)s-sg-chain %(physdev)s --physdev-INGRESS tap_port2 -j %(bn)s-i_port2
+-A %(bn)s-i_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-i_port2 -d 10.0.0.0/8 -j RETURN
 -A %(bn)s-i_port2 -m state --state INVALID -j DROP
 -A %(bn)s-i_port2 -m state --state ESTABLISHED,RELATED -j RETURN
 -A %(bn)s-i_port2 -j RETURN -p udp --dport 68 --sport 67 -s 10.0.0.2
@@ -846,6 +869,7 @@ IPTABLES_FILTER_2_3 = """:%(bn)s-(%(chains)s) - [0:0]
 -A %(bn)s-INPUT %(physdev)s --physdev-EGRESS tap_port2 -j %(bn)s-o_port2
 -A %(bn)s-o_port2 -m mac ! --mac-source 12:34:56:78:9a:bd -j DROP
 -A %(bn)s-o_port2 -p udp --sport 68 --dport 67 -j RETURN
+-A %(bn)s-o_port2 -s 10.0.0.0/8 -j RETURN
 -A %(bn)s-o_port2 ! -s 10.0.0.4 -j DROP
 -A %(bn)s-o_port2 -p udp --sport 67 --dport 68 -j DROP
 -A %(bn)s-o_port2 -m state --state INVALID -j DROP
