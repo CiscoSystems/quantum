@@ -14,6 +14,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+#
+#    Modified by Nader Lahouti, Cisco Systems, Inc. Dec. 2013:
+#       - DFA support: Added new ingress/egress rule for a subnet.
+#
+
 
 import copy
 
