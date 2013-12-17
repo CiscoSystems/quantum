@@ -927,6 +927,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                "fixed_ips": [{'subnet_id': ip["subnet_id"],
                               'ip_address': ip["ip_address"]}
                              for ip in port["fixed_ips"]],
+               "dfa_vm_ip": port.get('dfa_vm_ip', "0.0.0.0"),
                "device_id": port["device_id"],
                "device_owner": port["device_owner"]}
         return self._fields(res, fields)
