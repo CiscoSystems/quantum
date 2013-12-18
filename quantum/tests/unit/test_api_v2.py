@@ -14,6 +14,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+#
+#    Modified by Nader Lahouti, Cisco Systems, Inc. Dec. 2013:
+#       - DFA support: Added new parameter 'dfa_vm_ip' to pass the test.
+#
+
 
 import os
 import urlparse
@@ -931,6 +936,7 @@ class JSONV2TestCase(APIv2TestBase, testlib_api.WebTestCase):
         initial_input = {'port': {'name': '', 'network_id': net_id,
                                   'tenant_id': tenant_id,
                                   'device_id': device_id,
+                                  'dfa_vm_ip': '0.0.0.0',
                                   'admin_state_up': True}}
         full_input = {'port': {'admin_state_up': True,
                                'mac_address': attributes.ATTR_NOT_SPECIFIED,
