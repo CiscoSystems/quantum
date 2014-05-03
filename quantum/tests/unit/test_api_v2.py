@@ -777,8 +777,9 @@ class JSONV2TestCase(APIv2TestBase, testlib_api.WebTestCase):
         full_input = {'network': {'admin_state_up': True,
                                   'shared': False,
                                   'config_profile': '',
-                                  'gateway_mac':'',
-                                  'forwarding_mode':'',
+                                  'gateway_mac': '',
+                                  'forwarding_mode': '',
+                                  'partition_name': '',
                                   }}
         full_input['network'].update(initial_input['network'])
 
@@ -818,8 +819,8 @@ class JSONV2TestCase(APIv2TestBase, testlib_api.WebTestCase):
         initial_input = {'network': {'name': 'net1'}}
         full_input = {'network': {'admin_state_up': True,
                       'shared': False, 'tenant_id': tenant_id,
-                      'config_profile':'', 'forwarding_mode': '',
-                      'gateway_mac': '',}}
+                      'config_profile': '', 'forwarding_mode': '',
+                      'gateway_mac': '', 'partition_name': ''}}
         full_input['network'].update(initial_input['network'])
 
         return_value = {'id': net_id, 'status': "ACTIVE"}
@@ -1389,6 +1390,7 @@ class ExtensionTestCase(base.BaseTestCase):
                                      'v2attrs:something_else': "abc"}}
         data = {'network': {'admin_state_up': True, 'shared': False,
                             'forwarding_mode': '',
+                            'partition_name': '',
                             'config_profile': '',
                             'gateway_mac': ''}}
         data['network'].update(initial_input['network'])

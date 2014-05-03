@@ -890,6 +890,7 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                'forwarding_mode': network.get('forwarding_mode',
                                               'proxy-gateway'),
                'gateway_mac': network.get('gateway_mac', '00:00:de:ad:be:ef'),
+               'partition_name': network.get('partition_name', 'partition'),
                'subnets': [subnet['id']
                            for subnet in network['subnets']]}
 
@@ -972,8 +973,10 @@ class QuantumDbPluginV2(quantum_plugin_base_v2.QuantumPluginBaseV2):
                     'shared': n['shared'],
                     'config_profile': n.get('config_profile',
                                             'defaultNetworkIpv4Profile'),
-                    'forwarding_mode': n.get('forwarding_mode', 'proxy-gateway'),
+                    'forwarding_mode': n.get('forwarding_mode',
+                                             'proxy-gateway'),
                     'gateway_mac': n.get('gateway_mac', '00:00:de:ad:be:ef'),
+                    'partition_name': n.get('partition_name', 'partition'),
                     'status': constants.NET_STATUS_ACTIVE}
             network = models_v2.Network(**args)
             context.session.add(network)

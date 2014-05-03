@@ -212,7 +212,7 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
         for ip in port['fixed_ips']:
             if netaddr.IPAddress(ip).version == 4:
                 sp1 = ip.split('.')
-                ipv4_rules += ['-s %s -j RETURN' % (sp1[0]+'.0.0.0/8')]
+                ipv4_rules += ['-s %s -j RETURN' % (sp1[0] + '.0.0.0/8')]
                 ipv4_addresses.append(ip)
             else:
                 ipv6_addresses.append(ip)
@@ -247,11 +247,11 @@ class IptablesFirewallDriver(firewall.FirewallDriver):
             for ip in port['fixed_ips']:
                 if netaddr.IPAddress(ip).version == 4:
                     sp1 = ip.split('.')
-                    ipnew = sp1[0]+'.0.0.0/8'
-                    ipv4_iptables_rule += \
-                                  ['-p udp --sport 68 --dport 67 -j RETURN']
-                    ipv4_iptables_rule += \
-                                  ['-d %s -j RETURN' % (sp1[0]+'.0.0.0/8')]
+                    ipnew = sp1[0] + '.0.0.0/8'
+                    ipv4_iptables_rule += ['-p udp '
+                                           '--sport 68 --dport 67 -j RETURN']
+                    ipv4_iptables_rule += ['-d %s -j '
+                                           'RETURN' % (sp1[0] + '.0.0.0/8')]
 
         ipv4_iptables_rule += self._convert_sgr_to_iptables_rules(
             ipv4_sg_rules)

@@ -168,3 +168,4 @@ class Network(model_base.BASEV2, HasId, HasTenant):
     config_profile = sa.Column(sa.String(255))
     forwarding_mode = sa.Column(sa.String(255))
     gateway_mac = sa.Column(sa.String(255))
+    partition_name = sa.Column(sa.String(255))

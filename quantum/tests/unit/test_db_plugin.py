@@ -3497,8 +3497,8 @@ class DbModelTestCase(base.BaseTestCase):
         exp_end_with = (" {tenant_id=None, id=None, "
                         "name='net_net', status='OK', "
                         "admin_state_up=True, shared=None, "
-                        "config_profile=None, "
-                        "forwarding_mode=None, gateway_mac=None}>")
+                        "config_profile=None, forwarding_mode=None, "
+                        "gateway_mac=None, partition_name=None}>")
         final_exp = exp_start_with + exp_middle + exp_end_with
         self.assertEqual(actual_repr_output, final_exp)
 

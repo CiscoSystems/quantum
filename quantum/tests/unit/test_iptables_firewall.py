@@ -82,8 +82,8 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                                '-m physdev --physdev-is-bridged '
                                '--physdev-out tapfake_dev '
                                '-j $ifake_dev'),
-                 call.add_rule(
-                    'ifake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule('ifake_dev',
+                               '-p udp --sport 68 --dport 67 -j RETURN'),
                  call.add_rule('ifake_dev', '-d 10.0.0.0/8 -j RETURN'),
                  call.add_rule(
                      'ifake_dev', '-m state --state INVALID -j DROP'),
@@ -737,15 +737,15 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                                '--physdev-out tapfake_dev '
                                '-j $ifake_dev')]
         if ethertype == 'IPv4':
-            calls += [call.add_rule(
-                     'ifake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
-                     call.add_rule('ifake_dev', '-d 10.0.0.0/8 -j RETURN')]
+            calls += [call.add_rule('ifake_dev',
+                                    '-p udp --sport 68 --dport 67 -j RETURN'),
+                      call.add_rule('ifake_dev', '-d 10.0.0.0/8 -j RETURN')]
 
         calls += [call.add_rule(
-                     'ifake_dev', '-m state --state INVALID -j DROP'),
+                  'ifake_dev', '-m state --state INVALID -j DROP'),
                   call.add_rule(
-                     'ifake_dev',
-                     '-m state --state ESTABLISHED,RELATED -j RETURN')]
+                  'ifake_dev',
+                  '-m state --state ESTABLISHED,RELATED -j RETURN')]
 
         if ingress_expected_call:
             calls.append(ingress_expected_call)
@@ -815,8 +815,8 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                      'sg-chain',
                      '-m physdev --physdev-is-bridged '
                      '--physdev-out tapfake_dev -j $ifake_dev'),
-                 call.add_rule(
-                    'ifake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule('ifake_dev',
+                               '-p udp --sport 68 --dport 67 -j RETURN'),
                  call.add_rule('ifake_dev', '-d 10.0.0.0/8 -j RETURN'),
                  call.add_rule(
                      'ifake_dev', '-m state --state INVALID -j DROP'),
@@ -873,8 +873,8 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                      'sg-chain',
                      '-m physdev --physdev-is-bridged '
                      '--physdev-out tapfake_dev -j $ifake_dev'),
-                 call.add_rule(
-                    'ifake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule('ifake_dev',
+                               '-p udp --sport 68 --dport 67 -j RETURN'),
                  call.add_rule('ifake_dev', '-d 10.0.0.0/8 -j RETURN'),
                  call.add_rule(
                      'ifake_dev',
@@ -899,19 +899,16 @@ class IptablesFirewallTestCase(base.BaseTestCase):
                  call.add_rule(
                      'ofake_dev',
                      '-m mac ! --mac-source ff:ff:ff:ff -j DROP'),
-                 call.add_rule(
-                    'ofake_dev', '-p udp --sport 68 --dport 67 -j RETURN'),
-                 call.add_rule(
-                     'ofake_dev', '-s 10.0.0.0/8 -j RETURN'),
-                 call.add_rule(
-                     'ofake_dev', '! -s 10.0.0.1 -j DROP'),
-                 call.add_rule(
-                     'ofake_dev', '-p udp --sport 67 --dport 68 -j DROP'),
-                 call.add_rule(
-                     'ofake_dev', '-m state --state INVALID -j DROP'),
-                 call.add_rule(
-                     'ofake_dev',
-                     '-m state --state ESTABLISHED,RELATED -j RETURN'),
+                 call.add_rule('ofake_dev',
+                               '-p udp --sport 68 --dport 67 -j RETURN'),
+                 call.add_rule('ofake_dev', '-s 10.0.0.0/8 -j RETURN'),
+                 call.add_rule('ofake_dev', '! -s 10.0.0.1 -j DROP'),
+                 call.add_rule('ofake_dev',
+                               '-p udp --sport 67 --dport 68 -j DROP'),
+                 call.add_rule('ofake_dev',
+                               '-m state --state INVALID -j DROP'),
+                 call.add_rule('ofake_dev',
+                 '-m state --state ESTABLISHED,RELATED -j RETURN'),
                  call.add_rule('ofake_dev', '-j RETURN'),
                  call.add_rule('ofake_dev', '-j $sg-fallback'),
                  call.add_rule('sg-chain', '-j ACCEPT'),
