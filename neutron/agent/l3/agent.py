@@ -412,9 +412,6 @@ class L3NATAgent(firewall_l3_agent.FWaaSL3AgentRpcCallback,
         ips = port['fixed_ips']
         if not ips:
             raise Exception(_("Router port %s has no IP address") % port['id'])
-        if len(ips) > 1:
-            LOG.error(_LE("Ignoring multiple IPs on router port %s"),
-                      port['id'])
         prefixlen = netaddr.IPNetwork(port['subnet']['cidr']).prefixlen
         port['ip_cidr'] = "%s/%s" % (ips[0]['ip_address'], prefixlen)
 

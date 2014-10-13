@@ -21,6 +21,7 @@ from neutron.api.rpc.agentnotifiers import l3_rpc_agent_api
 from neutron.api.v2 import attributes
 from neutron.common import constants as l3_constants
 from neutron.common import exceptions as n_exc
+from neutron.common import ipv6_utils
 from neutron.common import rpc as n_rpc
 from neutron.common import utils
 from neutron.db import model_base
@@ -516,10 +517,27 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
                    'external router cannot be added to Neutron Router.') %
                    subnet['id'])
             raise n_exc.BadRequest(resource='router', msg=msg)
-        self._check_for_dup_router_subnet(context, router,
-                                          subnet['network_id'],
-                                          subnet_id,
-                                          subnet['cidr'])
+
+        # Note(leblancd): If this is a subnet with auto addressing
+        # (e.g. IPv6 SLAAC), then any existing router ports will already
+        # have an automatically generated address for this subnet. We still
+        # want to go ahead and create a new interface for this subnet, so
+        # that the router port created specifically for this subnet can be
+        # maintained independent of other router ports (since users expect,
+        # for example, that router ports are created per-subnet, and can
+        # be deleted by port ID with no ambiguity re. which subnet is
+        # affected). The check for the subnet already being used on
+        # this router's ports is skipped for auto-address subnets. For now,
+        # this means that a misguided user can create duplicate router ports
+        # for a given SLAAC subnet. This will be fixed with a future
+        # commit for blueprint "multiple-ipv6-prefixes" whereby one router
+        # port will be shared for all IPv6 subnets.
+        is_auto_addr = ipv6_utils.is_auto_address_subnet(subnet)
+        if not is_auto_addr:
+            self._check_for_dup_router_subnet(context, router,
+                                              subnet['network_id'],
+                                              subnet_id,
+                                              subnet['cidr'])
         fixed_ip = {'ip_address': subnet['gateway_ip'],
                     'subnet_id': subnet['id']}
 
@@ -1070,11 +1088,7 @@ class L3_NAT_dbonly_mixin(l3.RouterPluginBase):
         def each_port_with_ip():
             for port in ports:
                 fixed_ips = port.get('fixed_ips', [])
-                if len(fixed_ips) > 1:
-                    LOG.info(_LI("Ignoring multiple IPs on router port %s"),
-                             port['id'])
-                    continue
-                elif not fixed_ips:
+                if not fixed_ips:
                     # Skip ports without IPs, which can occur if a subnet
                     # attached to a router is deleted
                     LOG.info(_LI("Skipping port %s as no IP is configure on "

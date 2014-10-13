@@ -663,7 +663,6 @@ class SGServerRpcCallBackTestCase(test_sg.SecurityGroupDBTestCase):
                                 'ip_address': fake_gateway}],
                     device_owner='network:router_interface')
                 gateway_mac = gateway_res['port']['mac_address']
-                gateway_port_id = gateway_res['port']['id']
                 gateway_lla_ip = str(ipv6.get_ipv6_addr_by_EUI64(
                     const.IPV6_LLA_PREFIX,
                     gateway_mac))
@@ -698,12 +697,12 @@ class SGServerRpcCallBackTestCase(test_sg.SecurityGroupDBTestCase):
                 self.assertEqual(port_rpc['security_group_rules'],
                                  expected)
                 self._delete('ports', port_id1)
-                # Note(xuhanp): remove gateway port's fixed_ips or gateway port
-                # deletion will be prevented.
-                data = {'port': {'fixed_ips': []}}
-                req = self.new_update_request('ports', data, gateway_port_id)
-                self.deserialize(self.fmt, req.get_response(self.api))
-                self._delete('ports', gateway_port_id)
+                # The gateway port cannot be deleted directly since it has
+                # device_owner == 'network.router_interface'. However,
+                # because it is on a SLAAC subnet, the subnet can be
+                # deleted directly, and all ports remaining on that subnet
+                # will be automatically deleted.
+                self._delete('subnets', subnet_v6['subnet']['id'])
 
     def test_security_group_rule_for_device_ipv6_multi_router_interfaces(self):
         fake_prefix = FAKE_PREFIX[const.IPv6]
@@ -779,8 +778,10 @@ class SGServerRpcCallBackTestCase(test_sg.SecurityGroupDBTestCase):
                 self.deserialize(self.fmt, req.get_response(self.api))
                 req = self.new_update_request('ports', data, interface_port_id)
                 self.deserialize(self.fmt, req.get_response(self.api))
-                self._delete('ports', gateway_port_id)
-                self._delete('ports', interface_port_id)
+                # Because the subnet is a SLAAC subnet, it can be deleted
+                # directly, and all of its ports will be automatically
+                # deleted.
+                self._delete('subnets', subnet_v6['subnet']['id'])
 
     def test_security_group_ra_rules_for_devices_ipv6_dvr(self):
         fake_prefix = FAKE_PREFIX[const.IPv6]

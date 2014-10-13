@@ -360,23 +360,23 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
 
         :raises: InvalidInput, IpAddressInUse
         """
-        fixed_ip_set = []
+        fixed_ips_to_alloc = []
+        fixed_ips_auto_addr = []
         for fixed in fixed_ips:
-            found = False
+            subnet_ip_checked = False
             if 'subnet_id' not in fixed:
                 if 'ip_address' not in fixed:
                     msg = _('IP allocation requires subnet_id or ip_address')
                     raise n_exc.InvalidInput(error_message=msg)
 
-                filter = {'network_id': [network_id]}
-                subnets = self.get_subnets(context, filters=filter)
+                subnets = self._get_subnets_by_network(context, network_id)
                 for subnet in subnets:
                     if self._check_subnet_ip(subnet['cidr'],
                                              fixed['ip_address']):
-                        found = True
+                        subnet_ip_checked = True
                         subnet_id = subnet['id']
                         break
-                if not found:
+                else:
                     msg = _('IP address %s is not a valid IP for the defined '
                             'networks subnets') % fixed['ip_address']
                     raise n_exc.InvalidInput(error_message=msg)
@@ -391,6 +391,7 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                     raise n_exc.InvalidInput(error_message=msg)
                 subnet_id = subnet['id']
 
+            is_auto_addr_subnet = ipv6_utils.is_auto_address_subnet(subnet)
             if 'ip_address' in fixed:
                 # Ensure that the IP's are unique
                 if not NeutronDbPluginV2._check_unique_ip(context, network_id,
@@ -400,31 +401,44 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                                                ip_address=fixed['ip_address'])
 
                 # Ensure that the IP is valid on the subnet
-                if (not found and
+                if (not subnet_ip_checked and
                     not self._check_subnet_ip(subnet['cidr'],
                                               fixed['ip_address'])):
                     msg = _('IP address %s is not a valid IP for the defined '
                             'subnet') % fixed['ip_address']
                     raise n_exc.InvalidInput(error_message=msg)
-                if (ipv6_utils.is_auto_address_subnet(subnet) and
-                    device_owner not in
-                        constants.ROUTER_INTERFACE_OWNERS):
-                    msg = (_("IPv6 address %(address)s can not be directly "
-                            "assigned to a port on subnet %(id)s since the "
-                            "subnet is configured for automatic addresses") %
-                           {'address': fixed['ip_address'],
-                            'id': subnet_id})
-                    raise n_exc.InvalidInput(error_message=msg)
-                fixed_ip_set.append({'subnet_id': subnet_id,
-                                     'ip_address': fixed['ip_address']})
+
+                fixed_ip = {'subnet_id': subnet_id,
+                            'ip_address': fixed['ip_address']}
+                if is_auto_addr_subnet:
+                    if device_owner in constants.ROUTER_INTERFACE_OWNERS:
+                        # This is a specific IP address assignment (override)
+                        # on an auto-address subnet.
+                        fixed_ips_auto_addr.append(fixed_ip)
+                    else:
+                        msg = (_("IPv6 address %(address)s can not be "
+                                 "directly assigned to a port on subnet "
+                                 "%(id)s since the subnet is "
+                                 "configured for automatic addresses") %
+                               {'address': fixed['ip_address'],
+                                'id': subnet_id})
+                        raise n_exc.InvalidInput(error_message=msg)
+                else:
+                    fixed_ips_to_alloc.append(fixed_ip)
             else:
-                fixed_ip_set.append({'subnet_id': subnet_id})
-        if len(fixed_ip_set) > cfg.CONF.max_fixed_ips_per_port:
+                # A scan for IPv6 SLAAC subnets on the network is done
+                # separately so that all such subnets (not just those
+                # listed explicitly here by subnet ID) are associated
+                # with the port.
+                if not is_auto_addr_subnet:
+                    fixed_ips_to_alloc.append({'subnet_id': subnet_id})
+
+        if len(fixed_ips_to_alloc) > cfg.CONF.max_fixed_ips_per_port:
             msg = _('Exceeded maximim amount of fixed ips per port')
             raise n_exc.InvalidInput(error_message=msg)
-        return fixed_ip_set
+        return fixed_ips_to_alloc, fixed_ips_auto_addr
 
-    def _allocate_fixed_ips(self, context, fixed_ips, mac_address):
+    def _allocate_fixed_ips(self, context, fixed_ips):
         """Allocate IP addresses according to the configured fixed_ips."""
         ips = []
         for fixed in fixed_ips:
@@ -437,28 +451,22 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             # Only subnet ID is specified => need to generate IP
             # from subnet
             else:
-                subnet = self._get_subnet(context, fixed['subnet_id'])
-                if (subnet['ip_version'] == 6 and
-                        ipv6_utils.is_auto_address_subnet(subnet)):
-                    prefix = subnet['cidr']
-                    ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(
-                        prefix, mac_address)
-                    ips.append({'ip_address': ip_address.format(),
-                                'subnet_id': subnet['id']})
-                else:
-                    subnets = [subnet]
-                    # IP address allocation
-                    result = self._generate_ip(context, subnets)
-                    ips.append({'ip_address': result['ip_address'],
-                                'subnet_id': result['subnet_id']})
+                # IP address allocation
+                subnets = [self._get_subnet(context, fixed['subnet_id'])]
+                result = self._generate_ip(context, subnets)
+                ips.append({'ip_address': result['ip_address'],
+                            'subnet_id': result['subnet_id']})
         return ips
 
-    def _update_ips_for_port(self, context, network_id, port_id, original_ips,
-                             new_ips, mac_address, device_owner):
+    def _update_ips_for_port(self, context, port, new_ips):
         """Add or remove IPs from the port."""
         ips = []
         # These ips are still on the port and haven't been removed
         prev_ips = []
+
+        network_id = port['network_id']
+        original_ips = port['fixed_ips']
+        device_owner = port['device_owner']
 
         # the new_ips contain all of the fixed_ips that are to be updated
         if len(new_ips) > cfg.CONF.max_fixed_ips_per_port:
@@ -473,10 +481,16 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                     original_ips.remove(original_ip)
                     new_ips.remove(new_ip)
                     prev_ips.append(original_ip)
+                    break
+            else:
+                subnet = self._get_subnet(context, original_ip['subnet_id'])
+                if (ipv6_utils.is_auto_address_subnet(subnet)):
+                    # Since this is an automatic (non-optional, e.g.
+                    # IPv6 SLAAC) address, retain it.
+                    original_ips.remove(original_ip)
+                    prev_ips.append(original_ip)
 
-        # Check if the IP's to add are OK
-        to_add = self._test_fixed_ips_for_port(context, network_id, new_ips,
-                                               device_owner)
+        # Delete IPs that are no longer used
         for ip in original_ips:
             LOG.debug("Port update. Hold %s", ip)
             NeutronDbPluginV2._delete_ip_allocation(context,
@@ -484,10 +498,29 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                                                     ip['subnet_id'],
                                                     ip['ip_address'])
 
-        if to_add:
-            LOG.debug("Port update. Adding %s", to_add)
-            ips = self._allocate_fixed_ips(context, to_add, mac_address)
+        # Check if the IP's to add are OK
+        fixed_to_alloc, fixed_auto_addr = (
+                self._test_fixed_ips_for_port(context, network_id, new_ips,
+                                              device_owner))
+        if fixed_to_alloc:
+            LOG.debug("Port update. Adding %s", fixed_to_alloc)
+            ips = self._allocate_fixed_ips(context, fixed_to_alloc)
+
+        # Add any specific IP address assignments (overrides) for
+        # auto address subnets.
+        ips += fixed_auto_addr
+
         return ips, prev_ips
+
+    def _calculate_ipv6_eui64_addr(self, context, subnet, port):
+        prefix = subnet['cidr']
+        mac_addr = port['mac_address']
+        ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(prefix, mac_addr)
+        if not self._check_unique_ip(context, port['network_id'],
+                                     subnet['id'], ip_address.format()):
+            raise n_exc.IpAddressInUse(net_id=port['network_id'],
+                                       ip_address=ip_address.format())
+        return ip_address
 
     def _allocate_ips_for_port(self, context, port):
         """Allocate IP addresses for the port.
@@ -498,23 +531,35 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         """
         p = port['port']
         ips = []
+        v6_stateless = []
+        subnets = self._get_subnets_by_network(context, p['network_id'])
 
         fixed_configured = p['fixed_ips'] is not attributes.ATTR_NOT_SPECIFIED
         if fixed_configured:
-            configured_ips = self._test_fixed_ips_for_port(context,
-                                                           p["network_id"],
-                                                           p['fixed_ips'],
-                                                           p['device_owner'])
-            ips = self._allocate_fixed_ips(context,
-                                           configured_ips,
-                                           p['mac_address'])
+            fixed_ips_to_alloc, fixed_ips_auto_addr = (
+                self._test_fixed_ips_for_port(context,
+                                              p['network_id'],
+                                              p['fixed_ips'],
+                                              p['device_owner']))
+            ips = self._allocate_fixed_ips(context, fixed_ips_to_alloc)
+
+            # Add any specific IP address assignments (overrides) for
+            # auto address subnets (only allowed for router ports).
+            ips += fixed_ips_auto_addr
+
+            # Find all other auto-address subnets.
+            fixed_ip_subnet_ids = [ip['subnet_id']
+                                   for ip in fixed_ips_auto_addr]
+            for subnet in subnets:
+                if ipv6_utils.is_auto_address_subnet(subnet):
+                    # Exclude SLAAC subnets where there is an explicit
+                    # IP address assignment on a router port.
+                    if subnet['id'] not in fixed_ip_subnet_ids:
+                        v6_stateless.append(subnet)
         else:
-            filter = {'network_id': [p['network_id']]}
-            subnets = self.get_subnets(context, filters=filter)
-            # Split into v4 and v6 subnets
+            # Split into v4, v6 stateless and v6 stateful subnets
             v4 = []
             v6_stateful = []
-            v6_stateless = []
             for subnet in subnets:
                 if subnet['ip_version'] == 4:
                     v4.append(subnet)
@@ -523,25 +568,21 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                         v6_stateless.append(subnet)
                     else:
                         v6_stateful.append(subnet)
-
-            for subnet in v6_stateless:
-                prefix = subnet['cidr']
-                ip_address = ipv6_utils.get_ipv6_addr_by_EUI64(
-                    prefix, p['mac_address'])
-                if not self._check_unique_ip(
-                    context, p['network_id'],
-                    subnet['id'], ip_address.format()):
-                    raise n_exc.IpAddressInUse(
-                        net_id=p['network_id'],
-                        ip_address=ip_address.format())
-                ips.append({'ip_address': ip_address.format(),
-                            'subnet_id': subnet['id']})
             version_subnets = [v4, v6_stateful]
             for subnets in version_subnets:
                 if subnets:
                     result = NeutronDbPluginV2._generate_ip(context, subnets)
                     ips.append({'ip_address': result['ip_address'],
                                 'subnet_id': result['subnet_id']})
+
+        for subnet in v6_stateless:
+            # IP addresses on all subnets configured with IPv6 SLAAC are
+            # automatically generated and are implicitly included.
+            ip_address = self._calculate_ipv6_eui64_addr(context,
+                                                         subnet, p)
+            ips.append({'ip_address': ip_address.format(),
+                        'subnet_id': subnet['id']})
+
         return ips
 
     def _validate_subnet_cidr(self, context, network, new_subnet_cidr):
@@ -1384,9 +1425,7 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                 changed_ips = True
                 original = self._make_port_dict(port, process_extensions=False)
                 added_ips, prev_ips = self._update_ips_for_port(
-                    context, network_id, id,
-                    original["fixed_ips"], p['fixed_ips'],
-                    original['mac_address'], port['device_owner'])
+                    context, original, p['fixed_ips'])
 
                 # Update ips if necessary
                 for ip in added_ips:
@@ -1428,6 +1467,15 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                           port_id)
 
     def _delete_port(self, context, id):
+        # Remove any associations with subnets that use automatic addresses.
+        port = self._get_port(context, id)
+        fixed_ips = port.get('fixed_ips', [])
+        for fixed_ip in fixed_ips:
+            subnet = self._get_subnet(context, fixed_ip['subnet_id'])
+            if (ipv6_utils.is_auto_address_subnet(subnet)):
+                NeutronDbPluginV2._delete_ip_allocation(
+                    context, subnet.network_id, id, fixed_ip['ip_address'])
+
         query = (context.session.query(models_v2.Port).
                  enable_eagerloads(False).filter_by(id=id))
         if not context.is_admin:
